@@ -1,5 +1,29 @@
 # Roadmap Validation Report
 
+## P02 Result
+
+P02 durable `Inventory.ReserveStock` / `Inventory.ProductStock` vertical path is closed under the local strict P02 checker and focused Cargo gates. Release readiness remains blocked by non-P02 evidence and CI workflow gaps.
+
+| Gate | Result | Notes |
+|---|---:|---|
+| `python -B tools/testing/p02_durable_vertical_path_check.py --strict` | PASS | Required P02 tests and the four retained P02 evidence reports are present; durable vertical invariants are found. |
+| `python -m py_compile tools/testing/p02_durable_vertical_path_check.py` | PASS | P02 checker compiles. |
+| `cargo test -p andromeda-inventory-demo --test v0_vertical_e2e --locked -- --nocapture` | PASS | 25 tests pass, covering ProductStock publication, pre-transaction rejection, crash-before-client-ACK recovery, and ResultStream ordering. |
+| `cargo test -p andromeda-wal --test file_wal_contract --locked -- --nocapture` | PASS | FileWal owner contract tests pass. |
+| `cargo test -p andromeda-recovery --test file_wal_recovery_contract --locked -- --nocapture` | PASS | FileWal recovery report and replay contract tests pass. |
+| `cargo test -p andromeda-storage-heap --test product_stock_heap_contract --locked -- --nocapture` | PASS | ProductStock heap/HREDOV1 contract tests pass. |
+
+## P02 Decision
+
+P02 closure is complete for the local durable vertical path. The accepted evidence proves:
+
+- invalid protocol, contract, admission, and permission inputs reject before WAL append or ProductStock mutation;
+- ProductStock publication requires `product_stock_commit`, `durable_commit_lsn`, and HREDOV1 `redo_record_lsn` evidence;
+- crash before client ACK recovers ProductStock rows from durable FileWal records, not from ResultStream or client-visible output;
+- ResultStream emits metadata, batch, and terminal completion, with completion carrying non-zero durable LSN evidence.
+
+The release gate remains closed. Do not claim production readiness until retained release evidence exists for fuzzing, Miri, backup/PITR restore drills, HA/DR cluster drills, B-Tree durable promotion crash/recovery, CI workflows, and final release evidence packets.
+
 ## P01 Result
 
 P01 normative specification baseline is closed under the hardened local checker. Release readiness remains blocked by non-P01 evidence and CI workflow gaps.

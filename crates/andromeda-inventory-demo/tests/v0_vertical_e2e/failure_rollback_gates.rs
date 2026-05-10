@@ -87,6 +87,32 @@ fn v0_inventory_rejects_transaction_bearing_execute_frame_before_product_stock_o
 }
 
 #[test]
+fn v0_inventory_rejects_missing_contract_binding_before_product_stock_or_wal() {
+    let catalog = inventory_catalog_snapshot();
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let procedure = executable_procedure(&catalog, &contract);
+    let mut unbound_request = request(&contract, 718);
+    unbound_request.expected_binding = None;
+    let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingProductStockStore::new(stock());
+
+    let err = runtime
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
+            &encoded_execute_frame(),
+            &procedure,
+            unbound_request,
+            &context(&contract, 7018),
+            &mut product_stock,
+        )
+        .unwrap_err();
+
+    assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+    assert!(err.message().contains("ProcedureContractBinding"));
+    assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
+}
+
+#[test]
 fn v0_inventory_rejects_contract_mismatch_before_wal_append() {
     let catalog = inventory_catalog_snapshot();
     let contract = inventory_reserve_stock_contract().unwrap();
@@ -94,19 +120,21 @@ fn v0_inventory_rejects_contract_mismatch_before_wal_append() {
     let mut stale_request = request(&contract, 701);
     stale_request.expected_contract_hash = ContractHash::test_vector(0xBA);
     let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingProductStockStore::new(stock());
 
     let err = runtime
-        .execute_encoded_inventory_reserve_stock(
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
             &encoded_execute_frame(),
             &procedure,
             stale_request,
             &context(&contract, 7001),
-            stock(),
+            &mut product_stock,
         )
         .unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Contract);
     assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
 }
 
 #[test]
@@ -115,19 +143,21 @@ fn v0_inventory_rejects_missing_permission_before_wal_append() {
     let contract = inventory_reserve_stock_contract().unwrap();
     let procedure = executable_procedure(&catalog, &contract);
     let mut runtime = V0InventoryRecoverableRuntime::new(InMemoryWal::new());
+    let mut product_stock = CountingProductStockStore::new(stock());
 
     let err = runtime
-        .execute_encoded_inventory_reserve_stock(
+        .execute_encoded_inventory_reserve_stock_with_product_stock(
             &encoded_execute_frame(),
             &procedure,
             request(&contract, 702),
             &andromeda_exec::InvocationContext::new(TraceId::new(7002), Vec::new()),
-            stock(),
+            &mut product_stock,
         )
         .unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);
     assert!(runtime.wal().is_empty());
+    assert_product_stock_untouched(&product_stock);
 }
 
 #[test]

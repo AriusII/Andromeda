@@ -34,6 +34,13 @@ pub struct FileWalRecoveryReplayRecord {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FileWalRecoverySkippedNonRedoRecord {
+    pub lsn: Lsn,
+    pub kind: WalRecordKind,
+    pub transaction_id: Option<TransactionId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileWalRecoveryIgnoredTransaction {
     pub transaction_id: TransactionId,
     pub reason: FileWalRecoveryIgnoredTransactionReason,
@@ -54,6 +61,7 @@ pub struct FileWalRecoveryReportV0 {
     pub scan_stop: Option<WalScanStop>,
     pub boundary_kind: FileWalRecoveryBoundaryKind,
     pub replay_records: Vec<FileWalRecoveryReplayRecord>,
+    pub skipped_non_redo_records: Vec<FileWalRecoverySkippedNonRedoRecord>,
     pub ignored_transactions: Vec<FileWalRecoveryIgnoredTransaction>,
     pub ignored_record_count: usize,
     pub forensic_required: bool,
@@ -68,6 +76,12 @@ impl FileWalRecoveryReportV0 {
         self.ignored_transactions
             .iter()
             .map(|transaction| transaction.transaction_id)
+    }
+
+    pub fn skipped_non_redo_lsns(&self) -> impl Iterator<Item = Lsn> + '_ {
+        self.skipped_non_redo_records
+            .iter()
+            .map(|record| record.lsn)
     }
 
     pub const fn has_recoverable_tail_boundary(&self) -> bool {
@@ -108,24 +122,27 @@ pub fn build_file_wal_recovery_report_v0(
         FileWalRecoveryBoundaryKind::ForensicChainBreak
     );
 
-    let (replay_records, ignored_transactions, ignored_record_count) = if forensic_required {
-        (
-            Vec::new(),
-            ignored_transactions_from_prefix(&disk_scan.scan.records),
-            0,
-        )
-    } else {
-        let Some(plan) = redo_plan else {
-            return Err(recovery_error(
-                "file-WAL recovery report requires a redo plan unless the scan hit a forensic chain break",
-            ));
+    let (replay_records, skipped_non_redo_records, ignored_transactions, ignored_record_count) =
+        if forensic_required {
+            (
+                Vec::new(),
+                recovery_report_skipped_non_redo_records_from_prefix(&disk_scan.scan.records),
+                ignored_transactions_from_prefix(&disk_scan.scan.records),
+                0,
+            )
+        } else {
+            let Some(plan) = redo_plan else {
+                return Err(recovery_error(
+                    "file-WAL recovery report requires a redo plan unless the scan hit a forensic chain break",
+                ));
+            };
+            (
+                recovery_report_replay_records(plan),
+                recovery_report_skipped_non_redo_records(plan),
+                recovery_report_ignored_transactions(plan),
+                recovery_report_ignored_record_count(plan),
+            )
         };
-        (
-            recovery_report_replay_records(plan),
-            recovery_report_ignored_transactions(plan),
-            recovery_report_ignored_record_count(plan),
-        )
-    };
 
     Ok(FileWalRecoveryReportV0 {
         startup_mode,
@@ -138,6 +155,7 @@ pub fn build_file_wal_recovery_report_v0(
         scan_stop: disk_scan.scan.stopped,
         boundary_kind,
         replay_records,
+        skipped_non_redo_records,
         ignored_transactions,
         ignored_record_count,
         forensic_required,
@@ -195,6 +213,40 @@ fn report_replay_record_from_redo_record(record: &RedoRecordPlan) -> FileWalReco
         kind: record.kind,
         transaction_id: record.transaction_id,
     }
+}
+
+fn recovery_report_skipped_non_redo_records(
+    plan: &ConceptualRedoPlan,
+) -> Vec<FileWalRecoverySkippedNonRedoRecord> {
+    plan.records
+        .iter()
+        .filter(|record| record.decision == RedoRecordDecision::SkipNonRedoRecord)
+        .map(report_skipped_non_redo_record_from_redo_record)
+        .collect()
+}
+
+fn report_skipped_non_redo_record_from_redo_record(
+    record: &RedoRecordPlan,
+) -> FileWalRecoverySkippedNonRedoRecord {
+    FileWalRecoverySkippedNonRedoRecord {
+        lsn: record.lsn,
+        kind: record.kind,
+        transaction_id: record.transaction_id,
+    }
+}
+
+fn recovery_report_skipped_non_redo_records_from_prefix(
+    records: &[WalRecord],
+) -> Vec<FileWalRecoverySkippedNonRedoRecord> {
+    records
+        .iter()
+        .filter(|record| !record.header.kind.is_redo_relevant())
+        .map(|record| FileWalRecoverySkippedNonRedoRecord {
+            lsn: record.header.lsn,
+            kind: record.header.kind,
+            transaction_id: record.header.transaction_id,
+        })
+        .collect()
 }
 
 fn recovery_report_ignored_transactions(

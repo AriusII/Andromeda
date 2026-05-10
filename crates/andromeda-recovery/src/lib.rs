@@ -49,8 +49,9 @@ pub use fast_start::{FastStartAcceptance, FastStartRejection, fast_start_from_ma
 pub use file_wal_report::{
     FileWalRecoveryBoundaryKind, FileWalRecoveryIgnoredTransaction,
     FileWalRecoveryIgnoredTransactionReason, FileWalRecoveryReplayRecord, FileWalRecoveryReportV0,
-    build_file_wal_recovery_report_v0, file_wal_recovery_boundary_kind,
-    report_file_wal_recovery_from_scan_v0, report_file_wal_recovery_v0,
+    FileWalRecoverySkippedNonRedoRecord, build_file_wal_recovery_report_v0,
+    file_wal_recovery_boundary_kind, report_file_wal_recovery_from_scan_v0,
+    report_file_wal_recovery_v0,
 };
 pub use file_wal_startup::{
     FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_from_scan_v0,
