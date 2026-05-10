@@ -16,7 +16,7 @@ mod tests {
     use super::*;
     use crate::inventory_reserve_stock_contract;
     use andromeda_error::AndromedaErrorKind;
-    use andromeda_observe::{CriticalDecisionKind, TraceId};
+    use andromeda_observability::{CriticalDecisionKind, TraceId};
 
     #[test]
     fn reserve_stock_business_rules_produce_typed_effect() {

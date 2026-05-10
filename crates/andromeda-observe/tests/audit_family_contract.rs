@@ -2,8 +2,8 @@ use andromeda_audit::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope,
     UserPrincipal, UserPrincipalKind,
 };
-use andromeda_observability::{EventId, TraceId};
-use andromeda_observe::{EventCorrelation, EventEnvelope, TraceEvent};
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, TraceEvent};
 use andromeda_types::{RequestId, SessionId};
 
 #[test]

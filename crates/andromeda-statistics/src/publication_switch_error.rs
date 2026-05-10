@@ -1,4 +1,4 @@
-use andromeda_contract::StatsVersion;
+use andromeda_procedure_contract::StatsVersion;
 use andromeda_scenario_evidence::ScenarioEvidenceError;
 
 use crate::StatsValidationError;

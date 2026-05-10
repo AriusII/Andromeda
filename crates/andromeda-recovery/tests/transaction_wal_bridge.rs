@@ -3,10 +3,10 @@ use andromeda_mvcc::{TransactionStatus, TransactionStatusTable};
 use andromeda_recovery::{
     CommitLogInvocationWal, DurableTransactionWalPrefix, map_durable_wal_prefix_to_tx_replay,
 };
-use andromeda_transaction::CommitLogManager;
 use andromeda_transaction_log::{
-    InvocationWal as TransactionInvocationWal, IsolationLevel, Lsn, TxWalReplayRecord,
-    encode_commit_payload, encode_rollback_payload,
+    CommitLogManager, InvocationWal as TransactionInvocationWal, IsolationLevel, Lsn,
+    TransactionLogStatus, TransactionStatusStore, TxWalReplayRecord, encode_commit_payload,
+    encode_rollback_payload,
 };
 use andromeda_types::TransactionId;
 use andromeda_wal::{FileWal, InMemoryWal, Lsn as StorageLsn, WalRecord, WalRecordKind};
@@ -16,6 +16,68 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+#[derive(Debug)]
+struct MvccTransactionStatusStore {
+    table: Arc<TransactionStatusTable>,
+}
+
+impl MvccTransactionStatusStore {
+    fn new(table: Arc<TransactionStatusTable>) -> Arc<Self> {
+        Arc::new(Self { table })
+    }
+
+    fn to_mvcc_status(status: TransactionLogStatus) -> TransactionStatus {
+        match status {
+            TransactionLogStatus::InFlight => TransactionStatus::InFlight,
+            TransactionLogStatus::Committed => TransactionStatus::Committed,
+            TransactionLogStatus::RolledBack => TransactionStatus::RolledBack,
+        }
+    }
+
+    fn from_mvcc_status(status: TransactionStatus) -> TransactionLogStatus {
+        match status {
+            TransactionStatus::InFlight => TransactionLogStatus::InFlight,
+            TransactionStatus::Committed => TransactionLogStatus::Committed,
+            TransactionStatus::RolledBack => TransactionLogStatus::RolledBack,
+        }
+    }
+}
+
+impl TransactionStatusStore for MvccTransactionStatusStore {
+    fn status(&self, tx_id: TransactionId) -> Option<TransactionLogStatus> {
+        self.table.status(tx_id).map(Self::from_mvcc_status)
+    }
+
+    fn record_commit_from_durable_evidence(
+        &self,
+        tx_id: TransactionId,
+        commit_lsn: Lsn,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<()> {
+        self.table
+            .record_commit_from_durable_evidence(tx_id, commit_lsn, durable_lsn)
+    }
+
+    fn record_rollback_from_durable_evidence(
+        &self,
+        tx_id: TransactionId,
+        rollback_lsn: Lsn,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<()> {
+        self.table
+            .record_rollback_from_durable_evidence(tx_id, rollback_lsn, durable_lsn)
+    }
+
+    fn restore_terminal_from_validated_replay(
+        &self,
+        tx_id: TransactionId,
+        status: TransactionLogStatus,
+    ) -> AndromedaResult<()> {
+        self.table
+            .restore_terminal_from_validated_replay(tx_id, Self::to_mvcc_status(status))
+    }
+}
 
 fn unique_wal_path(test_name: &str) -> PathBuf {
     let nanos = SystemTime::now()
@@ -102,7 +164,10 @@ fn durable_terminal_payloads_replay_through_tx_commit_log() -> AndromedaResult<(
     assert_eq!(bridged.evidence.incomplete_transactions, 0);
 
     let status_table = Arc::new(TransactionStatusTable::new());
-    let commit_log = CommitLogManager::new(replay_wal(), status_table.clone());
+    let commit_log = CommitLogManager::new(
+        replay_wal(),
+        MvccTransactionStatusStore::new(status_table.clone()),
+    );
     let summary = commit_log.reconstruct_from_tx_wal_replay(bridged.replay_records)?;
 
     assert_eq!(summary.commits_restored, 1);
@@ -124,7 +189,10 @@ async fn commit_log_manager_uses_file_wal_bridge_for_terminal_records() -> Andro
     let bridge = Arc::new(CommitLogInvocationWal::new(FileWal::open(&path)?));
     let status_table = Arc::new(TransactionStatusTable::new());
     let wal_manager: Arc<dyn TransactionInvocationWal> = bridge.clone();
-    let commit_log = CommitLogManager::new(wal_manager.clone(), status_table.clone());
+    let commit_log = CommitLogManager::new(
+        wal_manager.clone(),
+        MvccTransactionStatusStore::new(status_table.clone()),
+    );
 
     let committed = TransactionId::new(101);
     let rolled_back = TransactionId::new(102);
@@ -180,7 +248,10 @@ async fn commit_log_manager_uses_file_wal_bridge_for_terminal_records() -> Andro
     assert_eq!(bridged.evidence.incomplete_transactions, 0);
 
     let recovered_status_table = Arc::new(TransactionStatusTable::new());
-    let recovered_commit_log = CommitLogManager::new(replay_wal(), recovered_status_table.clone());
+    let recovered_commit_log = CommitLogManager::new(
+        replay_wal(),
+        MvccTransactionStatusStore::new(recovered_status_table.clone()),
+    );
     let summary = recovered_commit_log.reconstruct_from_tx_wal_replay(bridged.replay_records)?;
     assert_eq!(summary.commits_restored, 1);
     assert_eq!(summary.rollbacks_restored, 1);
@@ -246,7 +317,10 @@ fn transaction_wal_bridge_preserves_duplicate_terminal_idempotency() -> Andromed
     );
 
     let status_table = Arc::new(TransactionStatusTable::new());
-    let commit_log = CommitLogManager::new(replay_wal(), status_table.clone());
+    let commit_log = CommitLogManager::new(
+        replay_wal(),
+        MvccTransactionStatusStore::new(status_table.clone()),
+    );
     let summary = commit_log.reconstruct_from_tx_wal_replay(bridged.replay_records)?;
     assert_eq!(summary.commits_restored, 1);
     assert_eq!(summary.rollbacks_restored, 1);
@@ -316,7 +390,10 @@ fn transaction_wal_bridge_maps_begin_only_to_incomplete_and_keeps_it_invisible()
     );
 
     let status_table = Arc::new(TransactionStatusTable::new());
-    let commit_log = CommitLogManager::new(replay_wal(), status_table.clone());
+    let commit_log = CommitLogManager::new(
+        replay_wal(),
+        MvccTransactionStatusStore::new(status_table.clone()),
+    );
     let summary = commit_log.reconstruct_from_tx_wal_replay(bridged.replay_records)?;
 
     assert_eq!(summary.incomplete_transactions, 1);

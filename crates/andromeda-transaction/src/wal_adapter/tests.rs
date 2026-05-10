@@ -5,7 +5,7 @@ use std::{
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use andromeda_transaction_log::Lsn;
+use andromeda_transaction_log::{Lsn, TxWalAdapterError};
 use andromeda_types::TransactionId;
 
 use super::*;

@@ -3,12 +3,12 @@ pub(crate) use andromeda_audit::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
-pub(crate) use andromeda_execution::LocalProcedure;
 pub(crate) use andromeda_catalog::CatalogSystemStore;
 pub(crate) use andromeda_definition_batch::{
     CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
 pub(crate) use andromeda_error::{AndromedaErrorKind, AndromedaResult};
+pub(crate) use andromeda_execution::LocalProcedure;
 pub(crate) use andromeda_hardware::{PipelineClass, ResourceBudget};
 pub(crate) use andromeda_inventory_demo::{
     inventory_domain_definition_batch, inventory_reserve_stock_contract,

@@ -1,8 +1,9 @@
 #![no_main]
 
-use andromeda_proto::{
-    decode_generated_message, generated::contract::v1::StructuredObjectHeader as ProtoHeader,
-    project_generated_structured_object_header, validate_generated_structured_object_header,
+use andromeda_proto::generated::contract::v1::StructuredObjectHeader as ProtoHeader;
+use andromeda_proto_wire::{
+    decode_protobuf_message, project_generated_structured_object_header,
+    validate_generated_structured_object_header,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -16,7 +17,7 @@ fuzz_target!(|data: &[u8]| {
 
     if let Some(header) =
         common::decode_bounded::<ProtoHeader, _>(data, MAX_STRUCTURED_OBJECT_INPUT_BYTES, |bytes| {
-            decode_generated_message(bytes)
+            decode_protobuf_message(bytes, "generated StructuredObjectHeader")
         })
     {
         let _ = validate_generated_structured_object_header(&header);
@@ -24,7 +25,9 @@ fuzz_target!(|data: &[u8]| {
     }
 
     if let Some((header_bytes, payload)) = split_length_prefixed_header(data) {
-        if let Ok(header) = decode_generated_message::<ProtoHeader>(header_bytes) {
+        if let Ok(header) =
+            decode_protobuf_message::<ProtoHeader>(header_bytes, "generated StructuredObjectHeader")
+        {
             let _ = validate_generated_structured_object_header(&header);
             if let Ok(typed) = project_generated_structured_object_header(&header) {
                 // TODO(structured-object-payload-codec): Replace this local

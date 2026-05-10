@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_plan_cache::{
     AdvisoryEvidenceSummary, CardinalityBucket, PlanCacheKey, PlanCandidate, PlanCandidateId,
     PlanCandidateRank, PlanClass, PlanSelectionError, PlanSelectionOutcome, PlanShapeFingerprint,
     PlanShapeFingerprintBuilder, select_minimal_plan_with_advisory_evidence,
 };
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 pub fn binding(

@@ -1,6 +1,6 @@
 mod support;
 
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_plan_cache::{
     AdvisoryEvidenceStatus, AdvisoryEvidenceSummary, AdvisoryEvidenceSummaryBuilder,
     PlanCandidateId, PlanClass, PlanSelectionError, select_minimal_plan_with_advisory_evidence,

@@ -68,7 +68,8 @@ This crate forbids unsafe code (`#![forbid(unsafe_code)]`).
 "#]
 
 mod batch;
-pub mod digest;
+#[cfg(test)]
+mod digest;
 mod recovery;
 mod server;
 mod snapshot;
@@ -76,24 +77,15 @@ mod store;
 mod wal_integration;
 mod wal_record;
 
-pub use andromeda_catalog_store::{
-    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
-    EnumVariant, ObjectKind, QualifiedName, StructuredObjectDefinition, TableDefinition,
-};
 pub use batch::{
-    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinitionBatchPlanning,
-    CatalogDurabilityMarker, CatalogLifecycleAction, CatalogLifecycleTarget, CatalogMutation,
+    CATALOG_MUTATION_MAX_APPLY_RECORDS_PER_BATCH, CatalogDefinitionBatchPlanning, CatalogMutation,
     CatalogMutationBoundary, CatalogMutationCommitEvidence, CatalogMutationDelta,
-    CatalogMutationDurability, CatalogMutationOperation, CatalogMutationPlan,
-    CatalogMutationRecord, CatalogMutationRecordKind, CatalogPublicationReceipt,
-    CatalogPublicationSemantics, CatalogWalPayloadDecodeError, CatalogWalPayloadDecodeErrorKind,
-    DefinitionBatch, DefinitionBatchId, DefinitionBatchImportId, DefinitionBatchPlan,
-    DefinitionBatchSourceHash, DefinitionOperation, PlannedDefinition, PlannedLifecycleTransition,
+    CatalogMutationOperation, CatalogMutationPlan, CatalogMutationRecord,
+    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogWalPayloadDecodeError,
+    CatalogWalPayloadDecodeErrorKind, DefinitionBatchPlan,
 };
 pub use recovery::{
-    CatalogDurableMutationPayload, CatalogRecoveredBatch, CatalogRecoveryAnomaly,
-    CatalogRecoveryAnomalyKind, CatalogRecoveryOutcome, CatalogRecoveryReport, CatalogSkippedBatch,
-    CatalogSkippedBatchReason, recover_catalog_snapshot_from_durable_payloads,
+    CatalogRecoveryOutcome, recover_catalog_snapshot_from_durable_payloads,
     replay_catalog_mutation_records,
 };
 pub use server::{
@@ -107,7 +99,7 @@ pub use server::{
     CatalogSubscriptionRegistry, ColumnSchema, DurableCatalogRuntimeHandle, ProcedureManifest,
     require_durable_catalog_runtime,
 };
-pub use snapshot::{CatalogSnapshot, CatalogSnapshotPublication};
+pub use snapshot::CatalogSnapshot;
 pub use store::{
     CatalogSystemApplyReport, CatalogSystemDurableApplyReport, CatalogSystemStore,
     CatalogSystemWalAppend,

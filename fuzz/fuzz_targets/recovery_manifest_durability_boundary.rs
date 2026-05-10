@@ -1,7 +1,7 @@
-﻿#![no_main]
-use libfuzzer_sys::fuzz_target;
+#![no_main]
 use andromeda_manifest::ManifestDurabilityBoundary;
 use andromeda_wal::Lsn;
+use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {
     if data.len() < 48 {
@@ -12,10 +12,12 @@ fuzz_target!(|data: &[u8]| {
     let database_id = u64::from_le_bytes(data[0..8].try_into().unwrap_or([0; 8]));
     let manifest_version = u64::from_le_bytes(data[8..16].try_into().unwrap_or([0; 8]));
     let snapshot_id = u64::from_le_bytes(data[16..24].try_into().unwrap_or([0; 8]));
-    let base_checkpoint_lsn =
-        Lsn::new(u64::from_le_bytes(data[24..32].try_into().unwrap_or([0; 8])));
-    let required_wal_start_lsn =
-        Lsn::new(u64::from_le_bytes(data[32..40].try_into().unwrap_or([0; 8])));
+    let base_checkpoint_lsn = Lsn::new(u64::from_le_bytes(
+        data[24..32].try_into().unwrap_or([0; 8]),
+    ));
+    let required_wal_start_lsn = Lsn::new(u64::from_le_bytes(
+        data[32..40].try_into().unwrap_or([0; 8]),
+    ));
     let manifest_crc = u32::from_le_bytes(data[40..44].try_into().unwrap_or([0; 4]));
 
     let mut previous_manifest_hash = [0u8; 32];

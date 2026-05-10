@@ -2,7 +2,6 @@
 
 #![forbid(unsafe_code)]
 
-use andromeda_contract::QualifiedName;
 use andromeda_optimizer::srpl::{
     constant_fold::{fold_assignments, fold_emit_values, fold_value},
     cost_model::{
@@ -20,6 +19,7 @@ use andromeda_optimizer::srpl::{
     projection_pushdown::apply as proj_apply,
 };
 use andromeda_plan_cache::PlanClass;
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_ir::{
     ArithOp, Cardinality, ConstantLiteral, MAX_EXPR_DEPTH, MAX_SRPL_BODY_OPERATIONS,
     SrplAssignmentIr, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplEmitValueIr,

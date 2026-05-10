@@ -25,9 +25,9 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::TransactionId;
 use std::sync::Arc;
 
-use crate::Lsn;
 use crate::commit_log::{CommitLogManager, IsolationLevel};
 use crate::state::TransactionState;
+use andromeda_transaction_log::Lsn;
 
 /// Coordinator for the transaction commit protocol.
 ///

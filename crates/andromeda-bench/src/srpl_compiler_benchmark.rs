@@ -2,8 +2,9 @@ use std::time::Instant;
 
 use andromeda_bench_harness::elapsed_micros;
 use andromeda_bench_workload::BenchmarkError;
-use andromeda_srpl::{
-    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature_with_optimizer,
+use andromeda_optimizer::srpl::{optimize_procedure_ir_with_config, phase::OptimizerPhase};
+use andromeda_srpl_definition_batch::{
+    INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
 };
 
 pub const SRPL_COMPILE_OPTIMIZE_WORKLOAD_ID: &str = "srpl-compile-optimize-smoke";
@@ -33,11 +34,17 @@ pub fn run_srpl_compile_optimize_smoke_benchmark(
 
     for _ in 0..samples {
         let started = Instant::now();
-        let result = compile_narrow_procedure_signature_with_optimizer(
-            INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE,
-            Default::default(),
-        )
-        .map_err(|_| BenchmarkError::HarnessFailed)?;
+        let ir = compile_narrow_procedure_signature(INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE)
+            .map_err(|_| BenchmarkError::HarnessFailed)?;
+        let mut result = optimize_procedure_ir_with_config(ir, Default::default())
+            .map_err(|_| BenchmarkError::HarnessFailed)?;
+        let mut phases = vec![
+            OptimizerPhase::Parsing,
+            OptimizerPhase::Binding,
+            OptimizerPhase::IRLowering,
+        ];
+        phases.extend(std::mem::take(&mut result.phases));
+        result.phases = phases;
         latencies_us.push(elapsed_micros(started));
 
         if result.original_ir.body.operations.is_empty()

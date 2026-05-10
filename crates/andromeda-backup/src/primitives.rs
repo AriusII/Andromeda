@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use super::error::{BackupResult, backup_error};
-use andromeda_observe::TraceId as ObserveTraceId;
+use andromeda_observability::TraceId as ObservabilityTraceId;
 use andromeda_types::CatalogVersion as CoreCatalogVersion;
 use andromeda_wal::Lsn as WalLsn;
 
@@ -120,7 +120,7 @@ impl BackupTraceId for TraceId {
     }
 }
 
-impl BackupTraceId for ObserveTraceId {
+impl BackupTraceId for ObservabilityTraceId {
     fn is_zero(self) -> bool {
         self.is_zero()
     }

@@ -280,7 +280,7 @@ fn scenario_evidence_batch_size_is_bounded_before_plan_selection() {
     let candidates = [candidate(40, PlanClass::StatsAdaptive, 100, 0x40)];
 
     assert_eq!(candidates.len(), 1);
-    let error = AdvisoryEvidenceSummaryBuilder::new(PLAN_SELECTION_MAX_SCENARIO_EVIDENCE + 1)
-        .unwrap_err();
+    let error =
+        AdvisoryEvidenceSummaryBuilder::new(PLAN_SELECTION_MAX_SCENARIO_EVIDENCE + 1).unwrap_err();
     assert_eq!(error, PlanSelectionError::TooManyScenarioEvidence);
 }

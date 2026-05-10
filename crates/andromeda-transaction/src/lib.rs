@@ -24,11 +24,6 @@ mod trace;
 mod wal_adapter;
 
 pub use allocator::TransactionIdAllocator;
-pub use commit_log::{
-    CommitLogEntry, CommitLogManager, IsolationLevel, Lsn, RollbackLogEntry, TransactionStatus,
-    TransactionStatusRebuild, TransactionStatusTable, TxWalReplayAction, TxWalReplayRecord,
-    TxWalReplaySummary, WalRecordKind,
-};
 pub use commit_protocol::CommitProtocol;
 pub use locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 pub use manager::{TransactionLockCoordinator, TransactionManager, TransactionRecord};
@@ -36,7 +31,4 @@ pub use state::{TransactionEvent, TransactionState, TransactionStateMachine};
 pub use trace::{
     LockReleaseAllTrace, TransactionTrace, TransactionTransitionCorrelation, transaction_phase_code,
 };
-pub use wal_adapter::{
-    TxWalAdapterError, TxWalAdapterReplayKind, TxWalAdapterReplayRecord, TxWalAdapterTrait,
-    WalManager, append_commit_and_flush, map_tx_wal_replay_records,
-};
+pub use wal_adapter::{TxWalAdapterTrait, WalManager, append_commit_and_flush};

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use andromeda_types::CatalogObjectId;
 
-use andromeda_contract::StatsVersion;
+use andromeda_procedure_contract::StatsVersion;
 
 use super::HistogramBucket;
 

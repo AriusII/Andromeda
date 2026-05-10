@@ -2,12 +2,13 @@
 
 //! Regression guard for DEC-032 page/LSN canonical ownership.
 //!
-//! Future buffer-pool, heap, and index work must import the existing durable
-//! primitives from the storage crate root or the `layout::page` compatibility
-//! surface. They must not introduce mirror `PageId`, `PageSize`, `PageHeader`,
-//! `PageTrailer`, `PageLayoutContract`, or `Lsn` definitions. `PageId`,
-//! `PageSize`, `PageHeader`, `PageTrailer`, and `PageLayoutContract` are
-//! canonical in `andromeda-storage-page`; `Lsn` is owned by the pure WAL crate.
+//! Future buffer-pool, heap, and index work must import durable page
+//! primitives from `andromeda-storage-page` and WAL positions from
+//! `andromeda-wal` directly. They must not introduce mirror `PageId`,
+//! `PageSize`, `PageHeader`, `PageTrailer`, `PageLayoutContract`, or `Lsn`
+//! definitions. `PageId`, `PageSize`, `PageHeader`, `PageTrailer`, and
+//! `PageLayoutContract` are canonical in `andromeda-storage-page`; `Lsn` is
+//! owned by the pure WAL crate.
 
 use std::any::TypeId;
 use std::collections::BTreeMap;
@@ -15,8 +16,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use andromeda_storage as storage;
-use andromeda_storage::layout;
+use andromeda_storage_page as page;
 use andromeda_wal as wal;
 
 /// Map of page/LSN ownership types to their canonical, workspace-relative
@@ -103,51 +103,50 @@ fn page_and_lsn_types_have_single_canonical_definition() {
 }
 
 #[test]
-fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
+fn buffer_heap_and_index_style_imports_use_owner_crate_primitives() {
     fn assert_type<T: 'static>() -> TypeId {
         TypeId::of::<T>()
     }
 
-    fn accept_page_id(_id: storage::PageId) {}
-    fn accept_page_size(_size: storage::PageSize) {}
-    fn accept_header(_header: storage::PageHeader) {}
-    fn accept_trailer(_trailer: storage::PageTrailer) {}
-    fn accept_contract(_contract: storage::PageLayoutContract) {}
+    fn accept_page_id(_id: page::PageId) {}
+    fn accept_page_size(_size: page::PageSize) {}
+    fn accept_header(_header: page::PageHeader) {}
+    fn accept_trailer(_trailer: page::PageTrailer) {}
+    fn accept_contract(_contract: page::PageLayoutContract) {}
     fn accept_lsn(_lsn: wal::Lsn) {}
 
+    assert_eq!(assert_type::<page::PageId>(), TypeId::of::<page::PageId>());
     assert_eq!(
-        assert_type::<storage::PageId>(),
-        assert_type::<layout::page::PageId>()
+        assert_type::<page::PageSize>(),
+        TypeId::of::<page::PageSize>()
     );
     assert_eq!(
-        assert_type::<storage::PageSize>(),
-        assert_type::<layout::page::PageSize>()
+        assert_type::<page::PageHeader>(),
+        TypeId::of::<page::PageHeader>()
     );
     assert_eq!(
-        assert_type::<storage::PageHeader>(),
-        assert_type::<layout::page::PageHeader>()
+        assert_type::<page::PageTrailer>(),
+        TypeId::of::<page::PageTrailer>()
     );
     assert_eq!(
-        assert_type::<storage::PageTrailer>(),
-        assert_type::<layout::page::PageTrailer>()
+        assert_type::<page::PageLayoutContract>(),
+        TypeId::of::<page::PageLayoutContract>()
     );
-    assert_eq!(
-        assert_type::<storage::PageLayoutContract>(),
-        assert_type::<layout::page::PageLayoutContract>()
-    );
-    let header = storage::PageHeader {
-        magic: storage::PageHeader::MAGIC,
-        format_version: storage::PageHeader::FORMAT_VERSION_V0,
-        page_size: layout::page::PageSize::KiB16,
-        page_type: layout::page::PageType::FixedRow,
-        page_id: layout::page::PageId::new(1),
-        object_id: layout::page::ObjectId::new(2),
-        allocation_id: layout::page::AllocationId::new(3),
+    assert_eq!(assert_type::<wal::Lsn>(), TypeId::of::<wal::Lsn>());
+
+    let header = page::PageHeader {
+        magic: page::PageHeader::MAGIC,
+        format_version: page::PageHeader::FORMAT_VERSION_V0,
+        page_size: page::PageSize::KiB16,
+        page_type: page::PageType::FixedRow,
+        page_id: page::PageId::new(1),
+        object_id: page::ObjectId::new(2),
+        allocation_id: page::AllocationId::new(3),
         page_lsn: wal::Lsn::new(4),
         page_epoch: 1,
         previous_page_id: None,
         next_page_id: None,
-        header_len: storage::PageHeader::MIN_HEADER_LEN_V0,
+        header_len: page::PageHeader::MIN_HEADER_LEN_V0,
         payload_offset: 128,
         payload_len: 512,
         free_start: 256,
@@ -155,19 +154,19 @@ fn buffer_heap_and_index_style_imports_resolve_to_existing_primitives() {
         free_bytes: 256,
         slot_count: 1,
         row_count: 1,
-        flags: layout::page::PageFlags::NONE,
+        flags: page::PageFlags::NONE,
         header_crc: 5,
     };
-    let trailer = layout::page::PageTrailer {
+    let trailer = page::PageTrailer {
         payload_crc64: 6,
         page_hash: [7; 32],
         torn_write_guard: 8,
     };
-    let contract = layout::page::PageLayoutContract { header, trailer };
+    let contract = page::PageLayoutContract { header, trailer };
     assert!(contract.validate().is_ok());
 
-    accept_page_id(layout::page::PageId::new(9));
-    accept_page_size(layout::page::PageSize::KiB16);
+    accept_page_id(page::PageId::new(9));
+    accept_page_size(page::PageSize::KiB16);
     accept_header(contract.header);
     accept_trailer(contract.trailer);
     accept_contract(contract);

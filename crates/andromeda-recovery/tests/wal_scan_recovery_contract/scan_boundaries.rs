@@ -1,8 +1,6 @@
 use crate::support::{encode_records, manifest, record, tx_record};
-use andromeda_observe::{
-    CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, RecoveryTrace, TraceEvent,
-    TraceId,
-};
+use andromeda_observability::{CriticalDecisionKind, EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, RecoveryTrace as ObserveRecoveryTrace, TraceEvent};
 use andromeda_recovery::{RecoveryPlan, StartupMode};
 use andromeda_wal::Lsn;
 use andromeda_wal::WalRecordKind;
@@ -104,7 +102,7 @@ fn recovery_trace_marks_recoverable_wal_tail_stop_as_boundary_evidence() {
     )
     .expect("recoverable WAL tail truncation should retain durable prefix for recovery");
     let trace_projection = plan.trace_projection(TraceId::new(601));
-    let trace = RecoveryTrace {
+    let trace = ObserveRecoveryTrace {
         trace_id: trace_projection.trace_id,
         last_durable_lsn: trace_projection.last_durable_lsn,
         corruption_boundary_lsn: trace_projection.corruption_boundary_lsn,

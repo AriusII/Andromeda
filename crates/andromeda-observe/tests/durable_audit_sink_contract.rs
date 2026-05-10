@@ -6,8 +6,8 @@ use andromeda_audit::{
     SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
-use andromeda_observability::{EventId, TraceId};
-use andromeda_observe::{EventCorrelation, EventEnvelope, PendingDurableAuditRecord, TraceEvent};
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, PendingDurableAuditRecord, TraceEvent};
 use andromeda_types::{RequestId, SessionId};
 
 #[test]

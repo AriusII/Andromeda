@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
-use andromeda_proto::StructuredObjectHeader;
+use andromeda_structured_object::StructuredObjectHeader;
 #[cfg(test)]
-use andromeda_proto::{RowCountPolicy, StructuredObjectLayout};
+use andromeda_structured_object::{RowCountPolicy, StructuredObjectLayout};
 use andromeda_types::{InvocationId, TransactionId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

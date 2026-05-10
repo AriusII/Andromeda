@@ -1,7 +1,8 @@
-use andromeda_observe::{
+use andromeda_audit::{
     AdminOperation, DurableAuditEventFamily, DurableAuditReplayBehavior,
-    DurableAuditRetentionBoundary, Permission, SurfaceScope, TraceEventFamily,
+    DurableAuditRetentionBoundary, DurableAuditTraceFamily, Permission, SurfaceScope,
 };
+use andromeda_observability::TraceEventFamily;
 
 pub(super) fn trace_family_str(family: TraceEventFamily) -> &'static str {
     match family {
@@ -32,6 +33,23 @@ pub(super) fn durable_family_str(family: DurableAuditEventFamily) -> &'static st
         DurableAuditEventFamily::ForensicDecision => "forensic-decision",
         DurableAuditEventFamily::RecoveryDecision => "recovery-decision",
         DurableAuditEventFamily::GenericAudit => "generic-audit",
+    }
+}
+
+pub(super) fn durable_trace_family_str(family: DurableAuditTraceFamily) -> &'static str {
+    match family {
+        DurableAuditTraceFamily::Decision => "decision",
+        DurableAuditTraceFamily::ProcedureInvocation => "procedure-invocation",
+        DurableAuditTraceFamily::Wal => "wal",
+        DurableAuditTraceFamily::Recovery => "recovery",
+        DurableAuditTraceFamily::ManifestCatalog => "manifest-catalog",
+        DurableAuditTraceFamily::Protocol => "protocol",
+        DurableAuditTraceFamily::SecurityAudit => "security-audit",
+        DurableAuditTraceFamily::AdminAudit => "admin-audit",
+        DurableAuditTraceFamily::Resource => "resource",
+        DurableAuditTraceFamily::Io => "io",
+        DurableAuditTraceFamily::Gpu => "gpu",
+        DurableAuditTraceFamily::Transaction => "transaction",
     }
 }
 

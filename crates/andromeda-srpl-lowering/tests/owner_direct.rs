@@ -1,7 +1,7 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::QualifiedName;
 use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_ast::{
     BusinessOperationAst, BusinessOperationKindAst, Cardinality, ProcedureBodyAst, SourceSpan,
     Spanned,

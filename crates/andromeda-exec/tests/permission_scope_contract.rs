@@ -7,7 +7,7 @@ use andromeda_exec::{
     ProcedureDispatchRequest, ProcedureDispatcher, ProcedureHandler, ProcedureRegistry,
     ResultStreamMetadata, validate_dispatch_permissions, validate_dispatch_permissions_or_error,
 };
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };

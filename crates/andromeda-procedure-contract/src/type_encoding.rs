@@ -33,11 +33,11 @@ fn scalar_type_bytes(sink: &mut Vec<u8>, scalar: &ScalarType) {
         ScalarType::Decimal(decimal) => {
             sink.push(10);
             decimal_type_bytes(sink, *decimal);
-        }
+        },
         ScalarType::Float(float) => {
             sink.push(11);
             float_type_bytes(sink, *float);
-        }
+        },
         ScalarType::Bool => sink.push(12),
         ScalarType::Text(text) => {
             sink.push(13);
@@ -52,10 +52,10 @@ fn scalar_type_bytes(sink: &mut Vec<u8>, scalar: &ScalarType) {
                 Some(collation) => {
                     sink.push(1);
                     len_prefixed_bytes(sink, collation.as_bytes());
-                }
+                },
                 None => sink.push(0),
             }
-        }
+        },
         ScalarType::Timestamp(timestamp) => {
             sink.push(14);
             sink.push(match timestamp {
@@ -63,7 +63,7 @@ fn scalar_type_bytes(sink: &mut Vec<u8>, scalar: &ScalarType) {
                 TimestampType::Invocation => 1,
                 TimestampType::MonotonicEpoch => 2,
             });
-        }
+        },
     }
 }
 
@@ -76,7 +76,7 @@ fn decimal_type_bytes(sink: &mut Vec<u8>, decimal: DecimalType) {
             sink.push(3);
             sink.push(precision);
             sink.push(scale);
-        }
+        },
     }
 }
 
@@ -92,7 +92,7 @@ fn float_type_bytes(sink: &mut Vec<u8>, float: FloatType) {
                 FloatMode::Approximate => 0,
                 FloatMode::DeterministicAnalytics => 1,
             });
-        }
+        },
     }
 }
 

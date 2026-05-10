@@ -1,9 +1,9 @@
-use andromeda_observe::{
+use andromeda_observability::{
     AuthorizationDeniedTrace, BackpressureTrace, CompletionEmittedTrace, ContractRejectedTrace,
-    EventCorrelation, EventEnvelope, EventId, EventSink, FrameRejectionTrace, InMemoryEventSink,
-    ProtocolCorrelation, ProtocolEventScope, SchemaLayoutDecisionTrace, StreamRoleRejectionTrace,
-    TraceEvent, TraceId, UnsupportedVersionTrace,
+    EventCorrelation, EventId, FrameRejectionTrace, ProtocolCorrelation, ProtocolEventScope,
+    SchemaLayoutDecisionTrace, StreamRoleRejectionTrace, TraceId, UnsupportedVersionTrace,
 };
+use andromeda_observe::{EventEnvelope, EventSink, InMemoryEventSink, TraceEvent};
 use andromeda_types::{RequestId, SessionId};
 
 fn request_correlation() -> EventCorrelation {

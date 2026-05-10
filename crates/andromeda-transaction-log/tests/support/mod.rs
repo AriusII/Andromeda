@@ -4,19 +4,19 @@ use andromeda_types::TransactionId;
 use std::collections::BTreeMap;
 use std::sync::{Mutex, MutexGuard};
 
-pub(crate) type TransactionStatus = TransactionLogStatus;
+pub type TransactionStatus = TransactionLogStatus;
 
 #[derive(Debug, Default)]
-pub(crate) struct TransactionStatusTable {
+pub struct TransactionStatusTable {
     statuses: Mutex<BTreeMap<TransactionId, TransactionStatus>>,
 }
 
 impl TransactionStatusTable {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 
-    pub(crate) fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
+    pub fn status(&self, transaction_id: TransactionId) -> Option<TransactionStatus> {
         self.lock_statuses().get(&transaction_id).copied()
     }
 

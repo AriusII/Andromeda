@@ -214,7 +214,7 @@ fn future_work_records_fail_stop_with_clear_error_and_context() {
         let record = record_for_kind(kind, Lsn::new(idx as u64 + 10));
         let err =
             replay_wal_record(&mut ctx, &record).expect_err("future work handlers must fail-stop");
-        let message = err.message();
+        let message = err.message().to_owned();
 
         if is_index_btree_recovery_kind(kind) {
             assert!(

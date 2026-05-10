@@ -1,13 +1,15 @@
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG, json_string};
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u64_option};
-use andromeda_bench::{
-    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
-    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, CRUD_SCENARIOS, CrudOperationMetrics,
-    CrudWorkloadResult, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS, MAX_CRUD_THREADS,
-    find_crud_scenario,
+use andromeda_bench_workload::{
+    CRUD_SCENARIOS, CrudOperationMetrics, MAX_CRUD_BATCH_SIZE, MAX_CRUD_DURATION_MS, MAX_CRUD_ROWS,
+    MAX_CRUD_THREADS, find_crud_scenario,
 };
 use andromeda_error::AndromedaResult;
+use andromeda_scenario_evidence::{
+    BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, CrudWorkloadResult,
+};
 
 #[derive(Debug, Clone)]
 pub(super) struct CrudRunOptions {

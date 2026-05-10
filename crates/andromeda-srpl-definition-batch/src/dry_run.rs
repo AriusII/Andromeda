@@ -1,6 +1,5 @@
-use andromeda_catalog::{
-    CatalogMutationRecordKind, CatalogSystemDurableApplyReport, CatalogSystemStore,
-};
+use andromeda_catalog::{CatalogSystemDurableApplyReport, CatalogSystemStore};
+use andromeda_catalog_recovery::CatalogMutationRecordKind;
 use andromeda_catalog_store::CatalogDefinition;
 use andromeda_definition_batch::{
     DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchDryRun, DefinitionBatchId,

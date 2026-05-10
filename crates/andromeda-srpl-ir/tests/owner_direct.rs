@@ -1,4 +1,4 @@
-use andromeda_contract::QualifiedName;
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_ir::{
     Cardinality, ResultContract, SrplEmitValueIr, SrplValueIr, validate_srpl_identifier,
 };

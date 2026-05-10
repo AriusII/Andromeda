@@ -1,4 +1,8 @@
-use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogSnapshot};
+use andromeda_catalog::CatalogDefinitionBatchPlanning;
+use andromeda_catalog_store::CatalogSnapshot;
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::AndromedaResult;
 use andromeda_exec::{InvocationContext, InvocationRequest};
 use andromeda_inventory_demo::{
@@ -8,7 +12,7 @@ use andromeda_inventory_demo::{
     bind_inventory_reserve_stock_v0_pdf_executable_procedure,
     encode_inventory_reserve_stock_v0_execute_frame, inventory_domain_definition_batch,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_rpc_protocol::{
     FRAME_HEADER_CRC_UNCHECKED, FrameBytes, FrameCodec, FrameHeader, FrameType,
@@ -17,7 +21,13 @@ use andromeda_storage_heap::LocalHeapRowInsertRedoTemplate;
 use andromeda_storage_page::{PageId, PageSize};
 use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 
-pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
+
+pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
     let batch = inventory_domain_definition_batch().unwrap();
     let plan = batch.dry_run().unwrap();
     let mut snapshot = CatalogSnapshot::empty(
@@ -48,7 +58,7 @@ pub(crate) fn context(contract: &ProcedureContract, trace_id: u64) -> Invocation
 }
 
 pub(crate) fn executable_procedure(
-    catalog: &CatalogSnapshot,
+    catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
     contract: &ProcedureContract,
 ) -> V0InventoryReserveStockExecutableProcedure {
     bind_inventory_reserve_stock_v0_pdf_executable_procedure(catalog, contract).unwrap()

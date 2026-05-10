@@ -1,6 +1,6 @@
 use crate::support::*;
 use andromeda_backup::{BackupId, WalArchiveRange};
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_restore::{
     RecoveryStage, RestoreAuditTrace, RestoreCompletion, compute_restore_checksum,
 };

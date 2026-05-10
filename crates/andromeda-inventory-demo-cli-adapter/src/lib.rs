@@ -3,7 +3,11 @@
 //! Narrow CLI adapter for the inventory vertical demo.
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogSnapshot};
+use andromeda_catalog::CatalogDefinitionBatchPlanning;
+use andromeda_catalog_store::CatalogSnapshot;
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::AndromedaResult;
 use andromeda_exec::LocalVerticalRuntime;
 use andromeda_inventory_demo_core::{
@@ -13,7 +17,7 @@ use andromeda_inventory_demo_core::{
     bind_inventory_reserve_stock_v0_pdf_executable_procedure,
     encode_inventory_reserve_stock_v0_execute_frame,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_result_stream::CompletionStatus;
 use andromeda_types::{InvocationId, RequestId, SessionId};
 use andromeda_wal::{FileWal, InMemoryWal, Lsn};
@@ -26,6 +30,12 @@ pub use andromeda_business_fixtures::inventory_catalog::{
 pub use andromeda_inventory_demo_core::{
     InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
+
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 /// Printable trace details returned to the CLI.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -164,7 +174,7 @@ pub fn run_cli_inventory_recoverable(
     })
 }
 
-fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot> {
+fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot<CatalogPublicationReceipt>> {
     let batch = inventory_domain_definition_batch()?;
     let plan = batch.dry_run()?;
     let mut snapshot = CatalogSnapshot::empty(

@@ -1,10 +1,10 @@
-use andromeda_observe::DurableAuditTraceQueryRow;
+use andromeda_audit::DurableAuditTraceQueryRow;
 
 use super::{
     format::{audit_output_text, json_audit_string, json_option_audit_string, json_raw_string},
     labels::{
-        durable_family_str, permission_str, replay_behavior_str, retention_str, surface_str,
-        trace_family_str,
+        durable_family_str, durable_trace_family_str, permission_str, replay_behavior_str,
+        retention_str, surface_str,
     },
 };
 
@@ -13,7 +13,7 @@ pub(super) fn print_trace_row_human(row: &DurableAuditTraceQueryRow) {
         "- event_id={} trace_id={} family={} record_lsn={} principal={} event_kind={}",
         row.event_id.get(),
         row.trace_id.get(),
-        trace_family_str(row.family),
+        durable_trace_family_str(row.family),
         row.record_lsn,
         audit_output_text(&row.principal_id),
         audit_output_text(&row.event_kind)
@@ -30,7 +30,7 @@ fn row_json(row: &DurableAuditTraceQueryRow) -> String {
         "{{\"event_id\":{},\"trace_id\":{},\"family\":{},\"durable_audit_family\":{},\"sequence_number\":{},\"record_lsn\":{},\"durable_lsn\":{},\"checksum\":{},\"replay_behavior\":{},\"retention\":{},\"principal_id\":{},\"certificate_fingerprint\":{},\"surface\":{},\"permission\":{},\"request_id\":{},\"session_id\":{},\"event_kind\":{}}}",
         row.event_id.get(),
         row.trace_id.get(),
-        json_raw_string(trace_family_str(row.family)),
+        json_raw_string(durable_trace_family_str(row.family)),
         json_raw_string(durable_family_str(row.durable_audit_family)),
         row.sequence_number,
         row.record_lsn,

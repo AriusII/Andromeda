@@ -1,13 +1,15 @@
 use std::time::Instant;
 
-use andromeda_observe::{
-    CertificateIdentity, DurableAuditPrincipalBinding, DurableAuditReplayBehavior,
+use andromeda_audit::{
+    CertificateIdentity, DurableAuditAppendRecord, DurableAuditEventFamily,
+    DurableAuditPrincipalBinding, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
     DurableAuditReplayQuery, DurableAuditRetentionBoundary, DurableAuditSinkReport,
-    DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId, FileDurableAuditWalSink,
-    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace,
-    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    DurableAuditWalSink, FileDurableAuditWalSink, Permission, SecurityAuditOutcome,
+    SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, TraceEvent};
 use andromeda_types::{RequestId, SessionId};
 
 use andromeda_bench_harness::{BenchmarkTempDir as BenchTempDir, elapsed_micros};
@@ -88,13 +90,20 @@ fn execute_audit_append_file_sink_smoke(
     })
 }
 
-fn sample_record(sample: u32) -> Result<PendingDurableAuditRecord, AuditHarnessFailure> {
-    PendingDurableAuditRecord::new(
-        u64::from(sample) + 1,
+fn sample_record(sample: u32) -> Result<DurableAuditAppendRecord, AuditHarnessFailure> {
+    let envelope = security_envelope(sample)?;
+
+    DurableAuditAppendRecord::new(
+        DurableAuditRecordIdentity {
+            event_id: envelope.event_id,
+            trace_id: envelope.trace_id,
+            family: DurableAuditEventFamily::SecurityDecision,
+            sequence_number: u64::from(sample) + 1,
+        },
         principal_binding(sample),
         DurableAuditRetentionBoundary::SecurityPolicy,
         DurableAuditReplayBehavior::RebuildDecisionIndex,
-        security_envelope(sample)?,
+        format!("{:?}", envelope.event.kind()),
     )
     .map_err(harness_failed)
 }

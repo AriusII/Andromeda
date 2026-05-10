@@ -4,17 +4,17 @@ use andromeda_catalog_store::{
     CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, ObjectKind,
     QualifiedName, StructuredObjectDefinition, TableDefinition,
 };
-use andromeda_contract::{
-    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
-    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
-    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
-};
 use andromeda_definition_batch::{
     BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, CatalogLifecycleAction,
     CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
     dry_run_definition_batch,
 };
 use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
+};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,

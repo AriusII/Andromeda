@@ -1,5 +1,4 @@
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
-use andromeda_observe::{CriticalDecisionKind, TraceId};
+use andromeda_observability::{CriticalDecisionKind, TraceId};
 use andromeda_plan_cache::{
     AdvisoryEvidenceIdentity, AdvisoryEvidenceStatus, AdvisoryEvidenceSummaryBuilder,
     BoundedPlanCache, CardinalityBucket, PlanCacheKey, PlanCacheMissReason, PlanCandidate,
@@ -7,6 +6,7 @@ use andromeda_plan_cache::{
     PlanShapeFingerprintBuilder, classify_advisory_identity_for_key,
     select_minimal_plan_with_advisory_evidence,
 };
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 fn binding(

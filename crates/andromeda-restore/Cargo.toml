@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-backup = { workspace = true }
-andromeda-observe = { workspace = true }
+andromeda-observability = { workspace = true }
 andromeda-wal = { workspace = true }
 
 [dev-dependencies]

@@ -1,5 +1,6 @@
 use crate::support::{emit_trace, recovery_correlation, wal_replay};
-use andromeda_observe::{EventEmitter, InMemoryEventSink, TraceId};
+use andromeda_observability::TraceId;
+use andromeda_observe::{EventEmitter, InMemoryEventSink};
 
 /// Verifies that the `EventEmitter` never drops valid events silently and that
 /// acceptance/rejection counters remain observable.

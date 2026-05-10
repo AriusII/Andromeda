@@ -20,7 +20,7 @@ mod tests {
         BackupPhysicalPlan as BackupPhysicalPlanRaw, ColdSnapshotBoundary, SegmentPlan,
         WalArchiveIntegration, WalArchiveRange,
     };
-    use andromeda_observe::TraceId;
+    use andromeda_observability::TraceId;
     use andromeda_wal::Lsn;
 
     type BackupPhysicalPlan = BackupPhysicalPlanRaw<Lsn, TraceId>;

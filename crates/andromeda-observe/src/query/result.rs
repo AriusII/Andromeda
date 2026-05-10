@@ -1,4 +1,6 @@
-use super::{TraceEventFamily, TraceQueryPermissionMatrix};
+use andromeda_audit::DurableAuditTraceQueryPermissionMatrix;
+
+use super::TraceEventFamily;
 use crate::EventEnvelope;
 
 /// Metadata returned with every trace query result.
@@ -10,7 +12,7 @@ pub struct TraceQueryMetadata {
     pub total_matching_rows: Option<usize>,
     pub truncated: bool,
     pub ordered_by_event_id_ascending: bool,
-    pub permission_matrix: TraceQueryPermissionMatrix,
+    pub permission_matrix: DurableAuditTraceQueryPermissionMatrix,
 }
 
 /// Single typed result row.

@@ -1,5 +1,5 @@
-use andromeda_contract::QualifiedName;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::QualifiedName;
 
 use super::{
     procedure::{SrplBusinessOperationKindIr, SrplProcedureIr},

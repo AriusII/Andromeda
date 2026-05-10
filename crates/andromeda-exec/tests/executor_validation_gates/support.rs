@@ -8,7 +8,7 @@ pub(crate) use andromeda_exec::{
     InvocationContext, InvocationRequest, LocalProcedure, ResultStreamMetadata,
     SrplProcedureDispatcher,
 };
-pub(crate) use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+pub(crate) use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 pub(crate) use andromeda_procedure_contract::{
     AccessMode, IsolationPolicy, MultiResultPolicy, PolicyVersion, ProcedureContractBinding,
     ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,

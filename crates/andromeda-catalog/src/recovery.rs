@@ -2,11 +2,7 @@
 
 use crate::{CatalogMutationRecord, CatalogSnapshot};
 
-pub use andromeda_catalog_recovery::{
-    CatalogDurableMutationPayload, CatalogRecoveredBatch, CatalogRecoveryAnomaly,
-    CatalogRecoveryAnomalyKind, CatalogRecoveryReport, CatalogSkippedBatch,
-    CatalogSkippedBatchReason,
-};
+use andromeda_catalog_recovery::{CatalogDurableMutationPayload, CatalogRecoveryReport};
 
 /// Result of catalog snapshot recovery replay.
 #[derive(Debug, Clone, PartialEq, Eq)]

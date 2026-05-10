@@ -1,9 +1,7 @@
 use andromeda_admission::{InvocationContext, InvocationReject, InvocationRequest};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{
-    CompletionEmittedTrace, EventCorrelation, EventEmitter, EventSink, ProtocolCorrelation,
-    TraceEvent,
-};
+use andromeda_observability::{EventCorrelation, ProtocolCorrelation};
+use andromeda_observe::{CompletionEmittedTrace, EventEmitter, EventSink, TraceEvent};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::CompletionStatus;
 use andromeda_rpc_protocol::{FrameType, StreamRole};

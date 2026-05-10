@@ -1,6 +1,7 @@
 //! State-machine gates that prevent visible terminal status before durable WAL.
 
-use andromeda_transaction::{Lsn, TransactionState, TransactionStateMachine};
+use andromeda_transaction::{TransactionState, TransactionStateMachine};
+use andromeda_transaction_log::Lsn;
 use andromeda_types::TransactionId;
 
 #[test]

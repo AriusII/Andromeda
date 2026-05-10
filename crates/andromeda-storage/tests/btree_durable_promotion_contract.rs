@@ -3,14 +3,22 @@
 #![forbid(unsafe_code)]
 
 use andromeda_error::AndromedaErrorKind;
-use andromeda_storage::format_version::FormatVersion;
-use andromeda_storage::{BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator};
+use andromeda_manifest::format_version::FormatVersion;
+use andromeda_storage_index::{BTreeKeyFormatIdentity, BTreeOperationType, KeyV1FormatValidator};
 
 #[test]
-fn storage_key_v1_validator_wrapper_preserves_legacy_constructor_shape() {
-    let validator = KeyV1FormatValidator::new(FormatVersion::V1_0, BTreeKeyFormatIdentity::V1_0);
+fn index_key_v1_validator_preserves_durable_mutation_gate() {
+    let storage_version = FormatVersion::V1_0;
+    let validator = KeyV1FormatValidator::new(
+        storage_version.major,
+        storage_version.minor,
+        BTreeKeyFormatIdentity::V1_0,
+    );
 
-    assert_eq!(validator.storage_version(), FormatVersion::V1_0);
+    assert_eq!(
+        validator.storage_version_parts(),
+        (storage_version.major, storage_version.minor)
+    );
     assert_eq!(validator.format_identity(), BTreeKeyFormatIdentity::V1_0);
     assert!(validator.is_format_compatible());
     assert_eq!(

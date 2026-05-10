@@ -4,10 +4,10 @@
 //! module keeps the storage-side runtime checks explicit without importing IAM
 //! policy mutation code into storage.
 
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{
+use andromeda_audit::{
     AdminOperation, Permission, SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope,
 };
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
 use super::types::HadrEpoch;
 

@@ -1,4 +1,4 @@
-pub use andromeda_contract::{
+pub use andromeda_procedure_contract::{
     CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName, ResultStreamCardinality,
     ResultStreamContract,
 };

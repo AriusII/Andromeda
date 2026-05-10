@@ -9,7 +9,8 @@ pub use andromeda_inventory_demo::{
     INVENTORY_RESERVE_STOCK_PERMISSION, InventoryReserveStockExecutor, InventoryStock,
     ReserveStockCommand, inventory_reserve_stock_contract,
 };
-pub use andromeda_observe::{EventCorrelation, EventEmitter, EventId, InMemoryEventSink, TraceId};
+pub use andromeda_observability::{EventCorrelation, EventId, TraceId};
+pub use andromeda_observe::{EventEmitter, InMemoryEventSink};
 pub use andromeda_procedure_contract::ProcedureContract;
 pub use andromeda_result_stream::CompletionStatus;
 pub use andromeda_storage_page::PageSize;

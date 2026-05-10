@@ -127,7 +127,10 @@ impl CatalogSnapshotManifestStore {
 
 impl CatalogRuntimeStore for CatalogSnapshotManifestStore {
     fn catalog_runtime_evidence(&self) -> CatalogRuntimeEvidence {
-        let store = self.store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let store = self
+            .store
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let catalog_version = Some(store.snapshot().visible_version());
         match self.reopen_evidence {
             Some(reopen_evidence) => {
@@ -140,7 +143,10 @@ impl CatalogRuntimeStore for CatalogSnapshotManifestStore {
 
 impl CatalogManifestStoreBoundary<CatalogManifestRecord> for CatalogSnapshotManifestStore {
     fn current_catalog_version(&self) -> CatalogVersion {
-        let store = self.store.read().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let store = self
+            .store
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         store.snapshot().visible_version()
     }
 

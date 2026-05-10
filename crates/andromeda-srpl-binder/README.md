@@ -27,7 +27,7 @@ shapes, and deterministic Procedure contracts.
 
 Dependencies must point only toward lower or contract-safe crates such as
 `andromeda-error`, `andromeda-types`,
-`andromeda-contract`, `andromeda-srpl-diagnostics`,
+`andromeda-procedure-contract`, `andromeda-srpl-diagnostics`,
 `andromeda-srpl-cardinality`, `andromeda-srpl-ast`, and
 `andromeda-srpl-ir`.
 

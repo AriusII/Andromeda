@@ -1,8 +1,9 @@
+use andromeda_audit::DurableAuditTraceQueryPermissionMatrix;
 use andromeda_error::AndromedaResult;
 
 use super::{
-    TraceEventFamily, TraceQueryMetadata, TraceQueryPermissionMatrix, TraceQueryResult,
-    TraceQueryRow, TraceQuerySpec, filtering::matches_filter,
+    TraceEventFamily, TraceQueryMetadata, TraceQueryResult, TraceQueryRow, TraceQuerySpec,
+    filtering::matches_filter,
 };
 use crate::InMemoryEventSink;
 
@@ -42,7 +43,7 @@ impl InMemoryEventSink {
                 total_matching_rows: spec.include_total_count.then_some(total_matching),
                 truncated: total_matching.saturating_sub(spec.offset) > returned_rows,
                 ordered_by_event_id_ascending: true,
-                permission_matrix: TraceQueryPermissionMatrix::V1_ADMIN,
+                permission_matrix: DurableAuditTraceQueryPermissionMatrix::V1_ADMIN,
             },
             rows,
         })

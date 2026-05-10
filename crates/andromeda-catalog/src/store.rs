@@ -17,8 +17,8 @@ use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
-    CatalogMutationCommitEvidence, CatalogMutationDurability, CatalogMutationPlan,
-    CatalogMutationRecordKind, CatalogPublicationReceipt, CatalogSnapshot, DefinitionBatchPlan,
+    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecordKind,
+    CatalogPublicationReceipt, CatalogSnapshot, DefinitionBatchPlan,
 };
 
 /// In-memory catalog system boundary for definition planning and snapshot mutation.
@@ -152,7 +152,7 @@ impl CatalogSystemStore {
         let evidence = CatalogMutationCommitEvidence::from_durable_commit_record(
             commit_record,
             records.len(),
-            CatalogMutationDurability::StorageWal {
+            andromeda_catalog_store::CatalogMutationDurability::StorageWal {
                 commit_lsn,
                 durable_lsn,
             },

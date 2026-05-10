@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-andromeda-contract.workspace = true
 andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-srpl-cardinality.workspace = true
 andromeda-types.workspace = true

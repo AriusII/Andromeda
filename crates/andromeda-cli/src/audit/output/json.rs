@@ -1,7 +1,8 @@
-use andromeda_observe::{
-    DurableAuditCompactionReport, DurableAuditTraceQueryResult, TraceQueryFilter,
-    TraceQueryLsnRange, TraceQueryPermissionMatrix, TraceQuerySpec,
+use andromeda_audit::{
+    DurableAuditCompactionReport, DurableAuditTraceQueryPermissionMatrix,
+    DurableAuditTraceQueryResult,
 };
+use andromeda_observability::{TraceQueryFilter, TraceQueryLsnRange, TraceQuerySpec};
 
 use super::super::{
     AuditCompactReport, AuditInspectionDiagnosticEvidence, AuditInspectionReport, AuditVerifyReport,
@@ -21,7 +22,7 @@ pub(super) fn print_audit_inspection_json(report: &AuditInspectionReport) {
         report.requires_durable_audit_journal,
         json_option_audit_string(report.journal_path.as_deref()),
         inspection_spec_json(&report.spec),
-        permission_matrix_json(TraceQueryPermissionMatrix::V1_ADMIN),
+        permission_matrix_json(DurableAuditTraceQueryPermissionMatrix::V1_ADMIN),
         inspection_evidence_json(report.diagnostic_evidence.as_ref()),
         result_json(report.result.as_ref()),
         json_audit_string(&report.message),
@@ -95,7 +96,7 @@ fn lsn_range_json(range: Option<TraceQueryLsnRange>) -> String {
         .unwrap_or_else(|| "null".to_string())
 }
 
-fn permission_matrix_json(matrix: TraceQueryPermissionMatrix) -> String {
+fn permission_matrix_json(matrix: DurableAuditTraceQueryPermissionMatrix) -> String {
     format!(
         "{{\"surface\":{},\"required_permission\":{},\"audit_operation\":{},\"audit_required\":{}}}",
         json_raw_string(surface_str(matrix.surface)),

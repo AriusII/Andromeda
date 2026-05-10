@@ -31,7 +31,7 @@ use andromeda_inventory_demo::{
     ReserveStockProcedureHandler, inventory_query_stock_contract, inventory_release_stock_contract,
     inventory_reserve_stock_contract,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_srpl_ir::Cardinality;
 
 // Helper constructors

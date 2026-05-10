@@ -1,9 +1,6 @@
-//! Catalog compatibility surface for DefinitionBatch.
+//! Catalog runtime planning bridge for DefinitionBatch.
 
-use andromeda_definition_batch::dry_run_definition_batch;
-pub use andromeda_definition_batch::{
-    CatalogLifecycleTarget, DefinitionBatch, DefinitionOperation,
-};
+use andromeda_definition_batch::{DefinitionBatch, DefinitionOperation, dry_run_definition_batch};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::CatalogVersion;
 
@@ -12,6 +9,10 @@ use super::plan::DefinitionBatchPlan;
 
 /// Catalog-local extension that turns a portable DefinitionBatch into a
 /// runtime mutation/WAL plan.
+///
+/// This remains a named integrator boundary because the resulting plan embeds
+/// catalog-owned mutation/WAL semantics; DefinitionBatch DTOs stay owned by
+/// `andromeda-definition-batch` and are not reexported from this module.
 pub trait CatalogDefinitionBatchPlanning {
     /// Validates all operations and produces a [`DefinitionBatchPlan`] without
     /// applying any mutations.

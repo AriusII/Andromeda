@@ -1,5 +1,5 @@
-use andromeda_contract::{CatalogObjectRef, ObjectKind, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind, QualifiedName};
 
 use crate::{Cardinality, identifier::validate_srpl_identifier as validate_symbol};
 
@@ -177,7 +177,7 @@ fn srpl_error(message: &'static str) -> AndromedaError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{ProcedureContractRef, QualifiedName};
+    use andromeda_procedure_contract::{ProcedureContractRef, QualifiedName};
     use andromeda_types::{CatalogObjectId, CatalogVersion, ContractHash, ProcedureId};
 
     use crate::{

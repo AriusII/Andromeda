@@ -1,10 +1,13 @@
 #![forbid(unsafe_code)]
 
-use andromeda_catalog::{
-    CatalogDefinitionBatchPlanning, CatalogSnapshot, DefinitionBatch, DefinitionBatchId,
-    DefinitionOperation,
+use andromeda_catalog::CatalogDefinitionBatchPlanning;
+use andromeda_catalog_store::{
+    CatalogDefinition, CatalogObjectRef, CatalogSnapshot, ObjectKind, TableDefinition,
 };
-use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, TableDefinition};
+use andromeda_definition_batch::{
+    DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatchSourceHash, DefinitionOperation,
+};
 use andromeda_procedure_contract::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
@@ -23,6 +26,12 @@ use andromeda_types::{
 const DB_ID: DatabaseId = DatabaseId::new(51);
 const NS_ID: NamespaceId = NamespaceId::new(61);
 const CATALOG_VERSION: CatalogVersion = CatalogVersion::new(1);
+
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 #[test]
 fn owner_direct_catalog_snapshot_binding_builds_executable_plan_without_srpl_facade() {
@@ -62,7 +71,7 @@ fn owner_direct_catalog_snapshot_binding_rejects_unknown_body_table() {
     assert!(error.message().contains("unbound table/object"));
 }
 
-fn inventory_snapshot() -> CatalogSnapshot {
+fn inventory_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
     let table = TableDefinition {
         object: object(701, "Inventory.ProductStock", ObjectKind::Table),
         columns: vec![

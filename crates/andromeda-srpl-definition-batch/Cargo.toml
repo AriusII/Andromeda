@@ -9,6 +9,7 @@ description = "SRPL source compilation bridge for DefinitionBatch dry-run and pu
 [dependencies]
 andromeda-business-fixtures.workspace = true
 andromeda-catalog.workspace = true
+andromeda-catalog-recovery.workspace = true
 andromeda-catalog-store.workspace = true
 andromeda-definition-batch.workspace = true
 andromeda-error.workspace = true

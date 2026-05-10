@@ -2,10 +2,10 @@ use andromeda_hardware::{
     CpuProfile, GpuProfile, HardwareArchitecture, HardwareProfile, PipelineClass, RamProfile,
     RamSectionBudget, RamSectionRole, ResourceBudget,
 };
+use andromeda_observability::{CriticalDecisionKind, EventCorrelation, EventId, TraceId};
 use andromeda_observe::{
-    CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, GpuPolicyDecisionTrace,
-    IoBudgetDecisionTrace, IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, TraceEvent,
-    TraceId,
+    EventEnvelope, GpuPolicyDecisionTrace, IoBudgetDecisionTrace, IoPipelineStage,
+    IoPlacementDecisionTrace, IoStorageTier, TraceEvent,
 };
 use andromeda_storage_page::PageSize;
 use andromeda_storage_placement::{

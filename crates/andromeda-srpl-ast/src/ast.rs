@@ -1,4 +1,4 @@
-use andromeda_contract::QualifiedName;
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_types::TypeDescriptor;
 
 use crate::{Cardinality, SourceSpan};

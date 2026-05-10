@@ -12,7 +12,7 @@ use andromeda_admission::{
     AdmissionService, InvocationContext, InvocationRequest, PreTransactionValidationService,
 };
 use andromeda_inventory_demo::inventory_reserve_stock_contract;
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::CompletionStatus;
 use andromeda_types::{CatalogVersion, ContractHash, InvocationId};

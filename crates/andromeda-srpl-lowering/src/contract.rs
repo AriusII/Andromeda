@@ -2,10 +2,10 @@
 
 use std::collections::BTreeSet;
 
-use andromeda_contract::{
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
     CatalogObjectRef, ObjectKind, ProcedureContractCandidate, ResultStreamContract,
 };
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_srpl_ir::{
     ProcedureSignature, ResultContract, SrplBusinessOperationKindIr, SrplProcedureBodyIr,
     SrplProcedureContractMetadata, SrplProcedureIr,

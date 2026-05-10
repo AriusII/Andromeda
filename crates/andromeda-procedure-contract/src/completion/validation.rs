@@ -24,7 +24,7 @@ impl RpcCompletion {
                     TransactionOutcome::Committed,
                     "committed RPC completion",
                 )?;
-            }
+            },
             RpcCompletionStatus::RolledBack => {
                 self.validate_transactional_completion(
                     TransactionOutcome::RolledBack,
@@ -37,12 +37,12 @@ impl RpcCompletion {
                         "rolled-back RPC completion must report zero rows affected",
                     ));
                 }
-            }
+            },
             RpcCompletionStatus::FailedBeforeTransaction
             | RpcCompletionStatus::PermissionDenied
             | RpcCompletionStatus::ContractRejected => {
                 self.validate_not_started_completion("pre-transaction RPC completion")?;
-            }
+            },
             RpcCompletionStatus::Cancelled => {
                 if self.transaction_outcome == TransactionOutcome::Committed {
                     return Err(AndromedaError::new(
@@ -51,7 +51,7 @@ impl RpcCompletion {
                     ));
                 }
                 self.validate_optional_transactional_binding("cancelled RPC completion")?;
-            }
+            },
             RpcCompletionStatus::Poisoned | RpcCompletionStatus::SystemUnavailable => {
                 if self.transaction_outcome == TransactionOutcome::Committed {
                     return Err(AndromedaError::new(
@@ -60,7 +60,7 @@ impl RpcCompletion {
                     ));
                 }
                 self.validate_optional_transactional_binding("failed RPC completion")?;
-            }
+            },
         }
 
         if self.transaction_outcome == TransactionOutcome::Committed
@@ -138,7 +138,7 @@ impl RpcCompletion {
                     ));
                 }
                 Ok(())
-            }
+            },
             TransactionOutcome::RolledBack => {
                 if self.tx_id.is_none() {
                     return Err(AndromedaError::new(
@@ -157,7 +157,7 @@ impl RpcCompletion {
                         ),
                     )),
                 }
-            }
+            },
             TransactionOutcome::Cancelled | TransactionOutcome::Failed => {
                 // Non-durable transient outcomes may not carry durable LSN
                 // claims. Tx id remains optional for diagnostic correlation.
@@ -170,7 +170,7 @@ impl RpcCompletion {
                     ));
                 }
                 Ok(())
-            }
+            },
             TransactionOutcome::Committed => Ok(()),
         }
     }

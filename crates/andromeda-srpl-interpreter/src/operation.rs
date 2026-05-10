@@ -1,4 +1,4 @@
-use andromeda_contract::CatalogObjectRef;
+use andromeda_procedure_contract::CatalogObjectRef;
 use andromeda_srpl_execution_adapter::{
     SrplAssertRequest, SrplAssertResult, SrplAssertionAdapter, SrplEmitRequest, SrplEmitResult,
     SrplExecutionFailure, SrplFailureAdapter, SrplFailureRequest, SrplReadRequest, SrplReadResult,

@@ -1,4 +1,4 @@
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 
 use andromeda_decision_trace::digest_prefix_hex;
 

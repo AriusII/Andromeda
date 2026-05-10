@@ -1,9 +1,9 @@
 #![forbid(unsafe_code)]
 
 use andromeda_optimizer::srpl::{OptimizerDiagnostic, OptimizerPipelineConfig};
-use andromeda_srpl::compile_narrow_procedure_signature;
 use andromeda_srpl_ast::{ProcedureAst, Spanned};
 use andromeda_srpl_cardinality::Cardinality;
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 use andromeda_srpl_diagnostics::{
     DiagnosticPhase, ForbiddenConstruct, ForbiddenConstructHit, SourceSpan, SrplDiagnostic,
     SrplSource,

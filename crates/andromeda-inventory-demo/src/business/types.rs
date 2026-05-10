@@ -1,7 +1,7 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_exec::LocalProcedure;
 use andromeda_mvcc::Snapshot;
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::{CompletionStatus, InvocationCompletion, ResultStreamMetadata};
 use andromeda_srpl_ir::Cardinality;

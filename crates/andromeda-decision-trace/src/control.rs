@@ -1,4 +1,4 @@
-use andromeda_contract::PolicyVersion;
+use andromeda_procedure_contract::PolicyVersion;
 
 /// Closed adaptive feature set that may be enabled or disabled by policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
+use andromeda_audit::DurableAuditEventFamily;
 use andromeda_error::AndromedaResult;
-use andromeda_observe::{
-    DurableAuditEventFamily, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter,
+use andromeda_observability::{
+    TRACE_QUERY_DEFAULT_LIMIT, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceId, TraceQueryFilter,
     TraceQueryLsnRange, TraceQuerySpec,
 };
 
@@ -19,7 +20,7 @@ pub(super) fn parse_audit_inspection_options(
     let mut diagnostic_json = false;
     let mut journal_path = None;
     let mut filter = TraceQueryFilter::default();
-    let mut limit = andromeda_observe::TRACE_QUERY_DEFAULT_LIMIT;
+    let mut limit = TRACE_QUERY_DEFAULT_LIMIT;
     let mut offset = 0usize;
     let mut include_total_count = false;
     let mut lsn_start = None;

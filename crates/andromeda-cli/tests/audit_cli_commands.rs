@@ -1,14 +1,15 @@
 #![forbid(unsafe_code)]
 
-use andromeda_cli::dispatch_command;
-use andromeda_observe::{
+use andromeda_audit::{
     AdminOperation, AdminOperationTrace, CertificateIdentity, DurableAuditPrincipalBinding,
     DurableAuditReplayBehavior, DurableAuditRetentionBoundary, DurableAuditSinkReport,
-    DurableAuditWalSink, EventCorrelation, EventEnvelope, EventId, FileDurableAuditWalSink,
-    PendingDurableAuditRecord, Permission, SecurityAuditOutcome, SecurityAuditTrace,
-    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, TraceId, UserPrincipal,
+    DurableAuditWalSink, FileDurableAuditWalSink, Permission, SecurityAuditOutcome,
+    SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
 };
+use andromeda_cli::dispatch_command;
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, PendingDurableAuditRecord, TraceEvent};
 use andromeda_test_support::{
     process::{assert_contains_all, assert_success, run_binary, stdout_lossy as stdout},
     workspace::unique_temp_path,

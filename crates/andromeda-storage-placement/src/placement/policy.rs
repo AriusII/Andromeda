@@ -1,6 +1,7 @@
 use andromeda_error::AndromedaResult;
 use andromeda_hardware::{HardwareProfile, PipelineClass};
-use andromeda_observe::{PlacementAuditEvent, TraceId};
+use andromeda_observability::TraceId;
+use andromeda_observe::PlacementAuditEvent;
 
 use super::{
     HotColdIoThresholds, IoPathBudget, IoPathClass, PlacementDecision, StorageIoBudgetScope,

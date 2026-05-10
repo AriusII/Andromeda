@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use andromeda_bench::{DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES};
+use andromeda_bench_workload::{DEFAULT_TEMP_BYTES, MAX_TEMP_BYTES};
 use andromeda_cli::dispatch_command;
 use andromeda_test_support::process::{
     assert_contains_all, assert_success, run_binary, stdout_lossy as stdout,

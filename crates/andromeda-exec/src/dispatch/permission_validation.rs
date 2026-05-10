@@ -1,7 +1,8 @@
 //! Permission scope validation for Procedure dispatch.
 
+use andromeda_audit::DurableAuditSinkReport;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{DurableAuditSinkReport, TraceId};
+use andromeda_observability::TraceId;
 use std::collections::HashSet;
 
 use crate::services::permission_audit_emitter::{

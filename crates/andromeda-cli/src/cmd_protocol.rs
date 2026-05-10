@@ -8,7 +8,7 @@ use andromeda_inventory_demo::inventory_reserve_stock_contract;
 use andromeda_inventory_demo::{
     InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_result_stream::CompletionStatus;
 use andromeda_types::InvocationId;
 use andromeda_wal::InMemoryWal;

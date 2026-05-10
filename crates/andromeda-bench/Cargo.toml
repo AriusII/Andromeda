@@ -8,9 +8,12 @@ publish = false
 [dependencies]
 andromeda-bench-harness.workspace = true
 andromeda-bench-workload.workspace = true
+andromeda-audit.workspace = true
+andromeda-observability.workspace = true
 andromeda-observe.workspace = true
 andromeda-scenario-evidence.workspace = true
-andromeda-srpl.workspace = true
+andromeda-optimizer.workspace = true
+andromeda-srpl-definition-batch.workspace = true
 andromeda-storage-page.workspace = true
 andromeda-types.workspace = true
 andromeda-wal.workspace = true

@@ -1,16 +1,17 @@
 #![no_main]
 
-use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogMutationRecord};
+use andromeda_catalog::CatalogDefinitionBatchPlanning;
+use andromeda_catalog_recovery::{decode_catalog_durable_payload, encode_catalog_durable_payload};
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, EnumDefinition, EnumVariant, ObjectKind, QualifiedName,
     StructuredObjectDefinition, TableDefinition,
 };
+use andromeda_definition_batch::{
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
+};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, DatabaseId, NamespaceId, ScalarType,
     TypeDescriptor,
-};
-use andromeda_definition_batch::{
-    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -24,13 +25,10 @@ const MAX_ENUM_VARIANTS: usize = 8;
 fuzz_target!(|data: &[u8]| {
     let data = common::bounded_input(data, MAX_DEFINITION_BATCH_INPUT_BYTES);
 
-    if let Ok(record) = CatalogMutationRecord::decode_durable_payload(data) {
+    if let Ok(record) = decode_catalog_durable_payload(data) {
         assert!(record.validate_for_durable_payload().is_ok());
-        if let Ok(encoded) = record.encode_durable_payload() {
-            assert_eq!(
-                CatalogMutationRecord::decode_durable_payload(&encoded),
-                Ok(record)
-            );
+        if let Ok(encoded) = encode_catalog_durable_payload(&record) {
+            assert_eq!(decode_catalog_durable_payload(&encoded), Ok(record));
         }
     }
 

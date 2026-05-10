@@ -8,6 +8,8 @@ use crate::{
 };
 use std::fs;
 const CONCRETE_RUNTIME_TLS_QUIC_DEPS: [&str; 3] = ["quinn", "rcgen", "rustls"];
+const QUIC_FORBIDDEN_CONCRETE_RUNTIME_DEPS: [&str; 5] =
+    ["quinn", "rcgen", "rustls", "tokio", "tokio-rustls"];
 const EXEC_FORBIDDEN_DIRECT_RUNTIME_DEPS: &[&str] = &[
     "andromeda-runtime-quinn",
     "andromeda-quic-runtime-quinn",
@@ -41,7 +43,20 @@ const EXEC_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
     "tower_grpc::",
     "serde_json",
 ];
-const RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
+const RPC_RUNTIME_FREE_CRATES: &[(&str, &str)] = &[
+    (
+        "andromeda-rpc-protocol",
+        "crates/andromeda-rpc-protocol/src",
+    ),
+    ("andromeda-rpc-codec", "crates/andromeda-rpc-codec/src"),
+    ("andromeda-rpc", "crates/andromeda-rpc/src"),
+];
+const RPC_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
+    "andromeda-exec",
+    "andromeda-quic",
+    "andromeda-quic-runtime-quinn",
+    "andromeda-rpc-runtime",
+    "andromeda-runtime-quinn",
     "grpc",
     "grpcio",
     "grpcio-sys",
@@ -51,6 +66,7 @@ const RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
     "rcgen",
     "rustls",
     "tokio",
+    "tokio-rustls",
     "tonic",
     "tonic-build",
     "tonic-prost",
@@ -59,7 +75,12 @@ const RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS: &[&str] = &[
     "tonic-web",
     "tower",
 ];
-const RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
+const RPC_FORBIDDEN_SOURCE_TOKENS: &[&str] = &[
+    "andromeda_exec::",
+    "andromeda_quic::",
+    "andromeda_quic_runtime_quinn::",
+    "andromeda_rpc_runtime::",
+    "andromeda_runtime_quinn::",
     "quinn::",
     "rcgen::",
     "rustls::",
@@ -286,6 +307,34 @@ fn only_andromeda_quic_declares_concrete_runtime_tls_quic_crates() {
         violations.join("\n")
     );
 }
+
+#[test]
+fn andromeda_quic_declares_no_concrete_quinn_rustls_or_tokio_dependencies() {
+    let manifests = load_crate_manifests(&workspace_root().join("crates"));
+    let manifest = manifests
+        .get("andromeda-quic")
+        .expect("workspace must include andromeda-quic");
+    let mut violations = Vec::new();
+
+    for dependency in manifest
+        .runtime_dependencies
+        .iter()
+        .chain(manifest.dev_dependencies.iter())
+    {
+        if QUIC_FORBIDDEN_CONCRETE_RUNTIME_DEPS.contains(&dependency.as_str()) {
+            violations.push(format!(
+                "andromeda-quic must not depend on concrete runtime crate `{dependency}` in {}; Quinn/Rustls/Tokio ownership belongs to andromeda-quic-runtime-quinn",
+                manifest.path.display()
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-quic concrete runtime dependency violations:\n{}",
+        violations.join("\n")
+    );
+}
 #[test]
 fn andromeda_exec_runtime_quinn_boundary_stays_feature_reexport_only() {
     let workspace = workspace_root();
@@ -343,60 +392,64 @@ fn andromeda_exec_runtime_quinn_boundary_stays_feature_reexport_only() {
     );
 }
 #[test]
-fn rpc_protocol_crate_stays_runtime_free_in_manifest_and_source() {
+fn rpc_protocol_codec_and_facade_crates_stay_runtime_free_in_manifest_and_source() {
     let workspace = workspace_root();
     let manifests = load_crate_manifests(&workspace.join("crates"));
-    let manifest = manifests
-        .get("andromeda-rpc-protocol")
-        .expect("workspace must include andromeda-rpc-protocol");
     let mut violations = Vec::new();
 
-    for dependency in manifest
-        .runtime_dependencies
-        .iter()
-        .chain(manifest.dev_dependencies.iter())
-    {
-        if RPC_PROTOCOL_FORBIDDEN_RUNTIME_DEPS.contains(&dependency.as_str()) {
-            violations.push(format!(
-                "andromeda-rpc-protocol manifest must not depend on runtime crate `{dependency}`"
-            ));
+    for (crate_name, source_root) in RPC_RUNTIME_FREE_CRATES {
+        let manifest = manifests
+            .get(*crate_name)
+            .unwrap_or_else(|| panic!("workspace must include {crate_name}"));
+
+        for dependency in manifest
+            .runtime_dependencies
+            .iter()
+            .chain(manifest.dev_dependencies.iter())
+        {
+            if RPC_FORBIDDEN_RUNTIME_DEPS.contains(&dependency.as_str()) {
+                violations.push(format!(
+                    "{crate_name} manifest must not depend on runtime crate `{dependency}`"
+                ));
+            }
         }
-    }
 
-    let rpc_protocol_src = workspace.join("crates/andromeda-rpc-protocol/src");
-    for file in rust_source_files(&rpc_protocol_src) {
-        let source = fs::read_to_string(&file)
-            .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display()));
-        let code_without_comments = strip_rust_comments(&source);
-        let relative = relative_slash_path(&workspace, &file);
+        for file in rust_source_files(&workspace.join(source_root)) {
+            let source = fs::read_to_string(&file)
+                .unwrap_or_else(|err| panic!("failed to read {}: {err}", file.display()));
+            let code_without_comments = strip_rust_comments(&source);
+            let relative = relative_slash_path(&workspace, &file);
 
-        for (line_index, line) in code_without_comments.lines().enumerate() {
-            let compact_line = line
-                .chars()
-                .filter(|character| !character.is_whitespace())
-                .collect::<String>();
+            for (line_index, line) in code_without_comments.lines().enumerate() {
+                let compact_line = line
+                    .chars()
+                    .filter(|character| !character.is_whitespace())
+                    .collect::<String>();
 
-            for token in RPC_PROTOCOL_FORBIDDEN_SOURCE_TOKENS {
-                if compact_line.contains(token) {
+                for token in RPC_FORBIDDEN_SOURCE_TOKENS {
+                    if compact_line.contains(token) {
+                        violations.push(format!(
+                            "{relative}:{} exposes runtime token `{token}`",
+                            line_index + 1
+                        ));
+                    }
+                }
+
+                if compact_line.starts_with("pubmodruntime")
+                    || compact_line.starts_with("modruntime")
+                {
                     violations.push(format!(
-                        "{relative}:{} exposes runtime token `{token}`",
+                        "{relative}:{} declares a runtime module from an RPC runtime-free crate",
                         line_index + 1
                     ));
                 }
-            }
-
-            if compact_line.starts_with("pubmodruntime") || compact_line.starts_with("modruntime") {
-                violations.push(format!(
-                    "{relative}:{} declares a runtime module from the abstract protocol crate",
-                    line_index + 1
-                ));
             }
         }
     }
 
     assert!(
         violations.is_empty(),
-        "andromeda-rpc-protocol must remain runtime-free:\n{}",
+        "andromeda-rpc-protocol/codec/facade crates must remain runtime-free:\n{}",
         violations.join("\n")
     );
 }

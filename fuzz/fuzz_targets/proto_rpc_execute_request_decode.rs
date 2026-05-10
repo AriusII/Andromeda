@@ -1,9 +1,7 @@
 #![no_main]
 
-use andromeda_proto::{
-    decode_generated_message, generated::protocol::v1::RpcExecuteRequest as ProtoRpcExecuteRequest,
-    validate_generated_rpc_execute_request,
-};
+use andromeda_proto::generated::protocol::v1::RpcExecuteRequest as ProtoRpcExecuteRequest;
+use andromeda_proto_wire::{decode_protobuf_message, validate_generated_rpc_execute_request};
 use libfuzzer_sys::fuzz_target;
 
 mod common;
@@ -14,7 +12,7 @@ fuzz_target!(|data: &[u8]| {
     if let Some(request) = common::decode_bounded::<ProtoRpcExecuteRequest, _>(
         data,
         common::MAX_64K_INPUT_BYTES,
-        |data| decode_generated_message(data),
+        |data| decode_protobuf_message(data, "generated RpcExecuteRequest"),
     ) {
         let _ = validate_generated_rpc_execute_request(&request);
         let _ = request

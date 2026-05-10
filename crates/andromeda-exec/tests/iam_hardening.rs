@@ -32,7 +32,7 @@ mod iam_hardening_tests {
         NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionDecision,
         PermissionEvaluator, PrincipalResolver,
     };
-    use andromeda_observe::TraceId;
+    use andromeda_observability::TraceId;
     use andromeda_principal::{Permission, PrincipalId, PrincipalRole};
     use andromeda_types::ProcedureId;
     use std::sync::Arc;

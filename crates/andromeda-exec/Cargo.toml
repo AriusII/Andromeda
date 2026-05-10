@@ -51,8 +51,8 @@ andromeda-inventory-demo.workspace = true
 andromeda-manifest.workspace = true
 andromeda-proto.workspace = true
 andromeda-recovery.workspace = true
-andromeda-srpl.workspace = true
 andromeda-srpl-binder.workspace = true
+andromeda-srpl-definition-batch.workspace = true
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }

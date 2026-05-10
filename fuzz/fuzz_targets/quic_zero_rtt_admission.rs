@@ -46,16 +46,16 @@ const fn expected_reason(class: ZeroRttReplayClass) -> ZeroRttAdmissionRejection
         ZeroRttReplayClass::MutatingProcedure => ZeroRttAdmissionRejectionReason::MutatingProcedure,
         ZeroRttReplayClass::UnknownIdempotency => {
             ZeroRttAdmissionRejectionReason::UnknownIdempotency
-        }
+        },
         ZeroRttReplayClass::AuthChangingOperation => {
             ZeroRttAdmissionRejectionReason::AuthChangingOperation
-        }
+        },
         ZeroRttReplayClass::CatalogProcedure => ZeroRttAdmissionRejectionReason::CatalogProcedure,
         ZeroRttReplayClass::HadrPromotion => ZeroRttAdmissionRejectionReason::HadrPromotion,
         ZeroRttReplayClass::HadrDemotion => ZeroRttAdmissionRejectionReason::HadrDemotion,
         ZeroRttReplayClass::ReadOnlyManifest | ZeroRttReplayClass::ReadOnlyTelemetry => {
             ZeroRttAdmissionRejectionReason::DoctrineV1DisablesEarlyData
-        }
+        },
     }
 }
 

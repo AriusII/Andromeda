@@ -1,7 +1,7 @@
 use crate::diagnostic_json::{DIAGNOSTIC_JSON_FLAG, JSON_FLAG};
 use crate::error::cli_error;
 use crate::parse::{next_option_value_rejecting_flag, parse_u32_option, parse_u64_option};
-use andromeda_bench::{
+use andromeda_bench_workload::{
     BenchmarkHardwareProfile, BenchmarkRunRequest, DEFAULT_DURATION_MS, DEFAULT_SAMPLES,
     DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
 };
@@ -184,7 +184,7 @@ pub(super) fn validate_benchmark_run_options(options: &BenchmarkRunOptions) -> A
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_bench::{BenchmarkHardwareProfile, MAX_DURATION_MS, MAX_TEMP_BYTES};
+    use andromeda_bench_workload::{BenchmarkHardwareProfile, MAX_DURATION_MS, MAX_TEMP_BYTES};
 
     fn strings(args: &[&str]) -> Vec<String> {
         args.iter().map(|arg| arg.to_string()).collect()

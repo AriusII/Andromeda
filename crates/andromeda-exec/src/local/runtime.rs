@@ -3,9 +3,13 @@ mod events;
 mod records;
 mod transactions;
 
-use andromeda_catalog::CatalogSnapshot;
+use andromeda_catalog_store::CatalogSnapshot;
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{EventCorrelation, EventEmitter, EventSink, TraceId};
+use andromeda_observability::{EventCorrelation, TraceId};
+use andromeda_observe::{EventEmitter, EventSink};
 use andromeda_quic::SurfacePlane;
 use andromeda_transaction::TransactionManager;
 use andromeda_wal::InvocationWal;
@@ -30,6 +34,12 @@ use transactions::{
     begin_runtime_transaction, mark_commit_visible_after_durable_wal,
     mark_rollback_durable_after_wal, route_rollback_cause,
 };
+
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 pub struct LocalVerticalRuntime<W> {
     wal: W,
@@ -129,7 +139,7 @@ where
         &mut self,
         request: InvocationRequest,
         procedure: &LocalProcedure,
-        catalog: &CatalogSnapshot,
+        catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
         trace_id: TraceId,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         validate_catalog_resolved_procedure(&request, procedure, catalog, trace_id)?;
@@ -140,7 +150,7 @@ where
         &mut self,
         request: InvocationRequest,
         procedure: &LocalProcedure,
-        catalog: &CatalogSnapshot,
+        catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
         context: &InvocationContext,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         validate_catalog_resolved_procedure(&request, procedure, catalog, context.trace_id)?;

@@ -6,10 +6,8 @@ use crate::support::{
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_inventory_demo::inventory_reserve_stock_contract;
-use andromeda_observe::{
-    EventEmitter, EventEnvelope, EventSink, InMemoryEventSink, TraceEvent, TraceId,
-    TransitionReasonCode,
-};
+use andromeda_observability::{TraceId, TransitionReasonCode};
+use andromeda_observe::{EventEmitter, EventEnvelope, EventSink, InMemoryEventSink, TraceEvent};
 use andromeda_rpc_protocol::FrameCodec;
 use andromeda_types::{ContractHash, InvocationId};
 use andromeda_wal::InMemoryWal;

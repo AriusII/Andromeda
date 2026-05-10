@@ -1,4 +1,4 @@
-use andromeda_contract::{ProcedureContractRef, QualifiedName};
+use andromeda_procedure_contract::{ProcedureContractRef, QualifiedName};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use super::{error::ProcedureResolveError, response::ProcedureResolveResponse};

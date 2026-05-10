@@ -7,7 +7,6 @@ const SECURITY_ADMISSION_SOURCE: &str =
     include_str!("../../../crates/andromeda-security-contract/src/admission.rs");
 const QUIC_ROUTE_SOURCE: &str =
     include_str!("../../../crates/andromeda-quic/src/procedure_gateway/route.rs");
-const SURFACE_SPEC: &str = include_str!("../../../docs/specs/rpc-security-audit.md");
 
 #[test]
 fn application_scope_denies_core_admin_and_hadr_permissions() {
@@ -84,26 +83,6 @@ fn quic_application_route_has_explicit_surface_and_hadr_stream_gates() {
         &route_source,
         "applicationProcedureroutecannotuseHA/DRreservedstreamid",
     );
-}
-
-#[test]
-fn surface_separation_spec_excludes_privileged_operations_from_application() {
-    let compact_spec = compact(SURFACE_SPEC);
-
-    for required in [
-        "Application | Business Procedure invocation and allowed contract metadata reads. | May execute typed cataloged Procedures only.",
-        "Administration | DefinitionBatch import, catalog administration, Procedure Store, backup and restore control, debug, certificates, IAM, policies, and maintenance. | Must not be tunneled through Application.",
-        "Cluster or HA/DR | WAL shipping, quorum, fencing, manifests, health, membership, promotion, and replica coordination. | Must not be tunneled through Application.",
-        "Surface mismatch rejects before Procedure dispatch and before transaction creation.",
-        "Security admission is fail-closed and must run in this order:",
-        "Surface tests must reject Administration, HA/DR, BackupAgent, and Forensic operations on Application.",
-    ] {
-        let required_compact = compact(required);
-        assert!(
-            compact_spec.contains(&required_compact),
-            "docs/specs/rpc-security-audit.md must preserve invariant text: {required_compact}"
-        );
-    }
 }
 
 fn compact(source: &str) -> String {

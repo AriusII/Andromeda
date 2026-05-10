@@ -13,13 +13,13 @@ pub(crate) use andromeda_inventory_demo::{
     inventory_reserve_stock_contract,
 };
 pub(crate) use andromeda_mvcc::{MvccIsolationPolicy, Snapshot, TransactionStatus};
-pub(crate) use andromeda_observe::TraceId;
+pub(crate) use andromeda_observability::TraceId;
 pub(crate) use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };
 pub(crate) use andromeda_result_stream::{CompletionStatus, ResultStreamMetadata};
-pub(crate) use andromeda_srpl::compile_narrow_procedure_signature;
 pub(crate) use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub(crate) use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 pub(crate) use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
 };

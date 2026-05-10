@@ -1,6 +1,6 @@
 use andromeda_digest::Sha256;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_plan_cache::{PlanCacheKey, PlanClass};
 use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_time::EngineTimestamp;

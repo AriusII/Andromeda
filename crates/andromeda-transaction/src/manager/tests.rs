@@ -107,10 +107,7 @@ fn commit_path_requires_durable_lsn_before_status_mirrors_committed() {
 
     let snap = mgr.snapshot(id).unwrap().unwrap();
     assert!(snap.state_machine.is_visible_committed());
-    assert_eq!(
-        snap.state_machine.durable_commit_lsn(),
-        Some(Lsn::new(42))
-    );
+    assert_eq!(snap.state_machine.durable_commit_lsn(), Some(Lsn::new(42)));
 }
 
 #[test]

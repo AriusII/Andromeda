@@ -1,9 +1,9 @@
-use andromeda_contract::PolicyVersion;
 use andromeda_decision_trace::{
     AdaptiveControl, AdaptiveFeature, DecisionFamily, DecisionOutcome, DecisionReasonCode,
     DecisionTrace, DecisionTraceError, DecisionTraceId, EvidenceDigest, EvidenceLabel,
     TraceEvidence,
 };
+use andromeda_procedure_contract::PolicyVersion;
 
 use crate::{PlanCacheKey, PlanCachePolicyError, limits::PLAN_CACHE_MAX_ENTRIES};
 
@@ -181,7 +181,7 @@ fn map_trace_error(error: DecisionTraceError) -> PlanCachePolicyError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
+    use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
     use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
     fn policy(byte: u8) -> PolicyVersion {

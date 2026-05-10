@@ -1,16 +1,16 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
-use andromeda_contract::{
-    AccessMode, CompatibilityPolicy, MultiResultPolicy, ProcedureContract,
-    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
-    StatsVersion, TransactionPolicy,
-};
 use andromeda_definition_batch::{
     DefinitionBatch, DefinitionBatchId, DefinitionOperation, SrplBatchDryRunReport,
     dry_run_definition_batch, validate_srpl_operations_dry_run,
 };
 use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    StatsVersion, TransactionPolicy,
+};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,
@@ -51,7 +51,7 @@ fn procedure(id: u64, name: &str, version: CatalogVersion) -> ProcedureContract 
         required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
         transaction_policy: TransactionPolicy {
             access_mode: AccessMode::ReadWrite,
-            isolation: andromeda_contract::IsolationPolicy::Serializable,
+            isolation: andromeda_procedure_contract::IsolationPolicy::Serializable,
             retryable: false,
         },
         compatibility_policy: CompatibilityPolicy::ExactHash,

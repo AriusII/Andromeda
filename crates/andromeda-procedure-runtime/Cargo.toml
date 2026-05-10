@@ -7,14 +7,14 @@ publish = false
 
 [dependencies]
 andromeda-admission.workspace = true
-andromeda-contract.workspace = true
 andromeda-error.workspace = true
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
-andromeda-contract.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true

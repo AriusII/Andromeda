@@ -1,6 +1,7 @@
+use andromeda_observability::{CriticalDecisionKind, EventCorrelation, EventId, TraceId};
 use andromeda_observe::{
-    CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, EventSink, InMemoryEventSink,
-    PlacementAuditEvent, PlacementAuditTransition, TraceEvent, TraceId,
+    EventEnvelope, EventSink, InMemoryEventSink, PlacementAuditEvent, PlacementAuditTransition,
+    TraceEvent,
 };
 
 #[test]

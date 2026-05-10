@@ -127,7 +127,7 @@ fn rolled_back_completion_requires_durable_rollback_lsn() {
 
 #[test]
 fn execution_transition_completion_codes_match_proto() {
-    use andromeda_proto::RpcCompletionStatus as Proto;
+    use andromeda_procedure_contract::RpcCompletionStatus as Proto;
     let pairs: &[(CompletionStatus, Proto)] = &[
         (CompletionStatus::Committed, Proto::Committed),
         (CompletionStatus::RolledBack, Proto::RolledBack),

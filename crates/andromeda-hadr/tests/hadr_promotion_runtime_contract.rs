@@ -2,6 +2,10 @@ use std::cell::RefCell;
 
 mod support;
 
+use andromeda_audit::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal, UserPrincipalKind,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
 use andromeda_hadr::{
     FileBackedHadrMembershipStore, HadrClusterOperation, HadrClusterSecurityEvidence, HadrEpoch,
@@ -9,10 +13,7 @@ use andromeda_hadr::{
     HadrNodeRole, HadrPromotionAuditLog, HadrPromotionAuditMarker, HadrPromotionAuditReceipt,
     HadrPromotionVote, NoopPromotionAuditLog, PromotionAttempt, PromotionBoundary,
 };
-use andromeda_observe::{
-    CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
-    SecurityPolicyVersionEvidence, SurfaceScope, TraceId, UserPrincipal, UserPrincipalKind,
-};
+use andromeda_observability::TraceId;
 use andromeda_wal::Lsn;
 
 fn store_path(dir: &support::TempDir) -> std::path::PathBuf {

@@ -4,7 +4,8 @@ use crate::support::{
 };
 use andromeda_inventory_demo::V0InventoryRecoverableRuntime;
 use andromeda_inventory_demo::inventory_reserve_stock_contract;
-use andromeda_observe::{CriticalDecisionKind, InMemoryEventSink, TraceEvent};
+use andromeda_observability::CriticalDecisionKind;
+use andromeda_observe::{InMemoryEventSink, TraceEvent};
 use andromeda_result_stream::CompletionStatus;
 use andromeda_rpc_protocol::{
     FrameType, StreamRole, validate_result_stream_sequence, validate_single_frame_on_stream,

@@ -1,5 +1,5 @@
 use andromeda_error::AndromedaResult;
-use andromeda_observe::DecisionTrace;
+use andromeda_observability::DecisionTrace;
 use andromeda_procedure_store::{
     InvocationRuntimeRecord, InvocationRuntimeRecordOutcome, ProcedureStore,
 };

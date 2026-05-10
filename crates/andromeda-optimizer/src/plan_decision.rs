@@ -213,8 +213,8 @@ fn map_trace_error(error: DecisionTraceError) -> OptimizerError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
     use andromeda_plan_cache::{PlanClass, PlanShapeFingerprint};
+    use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
     use andromeda_statistics::{StatsPublicationState, StatsSetDigest};
     use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 

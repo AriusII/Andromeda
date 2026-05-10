@@ -1,7 +1,7 @@
 use andromeda_error::AndromedaResult;
+use andromeda_observability::{EventCorrelation, TraceId};
 use andromeda_observe::{
-    CommitVisibleTrace, EventCorrelation, EventEmitter, EventSink, RollbackDurableTrace,
-    TraceEvent, TraceId,
+    CommitVisibleTrace, EventEmitter, EventSink, RollbackDurableTrace, TraceEvent,
 };
 use andromeda_types::TransactionId;
 use andromeda_wal::Lsn;

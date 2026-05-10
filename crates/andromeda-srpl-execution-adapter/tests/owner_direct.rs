@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
 use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
+    CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName,
+};
 use andromeda_srpl_execution_adapter::{
     SrplBindingEnvironment, SrplBoundValue, SrplEmitRequest, SrplReadRequest, SrplRowBound,
 };

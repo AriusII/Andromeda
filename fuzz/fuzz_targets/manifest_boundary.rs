@@ -2,7 +2,7 @@
 #![forbid(unsafe_code)]
 
 use andromeda_manifest::{
-    validate_manifest_atomic_switch, validate_recovery_floor, ManifestDurabilityBoundary,
+    ManifestDurabilityBoundary, validate_manifest_atomic_switch, validate_recovery_floor,
 };
 use andromeda_wal::Lsn;
 use libfuzzer_sys::fuzz_target;
@@ -21,7 +21,11 @@ fuzz_target!(|data: &[u8]| {
     let required_wal_start_lsn = Lsn::new(read_u64_le(data, 32));
 
     // Test atomic switch validation
-    let _ = validate_manifest_atomic_switch(manifest_checkpoint_lsn, wal_durable_lsn, wal_checkpoint_lsn);
+    let _ = validate_manifest_atomic_switch(
+        manifest_checkpoint_lsn,
+        wal_durable_lsn,
+        wal_checkpoint_lsn,
+    );
 
     // Test recovery floor validation
     let _ = validate_recovery_floor(recovery_floor_lsn, required_wal_start_lsn);

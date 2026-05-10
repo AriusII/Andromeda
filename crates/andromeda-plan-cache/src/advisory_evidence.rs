@@ -1,4 +1,4 @@
-use andromeda_contract::StatsVersion;
+use andromeda_procedure_contract::StatsVersion;
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use super::{PLAN_SELECTION_MAX_SCENARIO_EVIDENCE, PlanCacheKey, PlanClass, PlanSelectionError};
@@ -189,7 +189,7 @@ impl AdvisoryEvidenceSummaryBuilder {
             (Some(best_score), Some(best_confidence), Some(best_digest)) => {
                 (score_permille, confidence_permille, digest)
                     > (best_score, best_confidence, best_digest)
-            }
+            },
             _ => true,
         };
 
@@ -238,12 +238,12 @@ pub fn classify_advisory_identity_for_key(
         return AdvisoryEvidenceStatus::StatsVersionMismatch;
     }
     match identity.contract_hash {
-        Some(hash) if hash == key.contract_hash => {}
+        Some(hash) if hash == key.contract_hash => {},
         Some(_) => return AdvisoryEvidenceStatus::ContractHashMismatch,
         None => return AdvisoryEvidenceStatus::ContractHashMissing,
     }
     match identity.plan_class {
-        Some(plan_class) if plan_class == key.plan_class => {}
+        Some(plan_class) if plan_class == key.plan_class => {},
         Some(_) => return AdvisoryEvidenceStatus::PlanClassMismatch,
         None => return AdvisoryEvidenceStatus::PlanClassMissing,
     }
@@ -273,7 +273,7 @@ pub(crate) fn advisory_status_counts_reason(summary: &AdvisoryEvidenceSummary) -
 
 #[cfg(test)]
 mod tests {
-    use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
+    use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
     use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
     use super::{

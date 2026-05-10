@@ -14,13 +14,14 @@ use andromeda_inventory_demo::{
     ReserveStockCommand, inventory_reserve_stock_catalog_bindings,
     inventory_reserve_stock_contract,
 };
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
 use andromeda_observe::{
-    CommitVisibleTrace, EventCorrelation, EventEmitter, EventEnvelope, EventId, InMemoryEventSink,
-    RollbackDurableTrace, TraceEvent, TraceId,
+    CommitVisibleTrace, EventEmitter, EventEnvelope, InMemoryEventSink, RollbackDurableTrace,
+    TraceEvent,
 };
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_result_stream::CompletionStatus;
-use andromeda_srpl::compile_narrow_procedure_signature;
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 use andromeda_storage_page::PageSize;
 use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,

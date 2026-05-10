@@ -1,10 +1,10 @@
 //! Catalog object descriptor import boundary.
 //!
-//! `andromeda-contract` owns the canonical descriptor implementations and
-//! validation. This crate owns the catalog-store import boundary for object
-//! identities, definitions, and bindings.
+//! Procedure identity lives in `andromeda-procedure-contract`; catalog object
+//! descriptors and bindings still live in `andromeda-contract`.
 
 pub use andromeda_contract::{
-    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, EnumDefinition,
-    EnumVariant, ObjectKind, StructuredObjectDefinition, TableDefinition,
+    CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, EnumDefinition, EnumVariant,
+    StructuredObjectDefinition, TableDefinition,
 };
+pub use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind};

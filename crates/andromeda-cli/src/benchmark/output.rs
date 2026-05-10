@@ -1,9 +1,11 @@
 use crate::diagnostic_json::json_string;
-use andromeda_bench::{
+use andromeda_bench_workload::{
+    BenchmarkHardwareProfile, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES,
+    DEFAULT_WARMUPS, MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS, WORKLOADS,
+};
+use andromeda_scenario_evidence::{
     BENCHMARK_EVIDENCE_AUTHORITATIVE, BENCHMARK_EVIDENCE_CAN_SELECT_PLAN_ALONE,
-    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BenchmarkHardwareProfile,
-    BudgetStatus, DEFAULT_DURATION_MS, DEFAULT_SAMPLES, DEFAULT_TEMP_BYTES, DEFAULT_WARMUPS,
-    MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS, WORKLOADS,
+    BENCHMARK_EVIDENCE_OPTIMIZER_BOUNDARY, BenchmarkEvidence, BudgetStatus,
 };
 use std::fmt::Write as _;
 
@@ -324,8 +326,9 @@ mod tests {
     use super::*;
     use andromeda_bench::{
         BTREE_NODE_CODEC_HARNESS_NAME, BTREE_NODE_CODEC_HARNESS_SOURCE,
-        BTREE_NODE_CODEC_WORKLOAD_ID, BenchmarkRunRequest, run_bounded_benchmark,
+        BTREE_NODE_CODEC_WORKLOAD_ID, run_bounded_benchmark,
     };
+    use andromeda_bench_workload::BenchmarkRunRequest;
 
     #[test]
     fn workloads_json_lists_btree_node_codec_smoke() {

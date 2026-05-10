@@ -13,10 +13,10 @@ use andromeda_savepoint::{
 };
 use andromeda_types::TransactionId;
 
-use crate::Lsn;
 use crate::allocator::TransactionIdAllocator;
 use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 use crate::state::{TransactionState, TransactionStateMachine};
+use andromeda_transaction_log::Lsn;
 
 use super::lock_coordinator::TransactionLockCoordinator;
 use super::record::TransactionRecord;

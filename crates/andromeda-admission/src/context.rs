@@ -35,7 +35,8 @@ mod tests {
     use super::*;
     use crate::CompletionStatus;
     use andromeda_observability::CriticalDecisionKind;
-    use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
+    use andromeda_observability::{EventCorrelation, EventId};
+    use andromeda_observe::{EventEnvelope, TraceEvent};
     use andromeda_types::{RequestId, SessionId};
 
     #[test]

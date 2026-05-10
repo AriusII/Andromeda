@@ -1,10 +1,15 @@
+use andromeda_audit::{
+    CertificateIdentity, Permission, SecurityAuditOutcome, SecurityAuditTrace,
+    SecurityPolicyVersionEvidence, SurfaceScope, UserPrincipal, UserPrincipalKind,
+};
 use andromeda_hardware::{PipelineClass, ResourceBudget};
+use andromeda_observability::{
+    AuthorizationDeniedTrace, CompletionEmittedTrace, CriticalDecisionKind, DecisionTrace,
+    EventCorrelation, EventId, ProtocolCorrelation, TraceId, V0_EVENT_SCHEMA_VERSION,
+};
 use andromeda_observe::{
-    AuthorizationDeniedTrace, CertificateIdentity, CompletionEmittedTrace, CriticalDecisionKind,
-    DecisionTrace, EventCorrelation, EventEnvelope, EventId, InMemoryEventSequence,
-    IoBudgetDecisionTrace, IoPipelineStage, Permission, ProtocolCorrelation, RecoveryTrace,
-    SecurityAuditOutcome, SecurityAuditTrace, SecurityPolicyVersionEvidence, SurfaceScope,
-    TraceEvent, TraceId, UserPrincipal, UserPrincipalKind, WalEventTrace, WalOperation,
+    EventEnvelope, InMemoryEventSequence, IoBudgetDecisionTrace, IoPipelineStage, RecoveryTrace,
+    TraceEvent, WalEventTrace, WalOperation,
 };
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ContractHash, RequestId, SessionId, TransactionId,
@@ -323,7 +328,7 @@ fn security_audit_rejects_surface_permission_drift_and_secret_evidence() {
         base_correlation(),
         TraceEvent::SecurityAudit(SecurityAuditTrace {
             trace_id: TraceId::new(303),
-            schema_version: andromeda_observe::V0_EVENT_SCHEMA_VERSION,
+            schema_version: V0_EVENT_SCHEMA_VERSION,
             surface: SurfaceScope::Application,
             certificate: CertificateIdentity {
                 fingerprint: "token=raw-certificate-material".to_string(),

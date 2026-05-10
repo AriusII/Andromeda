@@ -10,7 +10,7 @@ use andromeda_exec::{
     ProcedureRegistry, ResultStreamMetadata, validate_dispatch_permissions,
     validate_dispatch_permissions_or_error,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_procedure_contract::{
     PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
 };

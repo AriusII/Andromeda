@@ -1,12 +1,9 @@
-//! Tests for digest aliases, catalog object hashing, and the extended catalog
-//! dependency graph (Procedure to Table edges via bindings).
+//! Tests for digest backend behavior, catalog object hashing, and the extended
+//! catalog dependency graph (Procedure to Table edges via bindings).
 
 use andromeda_catalog_store::{
     CatalogBindingKind, CatalogDefinition, CatalogObjectBinding, CatalogObjectRef, ObjectKind,
     QualifiedName, StructuredObjectDefinition, TableDefinition,
-};
-use andromeda_contract::{
-    compute_structured_object_shape_hash, structured_object_shape_hash_compatible,
 };
 use andromeda_definition_batch::{
     BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, DefinitionBatch,
@@ -18,25 +15,24 @@ use andromeda_procedure_contract::{
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
     StatsVersion, TransactionPolicy,
 };
+use andromeda_structured_object::{
+    compute_structured_object_shape_hash, structured_object_shape_hash_compatible,
+};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,
 };
 
 #[test]
-fn catalog_digest_is_core_digest_alias() {
+fn digest_backend_incremental_hash_matches_one_shot_hash() {
     let message = b"catalog contract digest canonical backend";
 
-    let mut catalog_hasher: andromeda_catalog::digest::Sha256 = andromeda_digest::Sha256::new();
-    catalog_hasher.update(&message[..8]);
-    catalog_hasher.update(&message[8..]);
+    let mut incremental_hasher = andromeda_digest::Sha256::new();
+    incremental_hasher.update(&message[..8]);
+    incremental_hasher.update(&message[8..]);
 
-    let mut core_hasher: andromeda_digest::Sha256 = andromeda_catalog::digest::Sha256::new();
-    core_hasher.update(message);
-
-    assert_eq!(catalog_hasher.finalize(), core_hasher.finalize());
     assert_eq!(
-        andromeda_catalog::digest::sha256(message),
+        incremental_hasher.finalize(),
         andromeda_digest::sha256(message)
     );
 }

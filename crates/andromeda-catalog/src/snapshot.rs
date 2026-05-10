@@ -11,16 +11,14 @@ use andromeda_catalog_store::{
     CatalogSnapshotDefinitionBatchOperation, CatalogSnapshotMutationPlan,
     CatalogSnapshotPlannedObject,
 };
+use andromeda_definition_batch::{CatalogLifecycleTarget, DefinitionBatch, DefinitionOperation};
 use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
     CatalogDefinitionBatchPlanning, CatalogMutationDelta, CatalogMutationPlan,
-    CatalogPublicationReceipt, DefinitionBatch, DefinitionBatchPlan, DefinitionOperation,
+    CatalogPublicationReceipt, DefinitionBatchPlan,
 };
-
-pub type CatalogSnapshotPublication =
-    andromeda_catalog_store::CatalogSnapshotPublication<CatalogPublicationReceipt>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[repr(transparent)]
@@ -107,7 +105,7 @@ impl DerefMut for CatalogSnapshot {
 }
 
 impl CatalogSnapshotMutationPlan for CatalogMutationPlan {
-    type LifecycleTarget = crate::CatalogLifecycleTarget;
+    type LifecycleTarget = CatalogLifecycleTarget;
 
     fn database_id(&self) -> DatabaseId {
         self.database_id

@@ -1,8 +1,7 @@
 use crate::support::{encode_records, recovery_manifest};
 use andromeda_manifest::DatabaseManifest;
-use andromeda_observe::{
-    EventCorrelation, EventEnvelope, EventId, RecoveryTrace, TraceEvent, TraceId,
-};
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, RecoveryTrace as ObserveRecoveryTrace, TraceEvent};
 use andromeda_recovery::{RecoveryPlan, RedoRecordDecision, StartupMode};
 use andromeda_types::TransactionId;
 use andromeda_wal::{
@@ -113,7 +112,7 @@ fn redo_plan_exports_recovery_trace_with_durable_lsn_correlation() {
         RecoveryPlan::from_manifest_and_wal(&manifest, StartupMode::SafeStart, &durable_records)
             .unwrap();
     let trace_projection = plan.trace_projection(TraceId::new(50));
-    let trace = RecoveryTrace {
+    let trace = ObserveRecoveryTrace {
         trace_id: trace_projection.trace_id,
         last_durable_lsn: trace_projection.last_durable_lsn,
         corruption_boundary_lsn: trace_projection.corruption_boundary_lsn,

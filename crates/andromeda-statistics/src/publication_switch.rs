@@ -1,5 +1,5 @@
-use andromeda_contract::StatsVersion;
 use andromeda_observability::TraceId;
+use andromeda_procedure_contract::StatsVersion;
 
 use crate::{
     StatsPublication, StatsPublicationDecisionEvidence, StatsPublicationDecisionStage,

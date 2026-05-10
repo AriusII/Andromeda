@@ -1,6 +1,8 @@
-use andromeda_contract::{ProcedureContractBinding, QualifiedName, ResultStreamCardinality};
 use andromeda_digest::Sha256;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
+    ProcedureContractBinding, QualifiedName, ResultStreamCardinality,
+};
 use andromeda_srpl_diagnostics::{DiagnosticPhase, SrplDiagnostic};
 use andromeda_types::{CatalogObjectId, ContractHash, ProcedureId};
 

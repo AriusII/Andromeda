@@ -1,5 +1,5 @@
-use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_procedure_contract::{ProcedureContractBinding, ProcedureContractRef};
 
 use crate::{InvocationReject, InvocationRequest};
 

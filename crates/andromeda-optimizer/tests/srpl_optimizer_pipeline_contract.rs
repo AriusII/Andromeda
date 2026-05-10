@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::QualifiedName;
 use andromeda_optimizer::srpl::{
     OptimizationLevel, OptimizerDecisionKind, optimize_procedure_ir, phase::OptimizerPhase,
     plan_kind::OptimizerPlanKind, run_optimizer_pipeline,
 };
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_ir::{
     ArithOp, Cardinality, ConstantLiteral, SrplAssignmentIr, SrplBusinessOperationIr,
     SrplBusinessOperationKindIr, SrplEmitValueIr, SrplPredicateIr, SrplProcedureBodyIr,

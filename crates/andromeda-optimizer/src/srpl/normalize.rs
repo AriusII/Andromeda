@@ -66,7 +66,7 @@ fn normalize_operation(mut op: SrplBusinessOperationIr) -> Option<SrplBusinessOp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::QualifiedName;
+    use andromeda_procedure_contract::QualifiedName;
     use andromeda_srpl_ir::{Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr};
 
     fn read_op(ordinal: u32, predicates: Vec<SrplPredicateIr>) -> SrplBusinessOperationIr {

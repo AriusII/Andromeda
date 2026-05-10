@@ -9,5 +9,6 @@ publish = false
 andromeda-error.workspace = true
 andromeda-hardware.workspace = true
 andromeda-observe.workspace = true
+andromeda-observability.workspace = true
 andromeda-segment.workspace = true
 andromeda-storage-page.workspace = true

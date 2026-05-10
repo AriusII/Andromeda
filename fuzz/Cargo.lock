@@ -24,15 +24,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "andromeda-buffer-pool"
-version = "0.1.0"
-dependencies = [
- "andromeda-error",
- "andromeda-storage-page",
- "andromeda-wal",
-]
-
-[[package]]
 name = "andromeda-catalog"
 version = "0.1.0"
 dependencies = [
@@ -65,6 +56,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-contract",
  "andromeda-error",
+ "andromeda-procedure-contract",
  "andromeda-types",
 ]
 
@@ -83,7 +75,7 @@ dependencies = [
 name = "andromeda-decision-trace"
 version = "0.1.0"
 dependencies = [
- "andromeda-contract",
+ "andromeda-procedure-contract",
  "andromeda-types",
 ]
 
@@ -95,6 +87,7 @@ dependencies = [
  "andromeda-contract",
  "andromeda-digest",
  "andromeda-error",
+ "andromeda-procedure-contract",
  "andromeda-srpl-diagnostics",
  "andromeda-types",
 ]
@@ -104,16 +97,6 @@ name = "andromeda-digest"
 version = "0.1.0"
 
 [[package]]
-name = "andromeda-disk-page-store"
-version = "0.1.0"
-dependencies = [
- "andromeda-error",
- "andromeda-segment",
- "andromeda-storage-page",
- "andromeda-wal",
-]
-
-[[package]]
 name = "andromeda-error"
 version = "0.1.0"
 
@@ -121,12 +104,17 @@ version = "0.1.0"
 name = "andromeda-fuzz"
 version = "0.0.0"
 dependencies = [
+ "andromeda-audit",
  "andromeda-catalog",
+ "andromeda-catalog-recovery",
  "andromeda-catalog-store",
  "andromeda-definition-batch",
  "andromeda-manifest",
+ "andromeda-observability",
  "andromeda-observe",
+ "andromeda-procedure-contract",
  "andromeda-proto",
+ "andromeda-proto-wire",
  "andromeda-quic",
  "andromeda-recovery",
  "andromeda-rpc-codec",
@@ -134,21 +122,12 @@ dependencies = [
  "andromeda-security-contract",
  "andromeda-segment",
  "andromeda-srpl-parser",
- "andromeda-storage",
+ "andromeda-storage-heap",
  "andromeda-storage-page",
+ "andromeda-structured-object",
  "andromeda-types",
  "andromeda-wal",
  "libfuzzer-sys",
-]
-
-[[package]]
-name = "andromeda-hadr"
-version = "0.1.0"
-dependencies = [
- "andromeda-error",
- "andromeda-observe",
- "andromeda-wal",
- "sha2",
 ]
 
 [[package]]
@@ -302,6 +281,7 @@ dependencies = [
  "andromeda-proto",
  "andromeda-proto-wire",
  "andromeda-rpc-protocol",
+ "andromeda-structured-object",
  "andromeda-types",
 ]
 
@@ -342,7 +322,7 @@ dependencies = [
 name = "andromeda-srpl-ast"
 version = "0.1.0"
 dependencies = [
- "andromeda-contract",
+ "andromeda-procedure-contract",
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
  "andromeda-types",
@@ -352,7 +332,7 @@ dependencies = [
 name = "andromeda-srpl-cardinality"
 version = "0.1.0"
 dependencies = [
- "andromeda-contract",
+ "andromeda-procedure-contract",
 ]
 
 [[package]]
@@ -373,32 +353,12 @@ dependencies = [
 name = "andromeda-srpl-parser"
 version = "0.1.0"
 dependencies = [
- "andromeda-contract",
+ "andromeda-procedure-contract",
  "andromeda-srpl-ast",
  "andromeda-srpl-cardinality",
  "andromeda-srpl-diagnostics",
  "andromeda-srpl-lexer",
  "andromeda-types",
-]
-
-[[package]]
-name = "andromeda-storage"
-version = "0.1.0"
-dependencies = [
- "andromeda-buffer-pool",
- "andromeda-catalog-recovery",
- "andromeda-disk-page-store",
- "andromeda-error",
- "andromeda-hadr",
- "andromeda-manifest",
- "andromeda-observe",
- "andromeda-recovery",
- "andromeda-segment",
- "andromeda-storage-heap",
- "andromeda-storage-index",
- "andromeda-storage-page",
- "andromeda-types",
- "andromeda-wal",
 ]
 
 [[package]]

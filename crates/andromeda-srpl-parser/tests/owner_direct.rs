@@ -26,8 +26,7 @@ fn assert_utf8_span(source: &str, span: SourceSpan) {
 fn parser_facade_reexports_lexer_tokens_and_byte_spans() {
     let source = "procedure Inventory.ReserveStock accepts (ProductId i64) returns Reservation one (Reserved bool);";
 
-    let tokens: Vec<Token> =
-        lex(source).expect("parser reexport must accept a narrow signature");
+    let tokens: Vec<Token> = lex(source).expect("parser reexport must accept a narrow signature");
 
     assert_eq!(tokens[0].kind, TokenKind::Procedure);
     assert!(tokens.iter().any(|token| token.kind == TokenKind::Dot));
@@ -87,7 +86,7 @@ fn parser_directly_builds_ast_for_narrow_body_operations() {
             assert_eq!(source.value.as_catalog_path(), "Inventory.ProductStock");
             assert_eq!(binding.value, "Stock");
             assert_eq!(cardinality.value, Cardinality::One);
-        }
+        },
         other => panic!("first operation must be Read, got {other:?}"),
     }
 
@@ -98,7 +97,7 @@ fn parser_directly_builds_ast_for_narrow_body_operations() {
         } => {
             assert_eq!(predicate.value, "Quantity");
             assert_eq!(failure_code.value, "InsufficientStock");
-        }
+        },
         other => panic!("second operation must be Assert, got {other:?}"),
     }
 
@@ -111,7 +110,7 @@ fn parser_directly_builds_ast_for_narrow_body_operations() {
             assert_eq!(target.value.as_catalog_path(), "Inventory.ProductStock");
             assert_eq!(mutation.value, "AvailableQuantity");
             assert!(affected_rows_exact.is_none());
-        }
+        },
         other => panic!("third operation must be Update, got {other:?}"),
     }
 
@@ -120,7 +119,7 @@ fn parser_directly_builds_ast_for_narrow_body_operations() {
             assert_eq!(stream.value, "Reservation");
             assert_eq!(values.len(), 1);
             assert_eq!(values[0].value, "Reserved");
-        }
+        },
         other => panic!("fourth operation must be Emit, got {other:?}"),
     }
 }

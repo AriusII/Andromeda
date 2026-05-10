@@ -1,6 +1,6 @@
 mod support;
 
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_plan_cache::{
     BoundedPlanCache, PlanCacheError, PlanCacheKey, PlanCacheMissReason, PlanClass,
     PlanDecisionOutcome, PlanSelectionError, PlanShapeFingerprint,

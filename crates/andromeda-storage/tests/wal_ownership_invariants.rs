@@ -10,8 +10,7 @@
 //! 1. Each type is defined exactly once across the crate.
 //! 2. The single definition lives at the documented canonical path.
 //!
-//! Storage must not grow compatibility files for pure WAL owner types. FileWal
-//! recovery reports remain storage-owned.
+//! Storage must not grow compatibility files for WAL/recovery owner types.
 
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
@@ -125,10 +124,13 @@ fn wal_ownership_types_have_single_canonical_definition() {
 fn pure_wal_facade_files_stay_demolished() {
     let workspace = workspace_root();
     let demolished_facades = [
+        "crates/andromeda-storage/src/recovery.rs",
+        "crates/andromeda-storage/src/write_ahead_log/mod.rs",
         "crates/andromeda-storage/src/write_ahead_log/codec.rs",
         "crates/andromeda-storage/src/write_ahead_log/commit_log_entry.rs",
         "crates/andromeda-storage/src/write_ahead_log/commit_log_facade.rs",
         "crates/andromeda-storage/src/write_ahead_log/compaction.rs",
+        "crates/andromeda-storage/src/write_ahead_log/durability_fence.rs",
         "crates/andromeda-storage/src/write_ahead_log/gc.rs",
         "crates/andromeda-storage/src/write_ahead_log/gc_eligibility.rs",
         "crates/andromeda-storage/src/write_ahead_log/heap_redo.rs",
@@ -146,7 +148,7 @@ fn pure_wal_facade_files_stay_demolished() {
     for relative in demolished_facades {
         if workspace.join(relative).exists() {
             failures.push(format!(
-                "{relative} reintroduced a storage WAL facade file; import from andromeda-wal/andromeda-hadr or use the narrow aliases in write_ahead_log/mod.rs"
+                "{relative} reintroduced a storage WAL/recovery facade file; import from andromeda-wal, andromeda-recovery, andromeda-manifest, or andromeda-storage-page"
             ));
         }
     }

@@ -6,10 +6,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use andromeda_contract::{
-    CatalogDefinition, CatalogObjectRef, ObjectKind, ProcedureContract, QualifiedName,
-};
+use andromeda_contract::CatalogDefinition;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
+    CatalogObjectRef, ObjectKind, ProcedureContract, QualifiedName,
+};
 use andromeda_types::CatalogVersion;
 use andromeda_types::{CatalogObjectId, DatabaseId, NamespaceId, ProcedureId};
 
@@ -781,7 +782,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{
+    use andromeda_contract::StructuredObjectDefinition;
+    use andromeda_procedure_contract::{
         AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
         ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
         StatsVersion, TransactionPolicy,
@@ -858,7 +860,7 @@ mod tests {
     }
 
     fn structured_object(id: u64, name: &str, version: u64) -> CatalogDefinition {
-        CatalogDefinition::StructuredObject(andromeda_contract::StructuredObjectDefinition {
+        CatalogDefinition::StructuredObject(StructuredObjectDefinition {
             object: object(id, name, ObjectKind::StructuredObject, version),
             fields: vec![column("ProductId", 0)],
             unique_by: vec!["ProductId".to_string()],

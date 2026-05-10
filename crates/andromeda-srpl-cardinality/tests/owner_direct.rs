@@ -1,4 +1,4 @@
-use andromeda_contract::ResultStreamCardinality;
+use andromeda_procedure_contract::ResultStreamCardinality;
 use andromeda_srpl_cardinality::Cardinality;
 
 #[test]

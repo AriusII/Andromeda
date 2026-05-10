@@ -163,7 +163,7 @@ fn default_conjunct_selectivity(predicate_count: usize) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::QualifiedName;
+    use andromeda_procedure_contract::QualifiedName;
     use andromeda_srpl_ir::{
         Cardinality, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr,
         SrplProcedureIr,

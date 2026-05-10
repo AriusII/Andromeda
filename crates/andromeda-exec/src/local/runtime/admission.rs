@@ -1,13 +1,22 @@
 use andromeda_audit::{
     Permission as AuditPermission, SecurityAuditOutcome, SurfaceScope as AuditSurfaceScope,
 };
-use andromeda_catalog::CatalogSnapshot;
+use andromeda_catalog_store::CatalogSnapshot;
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::{CriticalDecisionTrace as DecisionTrace, TraceId};
 
 use crate::{
     AuthorizedProcedureDispatch, InvocationContext, InvocationRequest, local::types::LocalProcedure,
 };
+
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 #[derive(Debug)]
 pub(super) struct PreTransactionAdmission {
@@ -48,7 +57,7 @@ pub(super) fn validate_pre_transaction_admission(
 pub(super) fn validate_catalog_resolved_procedure(
     request: &InvocationRequest,
     procedure: &LocalProcedure,
-    catalog: &CatalogSnapshot,
+    catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
     trace_id: TraceId,
 ) -> AndromedaResult<()> {
     let visible_catalog_version = catalog.visible_version();

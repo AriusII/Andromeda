@@ -207,7 +207,7 @@ impl RetryDecision {
 /// Retry attempt tracking and audit data.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RetryAttempt {
-    pub trace_id: andromeda_observe::TraceId,
+    pub trace_id: andromeda_observability::TraceId,
     pub attempt_number: u32,
     pub error_kind: AndromedaErrorKind,
     pub error_message: String,

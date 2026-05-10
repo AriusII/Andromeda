@@ -87,7 +87,7 @@ fn plan_replay_segments_skips_wal_for_snapshot_base_target() {
 #[test]
 fn restore_audit_trace_rejects_zero_trace_id() {
     let trace = RestoreAuditTrace::new(
-        andromeda_observe::TraceId::new(0),
+        andromeda_observability::TraceId::new(0),
         BackupId::new(1),
         Lsn::new(1500),
         RecoveryStage::SafeStart,
@@ -100,7 +100,7 @@ fn restore_audit_trace_rejects_zero_trace_id() {
 #[test]
 fn restore_audit_trace_rejects_zero_backup_id() {
     let trace = RestoreAuditTrace::new(
-        andromeda_observe::TraceId::new(1),
+        andromeda_observability::TraceId::new(1),
         BackupId::new(0),
         Lsn::new(1500),
         RecoveryStage::SafeStart,
@@ -114,7 +114,7 @@ fn restore_audit_trace_rejects_zero_backup_id() {
 fn restore_orchestration_validates_prerequisites() {
     let manifest = make_test_manifest();
     let audit = RestoreAuditTrace::new(
-        andromeda_observe::TraceId::new(1),
+        andromeda_observability::TraceId::new(1),
         BackupId::new(1),
         Lsn::new(1500),
         RecoveryStage::SafeStart,
@@ -136,7 +136,7 @@ fn restore_orchestration_validates_prerequisites() {
 fn restore_orchestration_rejects_audit_binding_mismatch() {
     let manifest = make_test_manifest();
     let audit = RestoreAuditTrace::new(
-        andromeda_observe::TraceId::new(1),
+        andromeda_observability::TraceId::new(1),
         BackupId::new(1),
         Lsn::new(1500),
         RecoveryStage::SafeStart,
@@ -158,7 +158,7 @@ fn restore_orchestration_rejects_audit_binding_mismatch() {
 fn restore_orchestration_rejects_invalid_pitr() {
     let manifest = make_test_manifest();
     let audit = RestoreAuditTrace::new(
-        andromeda_observe::TraceId::new(1),
+        andromeda_observability::TraceId::new(1),
         BackupId::new(1),
         Lsn::new(3000),
         RecoveryStage::SafeStart,

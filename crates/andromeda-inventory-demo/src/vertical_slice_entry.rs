@@ -3,15 +3,18 @@ mod protocol;
 mod result_frames;
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_catalog::CatalogSnapshot;
+use andromeda_catalog_store::CatalogSnapshot;
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_digest::sha256;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_exec::{LocalVerticalRuntime, VerticalInvocationOutcome};
 use andromeda_observe::{EventEmitter, EventSink};
 use andromeda_procedure_contract::{ProcedureContract, ProcedureContractBinding};
 use andromeda_rpc_protocol::FrameBytes;
-use andromeda_srpl::compile_narrow_procedure_signature;
 use andromeda_srpl_catalog_binding::bind_executable_procedure_plan;
+use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 use andromeda_srpl_ir::ExecutableProcedurePlan;
 use andromeda_storage_page::{PageId, PageSize};
 use andromeda_wal::{InvocationWal, Lsn};
@@ -30,6 +33,12 @@ pub use protocol::{
     V0InventoryProtocolViolation, V0InventoryReserveStockRpcPayload, decode_v0_execute_frame,
     encode_inventory_reserve_stock_v0_execute_frame,
 };
+
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
 
 const V0_PRODUCT_STOCK_HEAP_PAGE_ID: PageId = PageId::new(42_000);
 const V0_PRODUCT_STOCK_HEAP_PAGE_SIZE: PageSize = PageSize::KiB16;
@@ -62,7 +71,7 @@ pub struct V0InventoryReserveStockExecutableProcedure {
 impl V0InventoryReserveStockExecutableProcedure {
     pub fn bind_from_srpl_source(
         srpl_source: &str,
-        catalog: &CatalogSnapshot,
+        catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
         contract: &ProcedureContract,
     ) -> AndromedaResult<Self> {
         let srpl_ir = compile_narrow_procedure_signature(srpl_source).map_err(|diagnostic| {
@@ -417,7 +426,7 @@ pub fn inventory_reserve_stock_v0_pdf_srpl_source() -> &'static str {
 }
 
 pub fn bind_inventory_reserve_stock_v0_pdf_executable_procedure(
-    catalog: &CatalogSnapshot,
+    catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
     contract: &ProcedureContract,
 ) -> AndromedaResult<V0InventoryReserveStockExecutableProcedure> {
     V0InventoryReserveStockExecutableProcedure::bind_from_srpl_source(

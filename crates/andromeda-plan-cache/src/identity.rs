@@ -1,8 +1,8 @@
 use std::borrow::Borrow;
 
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_decision_trace::VersionBinding;
 use andromeda_digest::Sha256;
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::PlanCacheKeyError;
@@ -187,11 +187,11 @@ impl PlanCacheKey {
         match (plan_class, shape_fingerprint.is_empty()) {
             (PlanClass::Singleton, false) => {
                 return Err(PlanCacheKeyError::SingletonRejectsShapeFingerprint);
-            }
+            },
             (other, true) if other != PlanClass::Singleton => {
                 return Err(PlanCacheKeyError::ShapedPlanClassRequiresFingerprint);
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         Ok(Self {

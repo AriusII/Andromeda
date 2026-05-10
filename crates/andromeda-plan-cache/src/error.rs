@@ -16,22 +16,22 @@ impl core::fmt::Display for PlanCacheKeyError {
             Self::ProcedureIdZero => f.write_str("plan-cache key requires a non-zero ProcedureId"),
             Self::CatalogVersionZero => {
                 f.write_str("plan-cache key requires a non-zero CatalogVersion")
-            }
+            },
             Self::ContractHashZero => {
                 f.write_str("plan-cache key requires a non-zero ContractHash")
-            }
+            },
             Self::StatsVersionZero => {
                 f.write_str("plan-cache key requires a non-zero StatsVersion")
-            }
+            },
             Self::PolicyVersionZero => {
                 f.write_str("plan-cache key requires a non-zero PolicyVersion")
-            }
+            },
             Self::SingletonRejectsShapeFingerprint => {
                 f.write_str("PlanClass::Singleton must use the empty PlanShapeFingerprint")
-            }
+            },
             Self::ShapedPlanClassRequiresFingerprint => {
                 f.write_str("non-Singleton PlanClass requires a non-empty PlanShapeFingerprint")
-            }
+            },
         }
     }
 }
@@ -54,7 +54,7 @@ impl core::fmt::Display for PlanCachePolicyError {
             Self::CapacityZero => f.write_str("enabled plan-cache capacity must be non-zero"),
             Self::CapacityTooLarge => {
                 f.write_str("plan-cache capacity exceeds the bounded maximum")
-            }
+            },
             Self::PolicyVersionZero => f.write_str("plan-cache policy version must not be zero"),
             Self::TraceIdZero => f.write_str("plan-cache trace id must not be zero"),
             Self::TraceBuildFailed => f.write_str("plan-cache decision trace construction failed"),

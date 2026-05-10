@@ -1,5 +1,7 @@
-use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
+    CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName,
+};
 use andromeda_types::{CatalogVersion, ContractHash};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

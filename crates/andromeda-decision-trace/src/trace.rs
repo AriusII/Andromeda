@@ -1,4 +1,4 @@
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{

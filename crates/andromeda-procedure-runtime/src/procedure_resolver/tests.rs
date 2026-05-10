@@ -2,12 +2,12 @@ use super::*;
 use std::sync::Arc;
 
 use andromeda_admission::InvocationRequest;
-use andromeda_contract::{
+use andromeda_error::AndromedaErrorKind;
+use andromeda_procedure_contract::{
     AccessMode, CatalogObjectRef, IsolationPolicy, MultiResultPolicy, ObjectKind,
     ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract, TransactionPolicy,
 };
-use andromeda_error::AndromedaErrorKind;
 use andromeda_srpl_ir::{
     BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
 };

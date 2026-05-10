@@ -3,12 +3,79 @@ use andromeda_mvcc::{
     MvccIsolationPolicy, MvccRowHeader, Snapshot, TransactionStatus, TransactionStatusTable,
 };
 use andromeda_time::EngineTimestamp;
-use andromeda_transaction::CommitLogManager;
-use andromeda_transaction_log::{IsolationLevel, Lsn, TxWalReplayRecord, WalRecordKind};
+use andromeda_transaction_log::{
+    CommitLogManager, IsolationLevel, Lsn, TransactionLogStatus, TransactionStatusStore,
+    TxWalReplayRecord, WalRecordKind,
+};
 use andromeda_types::{CatalogVersion, TransactionId};
 use std::sync::Arc;
 
 struct NoopWal;
+
+struct MvccTransactionStatusStore {
+    table: Arc<TransactionStatusTable>,
+}
+
+impl MvccTransactionStatusStore {
+    fn new(table: Arc<TransactionStatusTable>) -> Arc<Self> {
+        Arc::new(Self { table })
+    }
+
+    fn mvcc_status_from_log_status(status: TransactionLogStatus) -> TransactionStatus {
+        match status {
+            TransactionLogStatus::InFlight => TransactionStatus::InFlight,
+            TransactionLogStatus::Committed => TransactionStatus::Committed,
+            TransactionLogStatus::RolledBack => TransactionStatus::RolledBack,
+        }
+    }
+
+    fn log_status_from_mvcc_status(status: TransactionStatus) -> TransactionLogStatus {
+        match status {
+            TransactionStatus::InFlight => TransactionLogStatus::InFlight,
+            TransactionStatus::Committed => TransactionLogStatus::Committed,
+            TransactionStatus::RolledBack => TransactionLogStatus::RolledBack,
+        }
+    }
+}
+
+impl TransactionStatusStore for MvccTransactionStatusStore {
+    fn status(&self, tx_id: TransactionId) -> Option<TransactionLogStatus> {
+        self.table
+            .status(tx_id)
+            .map(Self::log_status_from_mvcc_status)
+    }
+
+    fn record_commit_from_durable_evidence(
+        &self,
+        tx_id: TransactionId,
+        commit_lsn: Lsn,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<()> {
+        self.table
+            .record_commit_from_durable_evidence(tx_id, commit_lsn, durable_lsn)
+    }
+
+    fn record_rollback_from_durable_evidence(
+        &self,
+        tx_id: TransactionId,
+        rollback_lsn: Lsn,
+        durable_lsn: Lsn,
+    ) -> AndromedaResult<()> {
+        self.table
+            .record_rollback_from_durable_evidence(tx_id, rollback_lsn, durable_lsn)
+    }
+
+    fn restore_terminal_from_validated_replay(
+        &self,
+        tx_id: TransactionId,
+        status: TransactionLogStatus,
+    ) -> AndromedaResult<()> {
+        self.table.restore_terminal_from_validated_replay(
+            tx_id,
+            Self::mvcc_status_from_log_status(status),
+        )
+    }
+}
 
 #[async_trait::async_trait]
 impl andromeda_transaction_log::InvocationWal for NoopWal {
@@ -26,9 +93,15 @@ impl andromeda_transaction_log::InvocationWal for NoopWal {
     }
 }
 
-fn recovered_commit_log() -> (CommitLogManager, Arc<TransactionStatusTable>) {
+fn recovered_commit_log() -> (
+    CommitLogManager<MvccTransactionStatusStore>,
+    Arc<TransactionStatusTable>,
+) {
     let status_table = Arc::new(TransactionStatusTable::new());
-    let commit_log = CommitLogManager::new(Arc::new(NoopWal), status_table.clone());
+    let commit_log = CommitLogManager::new(
+        Arc::new(NoopWal),
+        MvccTransactionStatusStore::new(status_table.clone()),
+    );
     (commit_log, status_table)
 }
 

@@ -249,7 +249,7 @@ fn unknown_procedure_error(procedure_id: ProcedureId) -> AndromedaError {
 mod tests {
     use andromeda_admission::InvocationContext;
     use andromeda_error::{AndromedaErrorKind, AndromedaResult};
-    use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+    use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
     use andromeda_procedure_contract::{
         PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
     };

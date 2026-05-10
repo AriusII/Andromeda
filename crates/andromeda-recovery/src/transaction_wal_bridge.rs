@@ -1,9 +1,9 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_time::EngineTimestamp;
-use andromeda_transaction::{TxWalAdapterReplayRecord, map_tx_wal_replay_records};
 use andromeda_transaction_log::{
     InvocationWal as TransactionInvocationWal, IsolationLevel, Lsn as TxLsn, TX_COMMIT_PAYLOAD_LEN,
-    TX_ROLLBACK_PAYLOAD_LEN, TxWalReplayRecord, WalRecordKind as TxWalRecordKind,
+    TX_ROLLBACK_PAYLOAD_LEN, TxWalAdapterReplayRecord, TxWalReplayRecord,
+    WalRecordKind as TxWalRecordKind, map_tx_wal_replay_records,
 };
 use andromeda_types::TransactionId;
 use andromeda_wal::{FileWal, InMemoryWal, InvocationWal, Lsn, WalRecord, WalRecordKind};
@@ -41,7 +41,7 @@ impl<W> CommitLogInvocationWal<W> {
     {
         let mut wal = self.lock_wal()?;
         let lsn = wal.append(WalRecordKind::TxBegin, Some(transaction_id), &[])?;
-        Ok(storage_lsn_to_tx_lsn(lsn))
+        Ok(tx_lsn_from_storage_lsn(lsn))
     }
 
     pub fn flush_through_tx_lsn(&self, lsn: TxLsn) -> AndromedaResult<TxLsn>
@@ -49,8 +49,8 @@ impl<W> CommitLogInvocationWal<W> {
         W: InvocationWal,
     {
         let mut wal = self.lock_wal()?;
-        let durable_lsn = wal.flush_through(tx_lsn_to_storage_lsn(lsn))?;
-        Ok(storage_lsn_to_tx_lsn(durable_lsn))
+        let durable_lsn = wal.flush_through(storage_lsn_from_tx_lsn(lsn))?;
+        Ok(tx_lsn_from_storage_lsn(durable_lsn))
     }
 
     fn lock_wal(&self) -> AndromedaResult<MutexGuard<'_, W>> {
@@ -86,7 +86,7 @@ where
             };
             let mut wal = self.lock_wal()?;
             let lsn = wal.append(storage_kind, transaction_id, &payload)?;
-            Ok(storage_lsn_to_tx_lsn(lsn))
+            Ok(tx_lsn_from_storage_lsn(lsn))
         })
     }
 
@@ -197,7 +197,7 @@ where
         }
         evidence.source_records += 1;
 
-        let tx_lsn = storage_lsn_to_tx_lsn(record.header.lsn);
+        let tx_lsn = tx_lsn_from_storage_lsn(record.header.lsn);
         match record.header.kind {
             WalRecordKind::TxBegin => {
                 adapter_records.push(TxWalAdapterReplayRecord::begin(
@@ -264,11 +264,11 @@ where
     })
 }
 
-const fn storage_lsn_to_tx_lsn(lsn: Lsn) -> TxLsn {
+const fn tx_lsn_from_storage_lsn(lsn: Lsn) -> TxLsn {
     TxLsn::new(lsn.get())
 }
 
-const fn tx_lsn_to_storage_lsn(lsn: TxLsn) -> Lsn {
+const fn storage_lsn_from_tx_lsn(lsn: TxLsn) -> Lsn {
     Lsn::new(lsn.get())
 }
 

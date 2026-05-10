@@ -1,7 +1,7 @@
 use andromeda_error::AndromedaResult;
+use andromeda_proto_wire::FrameEnvelope;
+use andromeda_structured_object::StructuredObjectHeader;
 
-use crate::FrameEnvelope;
-use crate::StructuredObjectHeader;
 use crate::generated::{contract, protocol};
 
 mod views;

@@ -9,10 +9,12 @@ publish = false
 andromeda-admission.workspace = true
 andromeda-business-fixtures.workspace = true
 andromeda-catalog.workspace = true
+andromeda-catalog-store.workspace = true
+andromeda-definition-batch.workspace = true
 andromeda-error.workspace = true
 andromeda-exec.workspace = true
 andromeda-inventory-demo-core = { package = "andromeda-inventory-demo", path = "../andromeda-inventory-demo", version = "0.1.0" }
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-types.workspace = true
 andromeda-wal.workspace = true

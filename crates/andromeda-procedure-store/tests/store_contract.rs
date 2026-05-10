@@ -1,7 +1,7 @@
 //! Integration tests for the Procedure Store registry and evidence boundary.
 
 use andromeda_error::{AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_plan_cache::{PlanCacheKey, PlanClass, PlanShapeFingerprint};
 use andromeda_procedure_contract::{
     AccessMode, CatalogObjectRef, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,

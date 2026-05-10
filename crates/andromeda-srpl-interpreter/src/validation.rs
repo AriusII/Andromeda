@@ -1,5 +1,5 @@
-use andromeda_contract::{CatalogObjectRef, ObjectKind};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{CatalogObjectRef, ObjectKind};
 use andromeda_srpl_ir::{BoundSrplOperationPlan, ExecutableProcedurePlan};
 
 use crate::identifier::validate_srpl_identifier as validate_symbol;

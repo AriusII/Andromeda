@@ -12,12 +12,12 @@ andromeda-storage-heap = { path = "../andromeda-storage-heap" }
 andromeda-storage-index = { path = "../andromeda-storage-index" }
 andromeda-storage-page = { path = "../andromeda-storage-page" }
 andromeda-time = { path = "../andromeda-time" }
-andromeda-transaction = { path = "../andromeda-transaction" }
 andromeda-transaction-log = { path = "../andromeda-transaction-log" }
 andromeda-types = { path = "../andromeda-types" }
 andromeda-wal = { path = "../andromeda-wal" }
 
 [dev-dependencies]
+andromeda-observability.workspace = true
 andromeda-observe.workspace = true
 proptest.workspace = true
 andromeda-mvcc.workspace = true

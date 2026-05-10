@@ -3,8 +3,9 @@
 //! These types carry catalog mutation identity, object deltas, boundary
 //! metadata, and publication intent without owning WAL codecs or storage I/O.
 
-use andromeda_contract::{CatalogDefinition, CatalogObjectRef};
+use andromeda_contract::CatalogDefinition;
 use andromeda_error::AndromedaResult;
+use andromeda_procedure_contract::CatalogObjectRef;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 /// Maximum number of Apply records that one durable DefinitionBatch replay may carry.

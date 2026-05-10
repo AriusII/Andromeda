@@ -8,12 +8,12 @@ use andromeda_catalog_store::{
     CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError, ObjectKind, QualifiedName,
     StructuredObjectDefinition, TableDefinition, validate_catalog_store_wal_append_sequence,
 };
-use andromeda_contract::{
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
     StatsVersion, TransactionPolicy,
 };
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,
     ProcedureId, ScalarType, TypeDescriptor,

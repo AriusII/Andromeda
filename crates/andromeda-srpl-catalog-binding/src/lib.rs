@@ -2,8 +2,10 @@
 
 //! CatalogSnapshot adapter for executable SRPL catalog binding.
 
-use andromeda_catalog::CatalogSnapshot;
-use andromeda_catalog_store::{CatalogDefinition, QualifiedName};
+use andromeda_catalog_store::{CatalogDefinition, CatalogSnapshot, QualifiedName};
+use andromeda_definition_batch::{
+    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_procedure_contract::ProcedureContract;
 use andromeda_srpl_binder::{
@@ -12,9 +14,15 @@ use andromeda_srpl_binder::{
 use andromeda_srpl_ir::{ExecutableProcedurePlan, SrplProcedureIr};
 use andromeda_types::CatalogVersion;
 
+type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+    DefinitionBatchId,
+    DefinitionBatchSourceHash,
+    DefinitionBatchDependencyGraphHash,
+>;
+
 pub fn bind_executable_procedure_plan(
     ir: &SrplProcedureIr,
-    catalog: &CatalogSnapshot,
+    catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
 ) -> AndromedaResult<ExecutableProcedurePlan> {
     andromeda_srpl_binder::bind_executable_procedure_plan(
         ir,
@@ -23,7 +31,7 @@ pub fn bind_executable_procedure_plan(
 }
 
 struct CatalogSnapshotBindingView<'a> {
-    catalog: &'a CatalogSnapshot,
+    catalog: &'a CatalogSnapshot<CatalogPublicationReceipt>,
 }
 
 impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {

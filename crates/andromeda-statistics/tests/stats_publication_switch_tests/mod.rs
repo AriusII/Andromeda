@@ -1,5 +1,5 @@
-pub(crate) use andromeda_contract::StatsVersion;
 pub(crate) use andromeda_observability::TraceId;
+pub(crate) use andromeda_procedure_contract::StatsVersion;
 pub(crate) use andromeda_scenario_evidence::{EvidenceConfidence, EvidenceScore};
 pub(crate) use andromeda_scenario_evidence::{
     ScenarioEvidence, ScenarioEvidenceAdvisoryUse, ScenarioId, ScenarioKind, ScenarioTarget,

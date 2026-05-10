@@ -1,7 +1,7 @@
 //! Result metadata extraction from SRPL executable plans.
 
-use andromeda_contract::ResultStreamContract;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::ResultStreamContract;
 use andromeda_result_stream::ResultStreamMetadata;
 use andromeda_srpl_ir::{
     BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ExecutableProcedurePlan,
@@ -142,7 +142,7 @@ fn infer_result_stream_shape(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{
+    use andromeda_procedure_contract::{
         CatalogObjectRef, ObjectKind, QualifiedName, ResultStreamCardinality,
     };
     use andromeda_srpl_ir::{SrplEmitValueIr, SrplValueIr};

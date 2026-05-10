@@ -2,9 +2,10 @@ use std::sync::Arc;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_time::EngineTimestamp;
-use andromeda_transaction::{
+use andromeda_transaction::{WalManager, append_commit_and_flush};
+use andromeda_transaction_log::{
     IsolationLevel, Lsn, TxWalAdapterError, TxWalAdapterReplayRecord, TxWalReplayRecord,
-    WalManager, append_commit_and_flush, map_tx_wal_replay_records,
+    map_tx_wal_replay_records,
 };
 use andromeda_types::TransactionId;
 
@@ -98,7 +99,7 @@ async fn append_commit_and_flush_maps_append_and_flush_failures_to_typed_storage
 }
 
 #[test]
-fn transaction_facade_preserves_replay_mapper_compatibility() -> AndromedaResult<()> {
+fn transaction_log_replay_mapper_preserves_commit_records() -> AndromedaResult<()> {
     let tx_id = TransactionId::new(10);
 
     let records = map_tx_wal_replay_records([

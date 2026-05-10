@@ -1,9 +1,9 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_observe::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_procedure_contract::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_types::{InvocationId, ProcedureId};
 
 use crate::procedure_resolver::{ProcedureResolveRequest, ProcedureResolver};

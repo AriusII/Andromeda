@@ -132,7 +132,7 @@ fn compute_def(kind: &SrplBusinessOperationKindIr) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::QualifiedName;
+    use andromeda_procedure_contract::QualifiedName;
     use andromeda_srpl_ir::{
         Cardinality, SrplBusinessOperationIr, SrplBusinessOperationKindIr, SrplProcedureBodyIr,
         SrplProcedureIr,

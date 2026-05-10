@@ -7,10 +7,15 @@ fn cargo_manifest_rejects_rpc_runtime_and_implicit_wire_stack_drift() {
     let manifest = CARGO_MANIFEST.to_ascii_lowercase();
     let forbidden = [
         "andromeda-quic",
+        "andromeda-quic-runtime-quinn",
+        "andromeda-rpc-runtime",
+        "andromeda-runtime-quinn",
         "bincode",
         "bytemuck",
         "grpc",
         "grpcio",
+        "h2",
+        "hyper",
         "json-rpc",
         "jsonrpc",
         "jsonrpsee",
@@ -19,10 +24,14 @@ fn cargo_manifest_rejects_rpc_runtime_and_implicit_wire_stack_drift() {
         "prost-grpc",
         "prost_grpc",
         "quinn",
+        "rcgen",
         "rkyv",
+        "rustls",
         "serde_json",
         "tokio",
+        "tokio-rustls",
         "tonic",
+        "tower",
         "zerocopy",
     ];
 
@@ -41,10 +50,16 @@ fn cargo_manifest_rejects_rpc_runtime_and_implicit_wire_stack_drift() {
 #[test]
 fn source_rejects_runtime_transport_imports() {
     let forbidden = [
+        "andromeda_quic::",
+        "andromeda_quic_runtime_quinn::",
+        "andromeda_rpc_runtime::",
+        "andromeda_runtime_quinn::",
         "bincode::",
         "prost::",
         "quinn::",
+        "rcgen::",
         "rkyv::",
+        "rustls::",
         "serde_json::",
         "tokio::",
         "tonic::",

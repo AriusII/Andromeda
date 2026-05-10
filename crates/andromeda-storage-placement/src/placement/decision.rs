@@ -1,5 +1,6 @@
 use andromeda_error::AndromedaResult;
-use andromeda_observe::{PlacementAuditEvent, TraceId};
+use andromeda_observability::TraceId;
+use andromeda_observe::PlacementAuditEvent;
 use andromeda_segment::{SegmentDescriptor, SegmentMutation, SegmentState};
 
 use super::{DataTemperature, PipelineStage, ReadFallbackPolicy, StorageTier, storage_error};

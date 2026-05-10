@@ -67,14 +67,14 @@ impl Parser {
                     head_span,
                     "float scalar types are not permitted in SRPL contracts",
                 ));
-            }
+            },
             _ => {
                 return Err(self.error_at(
                     head_span,
                     "unsupported SRPL scalar type; expected one of \
                      i8|i16|i32|i64|i128|u8|u16|u32|u64|u128|bool|text|decimal|timestamp",
                 ));
-            }
+            },
         };
 
         let descriptor = TypeDescriptor::required(scalar);
@@ -177,7 +177,7 @@ impl Parser {
                     mode_token.span,
                     "SRPL timestamp mode must be transaction, invocation, or monotonic_epoch",
                 ));
-            }
+            },
         };
         let close = self.expect(TokenKind::RParen)?;
         Ok((ScalarType::Timestamp(mode), close.span.end))

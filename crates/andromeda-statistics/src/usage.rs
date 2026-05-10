@@ -192,7 +192,7 @@ fn map_trace_error(error: DecisionTraceError) -> StatisticsError {
 mod tests {
     use super::*;
     use crate::StatsSetDigest;
-    use andromeda_contract::{PolicyVersion, StatsVersion};
+    use andromeda_procedure_contract::{PolicyVersion, StatsVersion};
     use andromeda_types::CatalogVersion;
 
     fn policy(byte: u8) -> PolicyVersion {

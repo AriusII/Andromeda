@@ -2,10 +2,8 @@ use andromeda_error::AndromedaErrorKind;
 use andromeda_hardware::{
     GpuExecutionPolicy, GpuProfile, HardwareProfile, RamProfile, RamSectionBudget, RamSectionRole,
 };
-use andromeda_observe::{
-    CriticalDecisionKind, EventCorrelation, EventEnvelope, EventId, PlacementAuditTransition,
-    TraceEvent, TraceId,
-};
+use andromeda_observability::{CriticalDecisionKind, EventCorrelation, EventId, TraceId};
+use andromeda_observe::{EventEnvelope, PlacementAuditTransition, TraceEvent};
 use andromeda_segment::{
     ExtentId, SegmentDescriptor, SegmentHeader, SegmentId, SegmentMutation, SegmentState,
     SegmentTrailer,

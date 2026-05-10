@@ -1,4 +1,4 @@
-use andromeda_contract::PolicyVersion;
+use andromeda_procedure_contract::PolicyVersion;
 
 use crate::OptimizerError;
 

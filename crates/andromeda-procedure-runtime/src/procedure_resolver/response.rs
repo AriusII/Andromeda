@@ -1,4 +1,4 @@
-use andromeda_contract::{ProcedureContractRef, QualifiedName};
+use andromeda_procedure_contract::{ProcedureContractRef, QualifiedName};
 use andromeda_srpl_ir::ExecutableProcedurePlan;
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 

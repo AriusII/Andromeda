@@ -4,13 +4,15 @@ mod sensitive;
 
 use std::path::PathBuf;
 
-use andromeda_error::AndromedaResult;
-use andromeda_observe::{
+use andromeda_audit::{
     DurableAuditCompactionReport, DurableAuditEventFamily, DurableAuditReplayEvidence,
     DurableAuditReplayLsnRange, DurableAuditReplayQuery, DurableAuditReplayWindow,
-    DurableAuditRetentionPolicy, DurableAuditTraceQueryResult, DurableAuditTraceQuerySource,
-    FileDurableAuditWalSink, TraceEventFamily, TraceQueryLsnRange, TraceQuerySpec,
+    DurableAuditRetentionPolicy, DurableAuditTraceFamily, DurableAuditTraceQueryFilter,
+    DurableAuditTraceQueryResult, DurableAuditTraceQuerySource, DurableAuditTraceQuerySpec,
+    FileDurableAuditWalSink,
 };
+use andromeda_error::AndromedaResult;
+use andromeda_observability::{TraceEventFamily, TraceQueryLsnRange, TraceQuerySpec};
 
 use crate::error::cli_error;
 
@@ -182,7 +184,7 @@ fn build_audit_inspection_report(
             ))
         })?;
     let source = DurableAuditTraceQuerySource::new(&replay.records);
-    let result = source.query(&options.spec)?;
+    let result = source.query(&durable_trace_query_spec(&options.spec)?)?;
     let diagnostic_evidence = options
         .diagnostic_json
         .then(|| build_inspection_diagnostic_evidence(&options.spec, replay.evidence, &source))
@@ -316,7 +318,7 @@ fn build_inspection_diagnostic_evidence(
 ) -> AndromedaResult<AuditInspectionDiagnosticEvidence> {
     let mut diagnostic_spec = spec.clone();
     diagnostic_spec.include_total_count = true;
-    let diagnostic_result = source.query(&diagnostic_spec)?;
+    let diagnostic_result = source.query(&durable_trace_query_spec(&diagnostic_spec)?)?;
     Ok(AuditInspectionDiagnosticEvidence {
         records_scanned: replay_evidence.records_scanned,
         records_matched: diagnostic_result
@@ -351,6 +353,41 @@ fn durable_lsn_range(range: TraceQueryLsnRange) -> DurableAuditReplayLsnRange {
     DurableAuditReplayLsnRange::new(range.start_lsn, range.end_lsn)
 }
 
+fn durable_trace_query_spec(spec: &TraceQuerySpec) -> AndromedaResult<DurableAuditTraceQuerySpec> {
+    let durable_spec = DurableAuditTraceQuerySpec {
+        filter: DurableAuditTraceQueryFilter {
+            trace_id: spec.filter.trace_id,
+            family: spec.filter.family.map(durable_trace_family).transpose()?,
+            lsn_range: spec.filter.lsn_range,
+            catalog_version: spec.filter.catalog_version,
+            procedure_id: spec.filter.procedure_id,
+            principal: spec.filter.principal.clone(),
+        },
+        limit: spec.limit,
+        offset: spec.offset,
+        include_total_count: spec.include_total_count,
+    };
+    durable_spec.validate()?;
+    Ok(durable_spec)
+}
+
+fn durable_trace_family(family: TraceEventFamily) -> AndromedaResult<DurableAuditTraceFamily> {
+    Ok(match family {
+        TraceEventFamily::Decision => DurableAuditTraceFamily::Decision,
+        TraceEventFamily::ProcedureInvocation => DurableAuditTraceFamily::ProcedureInvocation,
+        TraceEventFamily::Wal => DurableAuditTraceFamily::Wal,
+        TraceEventFamily::Recovery => DurableAuditTraceFamily::Recovery,
+        TraceEventFamily::ManifestCatalog => DurableAuditTraceFamily::ManifestCatalog,
+        TraceEventFamily::Protocol => DurableAuditTraceFamily::Protocol,
+        TraceEventFamily::SecurityAudit => DurableAuditTraceFamily::SecurityAudit,
+        TraceEventFamily::AdminAudit => DurableAuditTraceFamily::AdminAudit,
+        TraceEventFamily::Resource => DurableAuditTraceFamily::Resource,
+        TraceEventFamily::Io => DurableAuditTraceFamily::Io,
+        TraceEventFamily::Gpu => DurableAuditTraceFamily::Gpu,
+        TraceEventFamily::Transaction => DurableAuditTraceFamily::Transaction,
+    })
+}
+
 fn durable_family_for_exact_trace_family(
     family: TraceEventFamily,
 ) -> Option<DurableAuditEventFamily> {
@@ -370,7 +407,8 @@ fn audit_path_for_output(path: &std::path::Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_observe::{TRACE_QUERY_MAX_LIMIT, TraceId};
+    use andromeda_observability::TRACE_QUERY_MAX_LIMIT;
+    use andromeda_observability::TraceId;
 
     fn strings(values: &[&str]) -> Vec<String> {
         values.iter().map(|value| value.to_string()).collect()

@@ -176,35 +176,32 @@ pub fn validate_trace_query_parts(input: TraceQueryValidation<'_>) -> AndromedaR
     if input.limit > input.max_limit {
         return Err(trace_query_error(input.messages.limit_exceeds_max));
     }
-    match input.trace_id {
-        Some(trace_id) if trace_id.is_zero() => {
-            return Err(trace_query_error(input.messages.trace_id_zero));
-        },
-        _ => {},
+    if let Some(trace_id) = input.trace_id
+        && trace_id.is_zero()
+    {
+        return Err(trace_query_error(input.messages.trace_id_zero));
     }
-    match input.lsn_range_valid {
-        Some(false) => {
-            return Err(trace_query_error(input.messages.lsn_range_invalid));
-        },
-        _ => {},
+
+    if let Some(false) = input.lsn_range_valid {
+        return Err(trace_query_error(input.messages.lsn_range_invalid));
     }
-    match input.catalog_version {
-        Some(catalog_version) if catalog_version.get() == 0 => {
-            return Err(trace_query_error(input.messages.catalog_version_zero));
-        },
-        _ => {},
+
+    if let Some(catalog_version) = input.catalog_version
+        && catalog_version.get() == 0
+    {
+        return Err(trace_query_error(input.messages.catalog_version_zero));
     }
-    match input.procedure_id {
-        Some(procedure_id) if procedure_id.get() == 0 => {
-            return Err(trace_query_error(input.messages.procedure_id_zero));
-        },
-        _ => {},
+
+    if let Some(procedure_id) = input.procedure_id
+        && procedure_id.get() == 0
+    {
+        return Err(trace_query_error(input.messages.procedure_id_zero));
     }
-    match input.principal {
-        Some(principal) if principal.trim().is_empty() => {
-            return Err(trace_query_error(input.messages.principal_empty));
-        },
-        _ => {},
+
+    if let Some(principal) = input.principal
+        && principal.trim().is_empty()
+    {
+        return Err(trace_query_error(input.messages.principal_empty));
     }
     Ok(())
 }

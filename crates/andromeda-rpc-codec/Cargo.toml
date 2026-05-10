@@ -12,4 +12,5 @@ andromeda-procedure-contract.workspace = true
 andromeda-proto.workspace = true
 andromeda-proto-wire.workspace = true
 andromeda-rpc-protocol.workspace = true
+andromeda-structured-object.workspace = true
 andromeda-types.workspace = true

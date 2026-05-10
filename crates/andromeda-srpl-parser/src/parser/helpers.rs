@@ -3,7 +3,7 @@
 //! These are lower-level parse helpers used by both the statement parsers
 //! and the type parsers. They do not depend on any statement-level logic.
 
-use andromeda_contract::QualifiedName;
+use andromeda_procedure_contract::QualifiedName;
 
 use crate::{
     Cardinality, DiagnosticPhase, FieldAst, ResultStreamAst, SourceSpan, Spanned, SrplDiagnostic,
@@ -186,7 +186,7 @@ impl Parser {
                     Cardinality::OptionalOne,
                     SourceSpan::new(token.span.start, next.span.end),
                 ));
-            }
+            },
             TokenKind::Identifier
                 if token.lexeme.eq_ignore_ascii_case("nonempty")
                     || token.lexeme.eq_ignore_ascii_case("non_empty") =>
@@ -198,7 +198,7 @@ impl Parser {
                     Cardinality::NonEmptyMany,
                     SourceSpan::new(token.span.start, next.span.end),
                 ));
-            }
+            },
             _ => return Err(self.error_at(token.span, "expected SRPL result cardinality")),
         };
 

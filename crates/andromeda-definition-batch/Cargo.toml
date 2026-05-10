@@ -11,5 +11,6 @@ andromeda-contract.workspace = true
 andromeda-catalog-store.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-srpl-diagnostics.workspace = true
 andromeda-types.workspace = true

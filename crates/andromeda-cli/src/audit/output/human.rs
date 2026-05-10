@@ -1,4 +1,5 @@
-use andromeda_observe::{TraceQueryFilter, TraceQueryPermissionMatrix};
+use andromeda_audit::DurableAuditTraceQueryPermissionMatrix;
+use andromeda_observability::TraceQueryFilter;
 
 use super::super::{AuditCompactReport, AuditInspectionReport, AuditVerifyReport};
 use super::{
@@ -20,7 +21,7 @@ pub(super) fn print_audit_inspection_human(report: &AuditInspectionReport) {
     if let Some(path) = &report.journal_path {
         println!("Journal: {}", audit_output_text(path));
     }
-    print_permission_human(TraceQueryPermissionMatrix::V1_ADMIN);
+    print_permission_human(DurableAuditTraceQueryPermissionMatrix::V1_ADMIN);
     println!("Limit: {}", report.spec.limit);
     println!("Offset: {}", report.spec.offset);
     print_filters_human(&report.spec.filter);
@@ -101,7 +102,7 @@ pub(super) fn print_audit_verify_human(report: &AuditVerifyReport) {
     println!("{}", audit_output_text(&report.message));
 }
 
-fn print_permission_human(matrix: TraceQueryPermissionMatrix) {
+fn print_permission_human(matrix: DurableAuditTraceQueryPermissionMatrix) {
     println!(
         "Permission: {} on {} (audit required: {})",
         permission_str(matrix.required_permission),

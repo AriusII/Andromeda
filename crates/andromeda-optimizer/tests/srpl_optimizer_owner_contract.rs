@@ -1,10 +1,10 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::QualifiedName;
 use andromeda_optimizer::srpl::{
     OptimizationLevel, OptimizerDecisionKind, OptimizerPipelineConfig, optimize_procedure_ir,
     optimize_procedure_ir_with_config, phase::OptimizerPhase, run_optimizer_pipeline,
 };
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_definition_batch::{
     INVENTORY_RESERVE_STOCK_PDF_STYLE_SOURCE, compile_narrow_procedure_signature,
     inventory_reserve_stock_contract_metadata,

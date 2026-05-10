@@ -3,14 +3,18 @@ pub(crate) use andromeda_business_fixtures::{
     inventory_domain_definition_batch, inventory_protocol_layout_ref,
     inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
 };
-pub(crate) use andromeda_catalog::{CatalogDefinitionBatchPlanning, CatalogSnapshot};
+pub(crate) use andromeda_catalog::{
+    CatalogDefinitionBatchPlanning, CatalogPublicationReceipt, DefinitionBatchPlan,
+};
 pub(crate) use andromeda_catalog_store::{
-    CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName, StructuredObjectDefinition,
+    CatalogDefinition, CatalogObjectRef, CatalogSnapshot as CatalogStoreSnapshot,
+    CatalogSnapshotDefinitionBatchOperation, CatalogSnapshotPlannedObject, ObjectKind,
+    QualifiedName, StructuredObjectDefinition,
 };
 pub(crate) use andromeda_definition_batch::{
     DefinitionBatch, DefinitionBatchId, DefinitionOperation,
 };
-pub(crate) use andromeda_error::AndromedaErrorKind;
+pub(crate) use andromeda_error::{AndromedaErrorKind, AndromedaResult};
 pub(crate) use andromeda_procedure_contract::{
     AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy,
     ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
@@ -37,6 +41,66 @@ pub(crate) use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
     TypeDescriptor,
 };
+
+pub(crate) type CatalogSnapshot<Receipt = CatalogPublicationReceipt> =
+    CatalogStoreSnapshot<Receipt>;
+
+pub(crate) trait CatalogSnapshotDefinitionBatchPlanning {
+    fn plan_definition_batch(
+        &self,
+        batch: &DefinitionBatch,
+    ) -> AndromedaResult<DefinitionBatchPlan>;
+}
+
+impl CatalogSnapshotDefinitionBatchPlanning for CatalogSnapshot<CatalogPublicationReceipt> {
+    fn plan_definition_batch(
+        &self,
+        batch: &DefinitionBatch,
+    ) -> AndromedaResult<DefinitionBatchPlan> {
+        let plan = batch.dry_run()?;
+        let operations = batch
+            .operations
+            .iter()
+            .map(|operation| match operation {
+                DefinitionOperation::Create(definition) => {
+                    CatalogSnapshotDefinitionBatchOperation::Create(definition)
+                },
+                DefinitionOperation::Deprecate(target) => {
+                    CatalogSnapshotDefinitionBatchOperation::Deprecate(target)
+                },
+            })
+            .collect::<Vec<_>>();
+        let created_objects = plan
+            .created_objects
+            .iter()
+            .map(|created| CatalogSnapshotPlannedObject {
+                object_id: created.object_id,
+                name: created.name.clone(),
+                kind: created.kind,
+            })
+            .collect::<Vec<_>>();
+        let deprecated_objects = plan
+            .deprecated_objects
+            .iter()
+            .map(|deprecated| CatalogSnapshotPlannedObject {
+                object_id: deprecated.object_id,
+                name: deprecated.name.clone(),
+                kind: deprecated.kind,
+            })
+            .collect::<Vec<_>>();
+
+        self.validate_definition_batch_operations(
+            batch.database_id,
+            batch.namespace_id,
+            batch.base_version,
+            &operations,
+            &created_objects,
+            &deprecated_objects,
+        )?;
+
+        Ok(plan)
+    }
+}
 
 pub(crate) fn contract_metadata() -> SrplProcedureContractMetadata {
     SrplProcedureContractMetadata {
@@ -91,7 +155,7 @@ pub(crate) fn stock_request_structured_object(
     }
 }
 
-pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {
+pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
     let batch = inventory_domain_definition_batch().unwrap();
     let plan = batch.dry_run().unwrap();
     let mut snapshot = CatalogSnapshot::empty(
@@ -108,7 +172,7 @@ pub(crate) fn cardinality_probe_snapshot(
     result_name: &str,
     cardinality: Cardinality,
     emit_count: usize,
-) -> (SrplProcedureIr, CatalogSnapshot) {
+) -> (SrplProcedureIr, CatalogSnapshot<CatalogPublicationReceipt>) {
     let catalog_version = CatalogVersion::new(1);
     let result_columns = vec![ColumnDescriptor {
         name: "Present".to_string(),

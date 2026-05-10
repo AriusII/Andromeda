@@ -3,8 +3,7 @@
 //! Pure key, cache, deterministic selection, advisory classification, and trace
 //! behavior belong with the plan-cache owner crate.
 
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
-use andromeda_observe::{CriticalDecisionKind, TraceId};
+use andromeda_observability::{CriticalDecisionKind, TraceId};
 use andromeda_plan_cache::{
     AdvisoryEvidenceIdentity, AdvisoryEvidenceStatus, AdvisoryEvidenceSummary,
     AdvisoryEvidenceSummaryBuilder, BoundedPlanCache, CardinalityBucket,
@@ -13,6 +12,7 @@ use andromeda_plan_cache::{
     PlanShapeFingerprint, PlanShapeFingerprintBuilder, classify_advisory_identity_for_key,
     select_minimal_plan_with_advisory_evidence,
 };
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 #[path = "plan_invalidation/advisory_evidence.rs"]

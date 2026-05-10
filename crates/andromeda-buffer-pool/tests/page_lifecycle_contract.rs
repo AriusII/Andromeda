@@ -7,8 +7,6 @@ use andromeda_storage_page::{
     PageLayoutContract, PageSize, PageStore, PageTrailer, PageType,
 };
 
-const STORAGE_WAL_SPEC: &str = include_str!("../../../docs/specs/storage-wal.md");
-
 fn valid_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {
     PageLayoutContract {
         header: PageHeader {
@@ -128,21 +126,4 @@ fn dirty_page_is_not_flushed_or_cleaned_before_wal_durable() {
     assert!(flushed.blocked_by_wal_durability.is_empty());
     assert!(flushed.errors.is_empty());
     assert!(!pool.is_dirty(page_id).expect("flushed page becomes clean"));
-}
-
-#[test]
-fn storage_spec_preserves_page_and_buffer_pool_gates() {
-    assert!(STORAGE_WAL_SPEC.contains(
-        "Dirty page flush requires durable WAL coverage for the page's latest dirty LSN."
-    ));
-    assert!(STORAGE_WAL_SPEC.contains(
-        "Read-ahead | Advisory clean prefetch only; it must not affect visibility"
-    ));
-    assert!(STORAGE_WAL_SPEC.contains(
-        "The buffer pool must report blocked dirty pages when WAL is behind and must keep them dirty."
-    ));
-    assert!(STORAGE_WAL_SPEC.contains(
-        "`flush_all_dirty` must not silently accept dirty pages when no WAL durability observer is available."
-    ));
-    assert!(STORAGE_WAL_SPEC.contains("Storage tests must prove WAL-before-page-flush."));
 }

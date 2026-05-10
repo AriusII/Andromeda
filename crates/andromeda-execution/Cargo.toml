@@ -16,5 +16,4 @@ andromeda-srpl-ir.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
-andromeda-contract.workspace = true
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true

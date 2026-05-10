@@ -1,4 +1,4 @@
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_plan_cache::{
     PLAN_SELECTION_MAX_CANDIDATES, PlanCacheKey, PlanCandidate, PlanSelectionError,
     PlanSelectionOutcome, select_minimal_plan_with_advisory_evidence,

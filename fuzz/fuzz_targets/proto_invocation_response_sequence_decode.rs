@@ -1,9 +1,9 @@
 #![no_main]
 
-use andromeda_proto::{
-    decode_generated_message,
-    generated::protocol::v1::InvocationResponse as ProtoInvocationResponse,
-    validate_generated_invocation_response, validate_generated_invocation_response_sequence,
+use andromeda_proto::generated::protocol::v1::InvocationResponse as ProtoInvocationResponse;
+use andromeda_proto_wire::{
+    decode_protobuf_message, validate_generated_invocation_response,
+    validate_generated_invocation_response_sequence,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -18,7 +18,7 @@ fuzz_target!(|data: &[u8]| {
     if let Some(response) = common::decode_bounded::<ProtoInvocationResponse, _>(
         data,
         common::MAX_64K_INPUT_BYTES,
-        |data| decode_generated_message(data),
+        |data| decode_protobuf_message(data, "generated InvocationResponse"),
     ) {
         let _ = validate_generated_invocation_response(&response);
         let single = [response];
@@ -45,7 +45,7 @@ fn decode_length_prefixed_sequence(data: &[u8]) -> Option<Vec<ProtoInvocationRes
         offset += 2;
         let next = offset.checked_add(frame_len)?;
         let frame = data.get(offset..next)?;
-        let response = decode_generated_message(frame).ok()?;
+        let response = decode_protobuf_message(frame, "generated InvocationResponse").ok()?;
         sequence.push(response);
         offset = next;
     }

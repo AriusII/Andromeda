@@ -1,14 +1,14 @@
 #![forbid(unsafe_code)]
 
 use andromeda_catalog_store::{CatalogDefinition, CatalogObjectRef, ObjectKind, QualifiedName};
-use andromeda_contract::{
-    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
-    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
-    StatsVersion, TransactionPolicy,
-};
 use andromeda_definition_batch::{
     DefinitionBatch, DefinitionBatchDryRun, DefinitionBatchId, DefinitionOperation,
     dry_run_definition_batch,
+};
+use andromeda_procedure_contract::{
+    AccessMode, CompatibilityPolicy, IsolationPolicy, MultiResultPolicy, ProcedureContract,
+    ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
+    StatsVersion, TransactionPolicy,
 };
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, DatabaseId, NamespaceId,

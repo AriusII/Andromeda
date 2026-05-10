@@ -28,7 +28,7 @@ truth, WAL durability, transport sessions, or catalog publication.
 
 Dependencies must point only toward lower or contract-safe crates such as
 `andromeda-error`, `andromeda-types`,
-`andromeda-contract`, `andromeda-srpl-diagnostics`,
+`andromeda-procedure-contract`, `andromeda-srpl-diagnostics`,
 `andromeda-srpl-cardinality`, and `andromeda-srpl-ir`.
 
 Do not depend on `andromeda-srpl` as a broad compatibility surface from this crate after extraction.

@@ -1,4 +1,4 @@
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 
 use super::decision::PlanDecisionReasonCode;
 use super::{
@@ -152,7 +152,7 @@ pub fn select_minimal_plan_with_advisory_evidence(
             Some(current) => {
                 (candidate.static_rank(), candidate.plan_id())
                     < (current.static_rank(), current.plan_id())
-            }
+            },
         };
         if should_replace {
             selected = Some(*candidate);
@@ -195,25 +195,25 @@ impl core::fmt::Display for PlanSelectionError {
         match self {
             PlanSelectionError::TraceIdZero => {
                 f.write_str("plan selection requires a non-zero TraceId")
-            }
+            },
             PlanSelectionError::CandidateRankOutOfRange => {
                 f.write_str("PlanCandidateRank raw value must be in 0..=1000")
-            }
+            },
             PlanSelectionError::PlanDigestZero => {
                 f.write_str("PlanCandidate.plan_digest must be non-zero")
-            }
+            },
             PlanSelectionError::NoCandidates => {
                 f.write_str("plan selection requires at least one candidate")
-            }
+            },
             PlanSelectionError::TooManyCandidates => {
                 f.write_str("plan selection candidate count exceeds the bounded maximum")
-            }
+            },
             PlanSelectionError::TooManyScenarioEvidence => {
                 f.write_str("scenario evidence count exceeds the bounded maximum")
-            }
+            },
             PlanSelectionError::NoCandidateForPlanClass => {
                 f.write_str("no candidate matched the requested PlanClass")
-            }
+            },
         }
     }
 }

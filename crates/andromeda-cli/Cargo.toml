@@ -7,7 +7,9 @@ publish = false
 
 [dependencies]
 andromeda-admission.workspace = true
+andromeda-audit.workspace = true
 andromeda-bench.workspace = true
+andromeda-bench-workload.workspace = true
 andromeda-backup.workspace = true
 andromeda-error.workspace = true
 andromeda-exec.workspace = true
@@ -16,10 +18,12 @@ andromeda-hardware.workspace = true
 andromeda-inventory-demo = { package = "andromeda-inventory-demo-cli-adapter", path = "../andromeda-inventory-demo-cli-adapter", version = "0.1.0" }
 andromeda-manifest.workspace = true
 andromeda-observe.workspace = true
+andromeda-observability.workspace = true
 andromeda-recovery.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-restore.workspace = true
 andromeda-segment.workspace = true
+andromeda-scenario-evidence.workspace = true
 andromeda-storage-page.workspace = true
 andromeda-types.workspace = true
 andromeda-wal.workspace = true

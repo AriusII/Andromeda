@@ -1,6 +1,6 @@
 #![no_main]
 
-use andromeda_proto::{StructuredObjectHeader, StructuredObjectLayout};
+use andromeda_structured_object::{StructuredObjectHeader, StructuredObjectLayout};
 use andromeda_types::{ColumnDescriptor, ContractHash, ScalarType, TypeDescriptor};
 use libfuzzer_sys::fuzz_target;
 

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use andromeda_backup::{
     BackupArtifactDigest, BackupId, BackupManifest as BackupManifestRaw, BackupWalArchiveEvidence,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_wal::Lsn;
 
 use super::{

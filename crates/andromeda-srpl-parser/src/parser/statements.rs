@@ -108,7 +108,7 @@ impl Parser {
                     binding,
                     cardinality,
                 }
-            }
+            },
             "assert" => {
                 let predicate = self.parse_identifier_spanned()?;
                 let failure_code = self.parse_identifier_spanned()?;
@@ -116,7 +116,7 @@ impl Parser {
                     predicate,
                     failure_code,
                 }
-            }
+            },
             "update" => {
                 let target = self.parse_qualified_name()?;
                 let mutation = self.parse_identifier_spanned()?;
@@ -125,22 +125,22 @@ impl Parser {
                     mutation,
                     affected_rows_exact: None,
                 }
-            }
+            },
             "emit" => {
                 let stream = self.parse_identifier_spanned()?;
                 let values = self.parse_identifier_list(true)?;
                 BusinessOperationKindAst::Emit { stream, values }
-            }
+            },
             "raise" => {
                 let code = self.parse_identifier_spanned()?;
                 BusinessOperationKindAst::Raise { code }
-            }
+            },
             _ => {
                 return Err(self.error_at(
                     operator.span,
                     "unsupported SRPL body operation in bounded compiler slice",
                 ));
-            }
+            },
         };
 
         Ok(BusinessOperationAst {
@@ -206,13 +206,13 @@ impl Parser {
                 let stream = self.parse_identifier_spanned()?;
                 let values = self.parse_identifier_list(true)?;
                 BusinessOperationKindAst::Return { stream, values }
-            }
+            },
             _ => {
                 return Err(self.error_at(
                     operator.span,
                     "unsupported SRPL begin/end operation in bounded compiler slice",
                 ));
-            }
+            },
         };
 
         Ok(BusinessOperationAst {

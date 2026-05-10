@@ -1,3 +1,7 @@
+pub use andromeda_audit::{
+    DurableAuditEventFamily, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
+    DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence,
+};
 pub use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 pub use andromeda_exec::dispatch::permission_validation::{
     validate_dispatch_permissions_with_audit, validate_dispatch_permissions_with_durable_audit,
@@ -7,11 +11,7 @@ pub use andromeda_exec::services::permission_audit_emitter::{
     DenialAuditReason, NoOpPermissionAuditEmitter, PermissionAuditEmitter, PermissionAuditEvent,
     audit_text_contains_sensitive_marker,
 };
-pub use andromeda_observe::{
-    DurableAuditEventFamily, DurableAuditRecordIdentity, DurableAuditReplayBehavior,
-    DurableAuditRetentionBoundary, DurableAuditSinkReport, DurableAuditWalEvidence, EventId,
-    TraceId,
-};
+pub use andromeda_observability::{EventId, TraceId};
 pub use andromeda_principal::{Permission, PrincipalId};
 
 use std::sync::Mutex;

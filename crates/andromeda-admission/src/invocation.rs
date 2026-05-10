@@ -1,9 +1,9 @@
-use andromeda_contract::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_observability::{
     AuthorizationDeniedTrace, ContractRejectedTrace, DecisionTrace, ExecutionTransitionTrace,
     ProtocolCorrelation, TraceId, TransitionReasonCode,
 };
-use andromeda_proto::StructuredObjectHeader;
+use andromeda_procedure_contract::{ProcedureContractBinding, ProcedureContractRef};
+use andromeda_structured_object::StructuredObjectHeader;
 use andromeda_types::{CatalogVersion, ContractHash, InvocationId, RequestId, SessionId};
 
 use crate::{
@@ -142,8 +142,9 @@ impl InvocationReject {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{PolicyVersion, StatsVersion};
-    use andromeda_observe::{EventCorrelation, EventEnvelope, EventId, TraceEvent};
+    use andromeda_observability::{EventCorrelation, EventId};
+    use andromeda_observe::{EventEnvelope, TraceEvent};
+    use andromeda_procedure_contract::{PolicyVersion, StatsVersion};
     use andromeda_types::{ProcedureId, RequestId, SessionId};
 
     fn request(expected_contract_hash: ContractHash) -> InvocationRequest {

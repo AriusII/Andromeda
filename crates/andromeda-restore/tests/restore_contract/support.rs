@@ -6,7 +6,7 @@ use andromeda_backup::{
     BackupArtifactWriteReport, BackupId, BackupManifest as BackupManifestRaw, ColdSnapshotBoundary,
     FileBackedBackupArtifactStore, WalArchiveRange,
 };
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 use andromeda_restore::{
     RecoveryStage, RestoreAuditTrace, RestoreOrchestration, RestoreValidationPolicy,
     compute_restore_checksum,

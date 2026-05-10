@@ -1,4 +1,4 @@
-﻿use andromeda_contract::StatsVersion;
+use andromeda_procedure_contract::StatsVersion;
 use andromeda_statistics::{
     CorrelationEvidenceBounds, CorrelationStrengthPermille, StatsColumnTarget, StatsCorrelation,
     StatsCorrelationId, StatsCorrelationKind, StatsCorrelationPublicationBuilder,
@@ -27,11 +27,12 @@ fn correlation_publication_is_advisory_only() {
     )
     .unwrap();
 
-    let publication = StatsCorrelationPublicationBuilder::new(CatalogVersion::new(11), StatsVersion::new(3))
-        .unwrap()
-        .push(correlation)
-        .unwrap()
-        .finish();
+    let publication =
+        StatsCorrelationPublicationBuilder::new(CatalogVersion::new(11), StatsVersion::new(3))
+            .unwrap()
+            .push(correlation)
+            .unwrap()
+            .finish();
 
     assert!(!publication.is_authoritative());
     assert!(publication.requires_durable_publication_evidence());

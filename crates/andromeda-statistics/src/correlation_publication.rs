@@ -1,7 +1,7 @@
 use andromeda_types::CatalogVersion;
 
-use andromeda_contract::StatsVersion;
 use andromeda_digest::Sha256;
+use andromeda_procedure_contract::StatsVersion;
 
 use super::{
     STATS_CORRELATION_PUBLICATION_DOMAIN, StatsCorrelation, StatsPublicationDigest,

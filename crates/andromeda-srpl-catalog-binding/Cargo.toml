@@ -9,6 +9,7 @@ description = "CatalogSnapshot adapter for executable SRPL plan binding."
 [dependencies]
 andromeda-catalog.workspace = true
 andromeda-catalog-store.workspace = true
+andromeda-definition-batch.workspace = true
 andromeda-error.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-srpl-binder.workspace = true

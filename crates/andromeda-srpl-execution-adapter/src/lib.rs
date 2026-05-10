@@ -35,8 +35,10 @@ pub use traits::{
 #[cfg(test)]
 mod tests {
     use super::*;
-    use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
     use andromeda_error::AndromedaErrorKind;
+    use andromeda_procedure_contract::{
+        CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName,
+    };
     use andromeda_srpl_ir::{Cardinality, SrplAssignmentIr, SrplEmitValueIr, SrplPredicateIr};
     use andromeda_types::{
         CatalogObjectId, CatalogVersion, ContractHash, ProcedureId, ScalarType, TypeDescriptor,

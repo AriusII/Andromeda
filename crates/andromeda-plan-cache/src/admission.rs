@@ -1,4 +1,4 @@
-use andromeda_observe::TraceId;
+use andromeda_observability::TraceId;
 
 use super::advisory_evidence::AdvisoryEvidenceSummary;
 use super::decision::PlanDecisionReasonCode;
@@ -354,20 +354,20 @@ impl core::fmt::Display for PlanCacheError {
         match self {
             PlanCacheError::TraceIdZero => {
                 f.write_str("PlanCache trace-producing operations require a non-zero TraceId")
-            }
+            },
             PlanCacheError::CapacityZero => f.write_str("PlanCache capacity must be non-zero"),
             PlanCacheError::CapacityTooLarge => {
                 f.write_str("PlanCache capacity exceeds the bounded maximum")
-            }
+            },
             PlanCacheError::KeyMismatch => {
                 f.write_str("PlanCache entry key does not match lookup key")
-            }
+            },
             PlanCacheError::KeyDigestMismatch => {
                 f.write_str("PlanCache entry key digest does not match lookup key digest")
-            }
+            },
             PlanCacheError::PlanDigestZero => {
                 f.write_str("PlanCache entry plan digest must be non-zero")
-            }
+            },
         }
     }
 }

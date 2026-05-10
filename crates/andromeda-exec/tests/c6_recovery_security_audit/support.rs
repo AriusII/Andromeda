@@ -2,9 +2,10 @@ use andromeda_audit::{
     CertificateIdentity, Permission, SurfaceScope, UserPrincipal, UserPrincipalKind,
 };
 use andromeda_exec::LocalVerticalRuntime;
-use andromeda_observability::TraceId;
+use andromeda_observability::{EventCorrelation, EventId, TraceId};
 use andromeda_observe::{
-    EventCorrelation, EventEmitter, EventEnvelope, EventId, EventSink, TraceEvent,
+    EventEmitter, EventEnvelope, EventSink, RecoveryTrace, TraceEvent, WalEventTrace, WalOperation,
+    WalTrace,
 };
 use andromeda_security::{PrincipalBinding, PrincipalRegistry};
 use andromeda_types::TransactionId;
@@ -52,7 +53,7 @@ pub fn transaction_correlation(
 }
 
 pub fn recovery_startup(trace_id: TraceId, last_durable_lsn: u64) -> TraceEvent {
-    TraceEvent::RecoveryStartup(andromeda_observe::RecoveryTrace {
+    TraceEvent::RecoveryStartup(RecoveryTrace {
         trace_id,
         last_durable_lsn,
         corruption_boundary_lsn: None,
@@ -60,7 +61,7 @@ pub fn recovery_startup(trace_id: TraceId, last_durable_lsn: u64) -> TraceEvent 
 }
 
 pub fn wal_replay(trace_id: TraceId, durable_lsn: u64) -> TraceEvent {
-    TraceEvent::Wal(andromeda_observe::WalTrace {
+    TraceEvent::Wal(WalTrace {
         trace_id,
         transaction_id: None,
         durable_lsn,
@@ -72,10 +73,10 @@ pub fn incomplete_transaction_wal_event(
     transaction_id: TransactionId,
     appended_lsn: u64,
 ) -> TraceEvent {
-    TraceEvent::WalEvent(andromeda_observe::WalEventTrace {
+    TraceEvent::WalEvent(WalEventTrace {
         trace_id,
         transaction_id: Some(transaction_id),
-        operation: andromeda_observe::WalOperation::Append,
+        operation: WalOperation::Append,
         appended_lsn,
         durable_lsn: Some(appended_lsn),
     })

@@ -5,10 +5,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use andromeda_observe::{
+use andromeda_audit::{
     DurableAuditEventFamily, DurableAuditReplayLsnRange, DurableAuditReplayQuery,
-    DurableAuditReplayWindow, FileDurableAuditWalSink, TraceId,
+    DurableAuditReplayWindow, FileDurableAuditWalSink,
 };
+use andromeda_observability::TraceId;
 
 use crate::common;
 
@@ -94,7 +95,7 @@ fn replay_query(data: &[u8]) -> DurableAuditReplayQuery {
                 )),
                 ..DurableAuditReplayQuery::all()
             }
-        }
+        },
         _ => DurableAuditReplayQuery {
             principal_id: Some("fuzz-principal".to_string()),
             ..DurableAuditReplayQuery::all()

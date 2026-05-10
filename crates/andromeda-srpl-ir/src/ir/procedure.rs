@@ -1,8 +1,8 @@
-use andromeda_contract::{
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
     CompatibilityPolicy, MultiResultPolicy, ProcedureErrorPolicy, ProtocolLayoutRef, QualifiedName,
     ResultMetadataPolicy, StatsVersion, TransactionPolicy,
 };
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogObjectId, CatalogVersion, ColumnDescriptor, ProcedureId};
 
 use crate::{Cardinality, identifier::validate_srpl_identifier as validate_symbol};

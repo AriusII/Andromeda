@@ -7,4 +7,4 @@ publish = false
 
 [dependencies]
 andromeda-error.workspace = true
-andromeda-observe.workspace = true
+andromeda-observability.workspace = true

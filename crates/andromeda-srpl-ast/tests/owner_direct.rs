@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::QualifiedName;
+use andromeda_procedure_contract::QualifiedName;
 use andromeda_srpl_ast::{
     BusinessOperationAst, BusinessOperationKindAst, Cardinality, FieldAst, ProcedureAst,
     ProcedureBodyAst, ResultStreamAst, SourceSpan, Spanned,
@@ -92,7 +92,7 @@ fn ast_owner_preserves_procedure_result_and_operation_shapes() {
             assert_eq!(source.value.as_catalog_path(), "Inventory.ProductStock");
             assert_eq!(binding.value, "Stock");
             assert_eq!(cardinality.value, Cardinality::OptionalOne);
-        }
+        },
         other => panic!("first AST operation must remain Read, got {other:?}"),
     }
 
@@ -100,7 +100,7 @@ fn ast_owner_preserves_procedure_result_and_operation_shapes() {
         BusinessOperationKindAst::Emit { stream, values } => {
             assert_eq!(stream.value, "Rows");
             assert_eq!(values[0].value, "Reserved");
-        }
+        },
         other => panic!("second AST operation must remain Emit, got {other:?}"),
     }
 }

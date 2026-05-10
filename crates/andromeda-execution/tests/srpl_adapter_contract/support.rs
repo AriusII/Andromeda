@@ -1,7 +1,9 @@
-pub use andromeda_contract::{CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName};
 pub use andromeda_execution::{
     FieldValue, SrplExecutionAdapter, SrplStreamBackpressure, SrplTransactionContext,
     SrplTypedEnvironment, StructuredObject,
+};
+pub use andromeda_procedure_contract::{
+    CatalogObjectRef, ObjectKind, ProcedureContractRef, QualifiedName,
 };
 pub use andromeda_srpl_execution_adapter::{
     SrplAssertRequest, SrplEmitRequest, SrplExecutionFailure, SrplFailureRequest,

@@ -13,15 +13,18 @@ pub use andromeda_inventory_demo::{
     inventory_reserve_stock_catalog_bindings, inventory_reserve_stock_contract,
 };
 pub use andromeda_manifest::DatabaseManifest;
+pub use andromeda_observability::{
+    CompletionEmittedTrace, CriticalDecisionKind, EventCorrelation, EventId, ProtocolCorrelation,
+    TraceId,
+};
 pub use andromeda_observe::{
-    CommitVisibleTrace, CompletionEmittedTrace, CriticalDecisionKind, EventCorrelation,
-    EventEnvelope, EventId, ProtocolCorrelation, RecoveryTrace, RollbackDurableTrace, TraceEvent,
-    TraceId, WalEventTrace, WalOperation,
+    CommitVisibleTrace, EventEnvelope, RecoveryTrace, RollbackDurableTrace, TraceEvent,
+    WalEventTrace, WalOperation,
 };
 pub use andromeda_procedure_contract::ProcedureContract;
 pub use andromeda_recovery::{RecoveryPlan, RedoRecordDecision, StartupMode};
-pub use andromeda_srpl::compile_narrow_procedure_signature;
 pub use andromeda_srpl_binder::inventory_reserve_stock_body_ir;
+pub use andromeda_srpl_definition_batch::compile_narrow_procedure_signature;
 pub use andromeda_srpl_ir::{
     Cardinality, SrplBusinessOperationKindIr, SrplPredicateIr, SrplValueIr,
 };

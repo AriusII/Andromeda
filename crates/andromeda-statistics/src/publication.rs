@@ -1,7 +1,7 @@
 use andromeda_types::CatalogVersion;
 
-use andromeda_contract::StatsVersion;
 use andromeda_digest::Sha256;
+use andromeda_procedure_contract::StatsVersion;
 
 use super::{
     HistogramPlaceholder, MAX_BUCKETS_PER_HISTOGRAM, MAX_HISTOGRAMS_PER_PUBLICATION,

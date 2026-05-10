@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
-use andromeda_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_decision_trace::DecisionTraceId;
 use andromeda_optimizer::{OptimizerPlanReason, OptimizerPolicy, evaluate_optimizer_plan_inputs};
 use andromeda_plan_cache::{
     PlanCacheKey, PlanCachePolicy, PlanCacheReuseReason, PlanClass, PlanShapeFingerprint,
     evaluate_plan_cache_reuse,
 };
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_statistics::{
     StatisticsUsePolicy, StatisticsUseReason, StatsObjectDescriptor, StatsPublicationState,
     StatsSetDigest, evaluate_statistics_for_optimizer,

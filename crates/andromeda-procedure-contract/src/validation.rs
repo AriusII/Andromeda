@@ -55,7 +55,7 @@ pub fn diagnose_procedure_contract_compatibility(
                 messages
                     .push("exact-hash compatibility requires unchanged contract hash".to_string());
             }
-        }
+        },
         CompatibilityPolicy::AdditiveOnly => {
             if previous.inputs != next.inputs {
                 messages.push("additive compatibility does not permit input changes".to_string());
@@ -141,7 +141,7 @@ pub fn diagnose_procedure_contract_compatibility(
                     ));
                 }
             }
-        }
+        },
     }
 
     if messages.is_empty() {

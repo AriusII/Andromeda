@@ -12,20 +12,26 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+andromeda-audit = { path = "../crates/andromeda-audit" }
 andromeda-catalog = { path = "../crates/andromeda-catalog" }
+andromeda-catalog-recovery = { path = "../crates/andromeda-catalog-recovery" }
 andromeda-catalog-store = { path = "../crates/andromeda-catalog-store" }
 andromeda-definition-batch = { path = "../crates/andromeda-definition-batch" }
 andromeda-manifest = { path = "../crates/andromeda-manifest" }
+andromeda-observability = { path = "../crates/andromeda-observability" }
 andromeda-recovery = { path = "../crates/andromeda-recovery" }
 andromeda-proto = { path = "../crates/andromeda-proto" }
 andromeda-observe = { path = "../crates/andromeda-observe" }
+andromeda-procedure-contract = { path = "../crates/andromeda-procedure-contract" }
 andromeda-quic = { path = "../crates/andromeda-quic" }
 andromeda-rpc-codec = { path = "../crates/andromeda-rpc-codec" }
 andromeda-rpc-protocol = { path = "../crates/andromeda-rpc-protocol" }
+andromeda-proto-wire = { path = "../crates/andromeda-proto-wire" }
 andromeda-security-contract = { path = "../crates/andromeda-security-contract" }
+andromeda-structured-object = { path = "../crates/andromeda-structured-object" }
 andromeda-srpl-parser = { path = "../crates/andromeda-srpl-parser" }
 andromeda-segment = { path = "../crates/andromeda-segment" }
-andromeda-storage = { path = "../crates/andromeda-storage" }
+andromeda-storage-heap = { path = "../crates/andromeda-storage-heap" }
 andromeda-storage-page = { path = "../crates/andromeda-storage-page" }
 andromeda-types = { path = "../crates/andromeda-types" }
 andromeda-wal = { path = "../crates/andromeda-wal" }

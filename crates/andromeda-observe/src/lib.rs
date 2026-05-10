@@ -6,19 +6,16 @@ mod exporters;
 mod query;
 mod restore_trace;
 
-pub use andromeda_observability::{
-    EventCorrelation, EventId, EventSchemaVersion, ProtocolCorrelation, ProtocolEventScope,
-    TraceId, V0_EVENT_SCHEMA_VERSION,
-};
+pub(crate) use andromeda_observability::{EventId, TraceId};
 pub use emitter::EventEmitter;
 pub use events::{
     AdminOperation, AdminOperationTrace, AdmissionAuditEvent, AdmissionDecisionKind,
     AffectedPrincipal, AuditTrace, AuthorizationDeniedTrace, BackpressureReason, BackpressureTrace,
     BackupAuditEvent, BackupAuditTrace, BackupId, CatalogMutationTrace, CertificateIdentity,
     CommitVisibleTrace, CompletionEmittedTrace, ContractRejectedTrace, ContractValidationResult,
-    CorruptionBoundaryTrace, CriticalDecisionKind, DecisionTrace, DurableAuditAppendRecord,
-    DurableAuditCompactionReport, DurableAuditDecisionGate, DurableAuditEventFamily,
-    DurableAuditFailureKind, DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
+    CorruptionBoundaryTrace, DurableAuditAppendRecord, DurableAuditCompactionReport,
+    DurableAuditDecisionGate, DurableAuditEventFamily, DurableAuditFailureKind,
+    DurableAuditPolicyEvidenceRequirement, DurableAuditPrincipalBinding,
     DurableAuditPruneBlockReason, DurableAuditPruneEvidence, DurableAuditRecordIdentity,
     DurableAuditReplayBehavior, DurableAuditReplayEvidence, DurableAuditReplayLsnRange,
     DurableAuditReplayQuery, DurableAuditReplayRecord, DurableAuditReplayResult,
@@ -48,8 +45,6 @@ pub use exporters::{
 };
 pub use query::{
     DurableAuditTraceQueryResult, DurableAuditTraceQueryRow, DurableAuditTraceQuerySource,
-    TRACE_QUERY_DEFAULT_LIMIT, TRACE_QUERY_MAX_LIMIT, TraceEventFamily, TraceQueryFilter,
-    TraceQueryLsnRange, TraceQueryMetadata, TraceQueryPermissionMatrix, TraceQueryResult,
-    TraceQueryRow, TraceQuerySpec,
+    TraceQueryMetadata, TraceQueryResult, TraceQueryRow,
 };
 pub use restore_trace::{RestoreCompletionStatus, RestoreId, RestoreTrace};

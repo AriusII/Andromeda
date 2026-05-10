@@ -1,10 +1,10 @@
 pub(crate) use andromeda_catalog::{
-    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecord,
-    CatalogRecoveryOutcome, CatalogSystemStore, DefinitionBatchPlan,
-    recover_catalog_snapshot_from_durable_payloads,
+    CatalogMutationCommitEvidence, CatalogMutationPlan, CatalogMutationRecord, CatalogSnapshot,
+    CatalogSystemStore,
 };
 pub(crate) use andromeda_catalog_recovery::{
-    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogSkippedBatchReason,
+    CatalogDurableMutationPayload, CatalogMutationRecordKind, CatalogRecoveryReport,
+    CatalogSkippedBatchReason, recover_catalog_target_from_durable_payloads,
 };
 pub(crate) use andromeda_catalog_store::{
     CatalogDefinition, CatalogDurabilityMarker, CatalogMutationDurability, CatalogObjectRef,
@@ -13,7 +13,7 @@ pub(crate) use andromeda_catalog_store::{
 };
 pub(crate) use andromeda_definition_batch::{
     CatalogDependencyKind, CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId,
-    DefinitionOperation,
+    DefinitionBatchPlan as OwnedDefinitionBatchPlan, DefinitionOperation,
 };
 pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind};
 pub(crate) use andromeda_procedure_contract::{
@@ -31,6 +31,14 @@ pub(crate) use andromeda_wal::{
 
 pub(crate) const DATABASE_ID: DatabaseId = DatabaseId::new(1);
 pub(crate) const NAMESPACE_ID: NamespaceId = NamespaceId::new(2);
+
+pub(crate) type DefinitionBatchPlan = OwnedDefinitionBatchPlan<CatalogMutationPlan>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct CatalogRecoveryOutcome {
+    pub(crate) snapshot: CatalogSnapshot,
+    pub(crate) report: CatalogRecoveryReport,
+}
 
 pub(crate) fn version(value: u64) -> CatalogVersion {
     CatalogVersion::new(value)
@@ -162,10 +170,14 @@ pub(crate) fn recover_payloads_at<'a>(
     catalog_version: u64,
     payloads: impl IntoIterator<Item = CatalogDurableMutationPayload<'a>>,
 ) -> CatalogRecoveryOutcome {
-    recover_catalog_snapshot_from_durable_payloads(
+    let outcome = recover_catalog_target_from_durable_payloads(
         store_at(catalog_version).into_snapshot(),
         payloads,
-    )
+    );
+    CatalogRecoveryOutcome {
+        snapshot: outcome.target,
+        report: outcome.report,
+    }
 }
 
 pub(crate) fn assert_empty_snapshot_at(outcome: &CatalogRecoveryOutcome, catalog_version: u64) {

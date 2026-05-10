@@ -1,4 +1,5 @@
-use andromeda_transaction::{TransactionManager, TransactionStatus};
+use andromeda_mvcc::TransactionStatus;
+use andromeda_transaction::TransactionManager;
 
 #[test]
 fn disposed_rolled_back_transaction_retains_status_history() {

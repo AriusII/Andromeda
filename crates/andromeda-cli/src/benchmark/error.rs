@@ -1,6 +1,7 @@
 use crate::error::cli_error;
-use andromeda_bench::{
+use andromeda_bench_workload::{
     BenchmarkError, BenchmarkRunRequest, MAX_DURATION_MS, MAX_SAMPLES, MAX_TEMP_BYTES, MAX_WARMUPS,
+    find_workload,
 };
 
 pub(super) fn benchmark_error_to_cli_error(
@@ -31,26 +32,22 @@ pub(super) fn benchmark_error_to_cli_error(
         BenchmarkError::TempBudgetExceedsGlobalLimit => {
             format!("--temp-budget-bytes must be <= {MAX_TEMP_BYTES}")
         },
-        BenchmarkError::DurationExceedsWorkloadLimit => {
-            match andromeda_bench::find_workload(&request.workload_id) {
-                Some(workload) => format!(
-                    "workload `{}` duration must be <= {} ms",
-                    workload.id, workload.max_duration_ms
-                ),
-                None => "benchmark workload duration exceeds its bounded limit".to_string(),
-            }
+        BenchmarkError::DurationExceedsWorkloadLimit => match find_workload(&request.workload_id) {
+            Some(workload) => format!(
+                "workload `{}` duration must be <= {} ms",
+                workload.id, workload.max_duration_ms
+            ),
+            None => "benchmark workload duration exceeds its bounded limit".to_string(),
         },
-        BenchmarkError::SamplesExceedsWorkloadLimit => {
-            match andromeda_bench::find_workload(&request.workload_id) {
-                Some(workload) => format!(
-                    "workload `{}` samples must be <= {}",
-                    workload.id, workload.max_samples
-                ),
-                None => "benchmark workload samples exceed its bounded limit".to_string(),
-            }
+        BenchmarkError::SamplesExceedsWorkloadLimit => match find_workload(&request.workload_id) {
+            Some(workload) => format!(
+                "workload `{}` samples must be <= {}",
+                workload.id, workload.max_samples
+            ),
+            None => "benchmark workload samples exceed its bounded limit".to_string(),
         },
         BenchmarkError::TempBudgetExceedsWorkloadLimit => {
-            match andromeda_bench::find_workload(&request.workload_id) {
+            match find_workload(&request.workload_id) {
                 Some(workload) => format!(
                     "workload `{}` temp budget must be <= {} bytes",
                     workload.id, workload.max_temp_bytes

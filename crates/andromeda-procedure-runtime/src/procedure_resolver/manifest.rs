@@ -1,11 +1,11 @@
 use std::collections::BTreeSet;
 
-use andromeda_contract::{
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_procedure_contract::{
     MultiResultPolicy, ProcedureContract, ProcedureContractRef, ProcedureErrorPolicy,
     ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, ResultStreamContract,
     TransactionPolicy,
 };
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::ColumnDescriptor;
 
 use super::validation::validate_dense_columns_allow_empty;

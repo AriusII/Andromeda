@@ -117,12 +117,12 @@ impl ResultStreamDescriptor {
             return Err(contract_error("result stream requires an exact row count"));
         }
 
-        if let Some(row_count_exact) = self.row_count_exact {
-            if !self.cardinality.permits_exact_row_count(row_count_exact) {
-                return Err(contract_error(
-                    "exact row count violates result stream cardinality",
-                ));
-            }
+        if let Some(row_count_exact) = self.row_count_exact
+            && !self.cardinality.permits_exact_row_count(row_count_exact)
+        {
+            return Err(contract_error(
+                "exact row count violates result stream cardinality",
+            ));
         }
 
         if let Some(row_count_max) = self.row_count_max {
