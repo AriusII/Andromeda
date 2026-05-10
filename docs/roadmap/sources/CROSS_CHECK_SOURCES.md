@@ -7,8 +7,9 @@
 - `README.md` : surface native stricte, Procedure-only, V0 local commands, non-negotiable constraints.
 - `docs/README.md` : docs replacement package, baseline Rust 1.95.0, doctrine procedure-only WAL-first.
 - `docs/status.md` : P00 status snapshot and readiness boundary.
+- `docs/project/CRITICALITY_MODEL.md` : normative C0-C5 grid, phase evidence rule, and production-readiness proof boundary.
+- `docs/project/FEATURE_ACCEPTANCE_GATE.md` : normative feature acceptance matrix and required evidence packet for phase closure.
 - `docs/project/CRATE_CLUSTER_CRITICALITY_MATRIX.md` : 89-crate cluster and C0-C5 criticality matrix.
-- `docs/roadmap/ROADMAP.md` : séquence P0-P11 et priorité durable Procedure path.
 - `docs/roadmap/ROADMAP_MASTER.md` : séquence P00-P15 et dépendances détaillées.
 - `crates/README.md` : crate ownership boundaries, C5 durable-kernel exclusions, no SQL/no gRPC/no runtime JSON default.
 - `crates/andromeda-exec/README.md` : execution orchestration, admission, ResultStream, retry, terminal evidence.
@@ -42,6 +43,8 @@
 - La roadmap retient 89 crates, car Cargo.toml est la source de vérité du workspace.
 - `docs/status.md` est le point d'entrée status courant référencé par le README racine.
 - La matrice crate/cluster/criticité classe chaque workspace member sans ajouter de claim readiness.
+- Les règles de criticité et d'acceptance gate exigent une evidence retenue par phase ; un test générique, un scaffold, une démo ou un benchmark ne suffit pas.
+- Les anciens matériaux roadmap P0-P11 restent traités comme contexte historique trop générique ; la navigation courante part de `docs/roadmap/ROADMAP_MASTER.md`.
 - La roadmap conserve le vertical Inventory.ReserveStock/ProductStock comme preuve P02, mais refuse de l’appeler production runtime.
 - La roadmap traite backup/restore/HA-DR comme partiellement implémentés mais release-blocked, pas comme fonctionnalités prêtes.
 - La roadmap place GPU après Maps/Analytics CPU et après Resource Governance.

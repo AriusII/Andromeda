@@ -16,6 +16,10 @@
 
 A feature can enter a C4 or C5 path only when it is definable, deterministic or explicitly bounded, typed, observable, recoverable, secure, versioned, explainable, and disableable.
 
+A feature may be described as implemented only for the scope proven by retained evidence. It must not be described as production-ready, release-ready, operationally safe, or generally available until the validation report names the proof artifacts and commands required by `docs/project/CRITICALITY_MODEL.md`.
+
+At phase level, the minimum proof chain is existing code, targeted tests, trace or audit evidence where the path is observable, and recovery behavior or fail-closed behavior when durable state or an external/security surface is touched.
+
 ## Review matrix
 
 | Criterion | Required question | Evidence required | Failure outcome |
@@ -42,6 +46,21 @@ A feature can enter a C4 or C5 path only when it is definable, deterministic or 
 | Sandbox C1 | Opportunistic and removable. | GPU analytics, benchmark scenarios. |
 | Experimental C0 | Research only. | Learned index prototypes, learned optimizer experiments. |
 | Rejected | Violates the gate. | Dynamic SQL application surface, GPU commit path, unbounded SRPL loops. |
+
+## Phase acceptance rule
+
+For roadmap phase closure, the acceptance class is not enough. The phase must retain an evidence packet that ties changed files to:
+
+| Evidence item | Required for |
+|---|---|
+| Source artifact or owner | Every accepted, sandboxed, or rejected feature decision. |
+| Normative spec or ADR section | C3, C4, and C5 changes. |
+| Targeted tests or deterministic validation command | Every implemented feature claim. |
+| Trace, audit, metric, or DecisionTrace artifact | C3 and above, and any feature affecting admission or post-mortem explanation. |
+| Crash/recovery or fail-closed evidence | Any durable-state, external-surface, security, admission, backup, restore, HA/DR, WAL, MVCC, catalog, or audit path. |
+| Runbook, rollback, or disablement rule | C4/C5 operational paths and C1/C2 optional accelerators. |
+
+If any required evidence is absent, the feature can remain specified, scaffolded, prototyped, or locally validated, but the phase report must keep production readiness blocked.
 
 ## Required review output
 

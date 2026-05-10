@@ -14,6 +14,7 @@ This tooling covers:
 - Windows/MSVC linker visibility for Rust gates that target `*-windows-msvc`.
 - Local supply-chain tooling visibility for `cargo-nextest`, `cargo-audit`, `cargo-deny`, `cargo-vet`, and `cargo tree`.
 - Step 11 roadmap inventory across crate-owned test suites, fuzz targets, test documentation, runbooks, GitHub workflows, Miri evidence, Loom evidence, and fuzz evidence.
+- P00 repository-state checks for Rust 1.95.0, Edition 2024, resolver 3, 89 workspace crates, required governance deliverables, stale roadmap references, and unbounded production-readiness claims.
 - P01 normative specification baseline checks across required `SPEC_*_V0.md` files, sections, rejection criteria, and key tokens.
 - Missing-gate reporting for release-readiness planning.
 
@@ -54,6 +55,13 @@ Run the Step 11 roadmap inventory:
 python tools/testing/step11_inventory.py
 ```
 
+Run the P00 repository-state baseline:
+
+```powershell
+python -B tools/testing/p00_repository_state_check.py
+python -B tools/testing/p00_repository_state_check.py --strict
+```
+
 Run the P01 normative specification baseline:
 
 ```powershell
@@ -80,6 +88,7 @@ python tools/testing/preflight.py --strict
 python tools/testing/windows_msvc_preflight.py --strict
 python tools/testing/supply_chain_preflight.py --strict
 python tools/testing/step11_inventory.py --strict
+python -B tools/testing/p00_repository_state_check.py --strict
 python -B tools/testing/p01_spec_baseline_check.py --strict
 ```
 
@@ -94,6 +103,7 @@ python -B tools/testing/windows_msvc_preflight.py --json
 python tools/testing/windows_msvc_preflight.py --strict
 python tools/testing/supply_chain_preflight.py
 python tools/testing/step11_inventory.py
+python -B tools/testing/p00_repository_state_check.py --strict
 python -B tools/testing/p01_spec_baseline_check.py
 python .codex/scripts/validate_codex_tooling.py
 ```
@@ -110,6 +120,8 @@ If `supply_chain_preflight.py` reports missing tools, treat the output as local 
 
 
 If `step11_inventory.py` reports a missing test path, inspect the owning crate first. Update roadmap documentation only after confirming the suite was renamed, moved, or intentionally removed.
+
+If `p00_repository_state_check.py` fails, treat the output as a P00 baseline blocker. Fix the root cause in `Cargo.toml`, current-state docs, ADRs, the crate criticality matrix, stale roadmap references, or unbounded readiness language rather than weakening the checker.
 
 If Loom evidence is reported missing, treat it as a planning gap for concurrency-sensitive promotion claims. Do not satisfy that gap with non-Loom unit tests unless the roadmap decision explicitly changes the required evidence.
 

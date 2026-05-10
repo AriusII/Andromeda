@@ -432,7 +432,7 @@ TOTAL                       166     ✅ PASS
 
 **STATUS: ✅ GATE 0 PASS**
 
-The Andromeda recovery test suite is complete and verified. With 166 tests covering all critical recovery paths, 15 crash injection scenarios, comprehensive invariant validation, and proven performance, the recovery infrastructure is ready for the extraction milestone.
+The Andromeda recovery test suite is complete for the scoped extraction milestone and verified locally. With 166 tests covering the documented recovery paths, 15 crash injection scenarios, comprehensive invariant validation, and measured performance, the recovery infrastructure has retained local evidence for extraction planning.
 
 All C5 critical invariants are enforced and validated:
 - No visible commit before durable WAL
@@ -446,4 +446,4 @@ The fuzz target infrastructure is integrated and buildable, enabling continuous 
 ---
 
 **Report Generated**: 2026-05-21  
-**Extraction Status**: **UNBLOCKED - Ready for deployment**
+**Extraction Status**: **UNBLOCKED for extraction planning; deployment readiness remains gated by retained release evidence**

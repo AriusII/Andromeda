@@ -19,6 +19,44 @@ Andromeda doit progresser par preuves, pas par accumulation de fonctionnalités.
 | Evidence | Commandes et sorties conservées dans un rapport. |
 | Documentation | Mettre à jour spec/phase/status si le comportement change. |
 
+## P00 baseline execution rule
+
+P00 work starts from repository truth, not from older documentation memory. The
+root `Cargo.toml` is the authority for Rust 1.95.0, Rust 2024 Edition,
+resolver 3, and 89 workspace crates. Any P00 claim that conflicts with
+`Cargo.toml`, `docs/status.md`, or `docs/roadmap/00_CURRENT_STATE_CROSS_CHECK.md`
+must be corrected or marked historical.
+
+P00 may close repository-state governance while release readiness remains
+closed. That distinction is mandatory: validation scripts, runbooks, and
+release-evidence generators can establish shape and local readiness, but only
+retained gate output can support a release claim.
+
+## Gate status vocabulary
+
+| Statut | Usage |
+|---|---|
+| `PASS` | La commande ou preuve exacte passe sur le commit, l'outil, la plateforme et le scope documente. |
+| `FAIL` | La commande ou preuve exacte echoue et bloque le claim. |
+| `BLOCKED` | La preuve, l'outil, le workflow ou l'artefact requis manque. |
+| `SKIPPED` | Le gate n'a pas ete lance et possede une decision explicite avec risque residuel. |
+| `NOT IN SCOPE` | Le gate ne s'applique pas au changement borne et la raison est documentee. |
+
+## Release-operation evidence
+
+Pour backup, restore, PITR, forensic startup, HA/DR, quorum, fencing et release
+gates, Personne 20 doit relier chaque claim a trois elements :
+
+1. un runbook operateur ou une procedure de validation ;
+2. une commande ou un drill exact avec sortie conservee ;
+3. une decision de release indiquant les gaps, exclusions et risques residuels.
+
+Les scripts `backup_restore_drill_check.py`, `hadr_cluster_drill_check.py`,
+`validation_manifest.py`, `roadmap_gate_summary.py` et `release_evidence.py`
+sont des aides de preuve. Ils ne remplacent pas un drill de restauration, un
+drill de promotion HA/DR, un transcript CI, un `RecoveryReport`, un
+`RestoreTrace` ou une preuve d'audit retenue.
+
 ## Rubber duck des mauvaises décisions fréquentes
 
 | Tentation | Pourquoi c’est dangereux | Réponse correcte |

@@ -3,7 +3,7 @@
 > **Status:** Normative project doctrine  
 > **Audience:** Andromeda maintainers, engine developers, architects, reviewers  
 > **Language:** American English  
-> **Baseline:** Rust 1.95.0, Rust 2024 Edition, x64 and ARM64 first
+> **Baseline:** Rust 1.95.0, Rust 2024 Edition, resolver 3, 89 crates, x64 and ARM64 first
 
 ## In this article
 
@@ -40,6 +40,12 @@ Adaptive inside.
 
 Strict boundaries reduce ambiguity before execution. Adaptive internals improve performance under policy.
 
+## P00 repository baseline
+
+The current repository baseline is the root `Cargo.toml`: Rust 1.95.0, Rust 2024 Edition, workspace resolver 3, and 89 workspace crates. `cargo metadata --format-version 1 --no-deps` is the retained source check for crate count, package edition, and package Rust version during P00.
+
+Historical documents may mention older crate counts. Those references are not current readiness evidence unless they are explicitly marked historical and direct readers back to `docs/status.md` and `docs/roadmap/00_CURRENT_STATE_CROSS_CHECK.md`.
+
 ## Non-negotiable invariants
 
 | ID | Invariant | Criticality |
@@ -56,6 +62,23 @@ Strict boundaries reduce ambiguity before execution. Adaptive internals improve 
 | INV-010 | Active plans are tied to `CatalogVersion`, `StatsVersion`, `PolicyVersion`, and `ContractHash`. | C4 |
 | INV-011 | Result metadata precedes payload. | C4 |
 | INV-012 | Every critical decision is observable and explainable after the fact. | C4 |
+
+## Criticality and proof model
+
+Andromeda uses `C0` through `C5` to separate research, advisory behavior, important measured subsystems, policy-critical behavior, mission-critical runtime behavior, and non-negotiable truth boundaries.
+
+| Level | Doctrine meaning |
+|---:|---|
+| C5 | Non-negotiable truth boundary: Procedure admission, catalog truth, transaction scope, WAL durability, recovery truth, authorization truth, and visible commit behavior. |
+| C4 | Mission-critical runtime or operations behavior that must be tested and observable before release claims. |
+| C3 | Versioned and policy-bound behavior such as optimizer, plan cache, statistics, diagnostics, compatibility, or procedure evidence. |
+| C2 | Important measured subsystem with bounded impact and fallback. |
+| C1 | Opportunistic or advisory subsystem that can be disabled without correctness impact. |
+| C0 | Research isolated from production paths. |
+
+Every roadmap phase must retain evidence for the highest criticality it touches. For C4/C5 paths, a generic compile, a demo, a scaffold crate, a benchmark, or a trace is not enough. The evidence must name the source artifact and validation command or review record, and it must prove the affected invariant, including crash/recovery or fail-closed behavior when durable state, external surfaces, admission, security, audit, backup, restore, HA/DR, WAL, MVCC, or catalog publication are touched.
+
+No document, README, roadmap phase, validation report, demo, benchmark, or generated artifact may claim production readiness, release readiness, operational safety, recoverability, HA/DR readiness, or security readiness for a C4/C5 path unless retained evidence exists and is referenced.
 
 ## Strict boundaries
 

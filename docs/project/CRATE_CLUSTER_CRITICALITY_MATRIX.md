@@ -10,6 +10,15 @@ This matrix maps the 89 workspace crates declared in the root `Cargo.toml` to
 engine clusters and P00 criticality. It is a governance aid, not a production
 readiness claim.
 
+The root `Cargo.toml` `workspace.members` list is the count source of truth.
+`crates/andromeda-cli/tests/workspace_dependency_topology.rs` protects this by
+checking both the declared 89 members and the physical crate manifests under
+`crates/`. If the count changes, update this matrix and the topology gate in the
+same change.
+
+Criticality describes the blast radius of an invariant. It does not prove that a
+crate is complete, durable, secure, or release-ready.
+
 Criticality follows `docs/project/CRITICALITY_MODEL.md`:
 
 | Level | Meaning |

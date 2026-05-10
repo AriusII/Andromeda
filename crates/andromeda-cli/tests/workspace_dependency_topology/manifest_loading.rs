@@ -13,7 +13,7 @@ pub(crate) fn load_crate_manifests(root: &Path) -> BTreeMap<String, CrateManifes
     let mut manifests = BTreeMap::new();
     let workspace_aliases = load_workspace_dependency_aliases(root);
 
-    for path in collect_manifest_paths(root) {
+    for path in collect_workspace_member_manifests(root) {
         let text = fs::read_to_string(&path).expect("read crate Cargo.toml");
         let package_name = parse_package_name(&text)
             .unwrap_or_else(|| panic!("{} must define package.name", path.display()));
@@ -33,9 +33,20 @@ pub(crate) fn load_crate_manifests(root: &Path) -> BTreeMap<String, CrateManifes
     manifests
 }
 pub(crate) fn collect_workspace_member_manifests(root: &Path) -> Vec<PathBuf> {
-    collect_manifest_paths(root)
+    let workspace_root = root
+        .parent()
+        .unwrap_or_else(|| panic!("{} must have a workspace parent", root.display()));
+    let workspace_manifest = workspace_root.join("Cargo.toml");
+    let text = fs::read_to_string(&workspace_manifest)
+        .unwrap_or_else(|err| panic!("read {}: {err}", workspace_manifest.display()));
+
+    parse_workspace_members(&text)
+        .into_iter()
+        .filter(|member| member.starts_with("crates/"))
+        .map(|member| workspace_root.join(member).join("Cargo.toml"))
+        .collect()
 }
-fn collect_manifest_paths(root: &Path) -> Vec<PathBuf> {
+pub(crate) fn collect_crate_directory_manifests(root: &Path) -> Vec<PathBuf> {
     let mut manifests = Vec::new();
     let entries = fs::read_dir(root).expect("read crates directory");
 
@@ -51,6 +62,49 @@ fn collect_manifest_paths(root: &Path) -> Vec<PathBuf> {
     }
 
     manifests
+}
+fn parse_workspace_members(text: &str) -> Vec<String> {
+    let mut in_workspace = false;
+    let mut in_members = false;
+    let mut members = Vec::new();
+
+    for line in text.lines() {
+        let Some(line) = cargo_line_without_comment(line) else {
+            continue;
+        };
+
+        if line.starts_with('[') {
+            in_workspace = line == "[workspace]";
+            in_members = false;
+            continue;
+        }
+
+        if !in_workspace {
+            continue;
+        }
+
+        if !in_members {
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            if key.trim() != "members" {
+                continue;
+            }
+            in_members = true;
+            members.extend(quoted_toml_values(value));
+            if value.contains(']') {
+                in_members = false;
+            }
+            continue;
+        }
+
+        members.extend(quoted_toml_values(line));
+        if line.contains(']') {
+            in_members = false;
+        }
+    }
+
+    members
 }
 fn parse_package_name(text: &str) -> Option<String> {
     let mut in_package = false;
@@ -308,12 +362,62 @@ fn parse_quoted_value(text: &str) -> Option<String> {
     let value = value.split_once('"')?.0;
     Some(value.to_owned())
 }
+fn quoted_toml_values(text: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+    let mut escaped = false;
+
+    for ch in text.chars() {
+        if in_string {
+            if escaped {
+                current.push(ch);
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                values.push(std::mem::take(&mut current));
+                in_string = false;
+            } else {
+                current.push(ch);
+            }
+        } else if ch == '"' {
+            in_string = true;
+        }
+    }
+
+    values
+}
 pub(crate) fn normalize_dependency_name(name: &str) -> String {
     let name = name.trim_matches(|character: char| {
         character == '"' || character == '\'' || character.is_whitespace()
     });
     let name = name.split_once('.').map_or(name, |(key, _)| key);
     name.replace('_', "-").to_ascii_lowercase()
+}
+#[test]
+fn workspace_member_parser_reads_multiline_member_arrays() {
+    let members = parse_workspace_members(
+        r#"
+        [package]
+        name = "ignored"
+
+        [workspace]
+        resolver = "3"
+        members = [
+            "crates/andromeda-error",
+            "crates/andromeda-types",
+        ]
+
+        [workspace.dependencies]
+        andromeda-error = { path = "crates/andromeda-error" }
+        "#,
+    );
+
+    assert_eq!(
+        members,
+        vec!["crates/andromeda-error", "crates/andromeda-types"]
+    );
 }
 #[test]
 fn manifest_parser_tracks_package_renames_in_dependency_sections() {

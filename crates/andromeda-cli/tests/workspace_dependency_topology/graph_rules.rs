@@ -3,7 +3,10 @@ use crate::{
         FORBIDDEN_SECURITY_CRITICAL_GPU_RUNTIME_DEPS, SECURITY_CONTRACT_FORBIDDEN_RUNTIME_DEPS,
         SECURITY_CRITICAL_PATH_CRATES,
     },
-    manifest_loading::{CrateManifest, load_crate_manifests},
+    manifest_loading::{
+        CrateManifest, collect_crate_directory_manifests, collect_workspace_member_manifests,
+        load_crate_manifests,
+    },
     workspace_root,
 };
 use std::{
@@ -151,19 +154,36 @@ fn workspace_crate_dependency_topology_blocks_forbidden_runtime_edges() {
 fn workspace_dependency_topology_tracks_current_crate_surface() {
     let workspace = workspace_root();
     let manifests = load_crate_manifests(&workspace.join("crates"));
-    let manifest_paths =
-        crate::manifest_loading::collect_workspace_member_manifests(&workspace.join("crates"));
+    let workspace_member_manifests = collect_workspace_member_manifests(&workspace.join("crates"));
+    let crate_directory_manifests = collect_crate_directory_manifests(&workspace.join("crates"));
 
     assert_eq!(
         manifests.len(),
         WORKSPACE_CRATE_COUNT,
-        "workspace topology tests must cover the current crate manifests under crates/"
+        "workspace topology tests must cover the current crate members declared in root Cargo.toml"
     );
     assert_eq!(
-        manifest_paths.len(),
+        workspace_member_manifests.len(),
         WORKSPACE_CRATE_COUNT,
-        "workspace member manifest discovery must stay aligned with the current crate topology"
+        "root Cargo.toml workspace.members must stay aligned with the P00 crate-count baseline"
     );
+    assert_eq!(
+        relative_manifest_paths(&workspace, &workspace_member_manifests),
+        relative_manifest_paths(&workspace, &crate_directory_manifests),
+        "root Cargo.toml workspace.members must match the physical crate Cargo.toml files under crates/"
+    );
+}
+fn relative_manifest_paths(workspace: &std::path::Path, paths: &[PathBuf]) -> BTreeSet<String> {
+    paths
+        .iter()
+        .map(|path| relative_slash_path_for_manifest(workspace, path))
+        .collect()
+}
+fn relative_slash_path_for_manifest(workspace: &std::path::Path, path: &std::path::Path) -> String {
+    path.strip_prefix(workspace)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/")
 }
 fn forbidden_rules() -> Vec<ForbiddenRule> {
     vec![
