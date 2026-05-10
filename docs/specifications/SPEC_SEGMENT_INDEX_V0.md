@@ -46,6 +46,9 @@ This specification applies to V0 documentation and implementation planning. It d
 - PageLocator verifies PageHash.
 - KeyRange entries are policy-bound.
 - SegmentIndex matches manifest hash.
+- SegmentIndex is bound to one DatabaseId, SnapshotId, ManifestVersion, and ParentManifestHash.
+- SegmentIndex contains only published cold segment entries in V0.
+- Native Rust layout is not a SegmentIndex format.
 
 
 ## Serialization
@@ -88,7 +91,59 @@ SegmentIndex files use a 256-byte little-endian header, `entry_count` fixed 160-
 | 240 | 8 | EntryTableCrc64 | Must match encoded entries. |
 | 248 | 8 | Reserved | Must be zero. |
 
-Each entry is 160 bytes and ends with `EntryCrc32` at offset 156. The trailer mirrors the entry-table CRC64 at offset 0, stores the file SHA256 at offset 8, root hash at offset 40, trailer CRC32 at offset 72, flags at offset 76, and 16 zero reserved bytes at offset 80.
+| Entry offset | Size | Field | Validation |
+|---:|---:|---|---|
+| 0 | 8 | SegmentId | Must be non-zero and strictly increasing. |
+| 8 | 8 | ObjectId | Must be non-zero. |
+| 16 | 8 | AllocationId | Must be non-zero. |
+| 24 | 8 | FirstExtentId | Must be non-zero. |
+| 32 | 4 | ExtentCount | Must be non-zero and not overflow extent range. |
+| 36 | 2 | PageSizeTag | `1` = 16 KiB, `2` = 32 KiB. |
+| 38 | 2 | SegmentStateTag | Must be `3` PublishedCold in V0. |
+| 40 | 8 | FirstPageId | Must be non-zero. |
+| 48 | 4 | PageCount | Must be non-zero and not overflow page range. |
+| 52 | 4 | Reserved | Must be zero. |
+| 56 | 8 | MinPageLsn | Must be non-zero. |
+| 64 | 8 | MaxPageLsn | Must be >= MinPageLsn. |
+| 72 | 8 | SnapshotId | Must match header SnapshotId. |
+| 80 | 8 | SegmentFileId | Must be non-zero. |
+| 88 | 8 | SegmentFileOffset | Must not overflow with SegmentByteLen. |
+| 96 | 8 | SegmentByteLen | Must be non-zero. |
+| 104 | 8 | SegmentPayloadCrc64 | Must be non-zero and match the listed segment bytes. |
+| 112 | 32 | SegmentSha256 | Must be non-zero and match the listed segment bytes. |
+| 144 | 4 | SegmentHeaderCrc32 | Must be non-zero and match the segment header. |
+| 148 | 4 | SegmentTrailerCrc32 | Must be non-zero and match the segment trailer. |
+| 152 | 4 | EntryFlags | Must be zero in V0. |
+| 156 | 4 | EntryCrc32 | CRC32/ISO-HDLC over the 160-byte entry with this field zeroed. |
+
+| Trailer offset | Size | Field | Validation |
+|---:|---:|---|---|
+| 0 | 8 | EntryTableCrc64Mirror | Must equal header EntryTableCrc64. |
+| 8 | 32 | SegmentIndexFileSha256 | SHA-256 over the encoded file with acyclic trailer hash fields zeroed. |
+| 40 | 32 | SegmentIndexRootHash | SHA-256 over ParentManifestHash, SegmentIndexId, SnapshotId, EntryTableSha256, and SegmentIndexFileSha256. |
+| 72 | 4 | TrailerCrc32 | CRC32/ISO-HDLC over the trailer with this field zeroed. |
+| 76 | 4 | TrailerFlags | Must be zero in V0. |
+| 80 | 16 | Reserved | Must be zero. |
+
+### Integrity algorithms
+
+`HeaderCrc32`, `EntryCrc32`, and `TrailerCrc32` use CRC32/ISO-HDLC with reflected polynomial `0xEDB88320`, initial value `0xFFFF_FFFF`, final xor `0xFFFF_FFFF`, and the target CRC field zeroed.
+
+`EntryTableCrc64` uses CRC64/ECMA with polynomial `0x42F0E1EBA9EA3693`, initial value `0`, no final xor, and zero normalized to `1`.
+
+`EntryTableSha256`, `SegmentIndexFileSha256`, `SegmentIndexRootHash`, and `SegmentSha256` use SHA-256. All-zero digest values are invalid.
+
+The decoder must validate header magic, version, byte order, header length, total length, entry count, entry length, extension bounds, and header CRC before allocating the entry vector. The decoded file must re-encode to the same bytes for golden vector acceptance.
+
+### Extension policy
+
+Extension bytes are optional and bounded to 1 MiB. Each extension record starts with an 8-byte record header: type `u16`, flags `u16`, and payload length `u32`, followed by payload bytes. Unknown required extension records, identified by flag `0x0001`, are rejected. Unknown optional extension records may be preserved but are not interpreted as startup truth.
+
+### Locator and startup rules
+
+PageLocator resolution must use SegmentIndex entries rather than scanning all cold segments. A locator is valid only when the page id falls within an entry page range, the entry is bound to the accepted manifest, and the segment payload CRC64, segment SHA-256, segment header CRC32, and segment trailer CRC32 all match the referenced bytes.
+
+If SegmentIndex is absent, corrupt, stale, or bound to a different manifest, normal Online startup must reject it and use the RecoveryReport mode selected by recovery. Rebuild is allowed only from manifest-listed durable artifacts and retained WAL evidence; it must not silently promote an unlisted cold scan to normal startup truth.
 
 ## State transitions
 
@@ -124,7 +179,7 @@ ErrorKind when applicable
 
 ## Recovery behavior
 
-If this specification affects durable state, it must define how recovery replays, validates, rebuilds, or rejects the affected state.
+Recovery validates SegmentIndex after the DatabaseManifest root is accepted and before using locators for page, key range, column chunk, or root access. A stale or corrupt SegmentIndex cannot be trusted as durable truth. Recovery may rebuild an index only from manifest-listed immutable cold segments plus durable WAL evidence, and RecoveryReport must record whether the accepted index was loaded, rebuilt, rejected, or unavailable.
 
 ## Compatibility
 
@@ -147,6 +202,13 @@ Changes are classified as:
 - invalid index fallback tests.
 - 256-byte header, 160-byte entry, and 96-byte trailer golden vector tests.
 - stale manifest hash fallback tests.
+- entry table SHA-256 and CRC64 mismatch tests.
+- header, entry, and trailer CRC32 mismatch tests.
+- reserved header, entry, and trailer byte rejection tests.
+- extension required-flag rejection tests.
+- manifest-bound locator hash and range tests.
+- absent, corrupt, stale, and mismatched SegmentIndex startup-mode tests.
+- malformed corpus coverage under `tests/fuzzing/corpus/segment_index_decode`.
 
 ## Rejection criteria
 
@@ -155,7 +217,21 @@ Changes are classified as:
 - Reject `unsupported SegmentIndex version`.
 - Reject `locator without hash`.
 - Reject `index not tied to manifest`.
+- Reject `SegmentIndex native Rust layout`.
+- Reject `SegmentIndex header CRC mismatch`.
+- Reject `SegmentIndex entry CRC mismatch`.
+- Reject `SegmentIndex trailer CRC mismatch`.
+- Reject `EntryTableSha256 mismatch`.
+- Reject `EntryTableCrc64 mismatch`.
+- Reject `SegmentIndexRootHash mismatch`.
+- Reject `nonzero SegmentIndex reserved bytes`.
+- Reject `PublishedCold-only violation`.
+- Reject `unknown required SegmentIndex extension`.
 
 ## Acceptance summary
 
-This specification is acceptable when implementation, tests, and documentation can prove the listed invariants without hidden defaults.
+Owner: Personne 09 owns SegmentIndex V0 with the `andromeda-segment`, `andromeda-manifest`, and `andromeda-recovery` owner crates.
+
+Evidence: acceptance requires `crates/andromeda-segment/tests/segment_index_contract.rs`, malformed corpus coverage under `tests/fuzzing/corpus/segment_index_decode`, startup-mode evidence that does not scan all cold segments for normal Online startup, and golden vectors for the 256-byte header, 160-byte entry, 96-byte trailer, EntryTableSha256, EntryTableCrc64, and SegmentIndexRootHash.
+
+Reject: reviewers must reject implementations that persist native Rust layout, omit magic/version/byte-order checks, accept bad CRC or hash evidence, use a SegmentIndex not tied to the accepted manifest, trust an unlisted cold scan as normal startup truth, or skip the required fallback and RecoveryReport evidence.

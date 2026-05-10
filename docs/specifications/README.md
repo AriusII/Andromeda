@@ -8,6 +8,11 @@
 This folder contains Andromeda's normative V0 technical specifications. Source code, tests, ADRs,
 and roadmap work packets should link here rather than to legacy `docs/specs` paths.
 
+Each specification is an implementation gate, not a documentation placeholder. A spec can unblock
+owner implementation only when it states source grounding, criticality, rejection behavior,
+serialization boundaries, owner crates, acceptance evidence, tests, and the retained evidence
+required for the highest C0-C5 path it touches.
+
 ## Specification groups
 
 | Area | Specifications |
@@ -24,6 +29,27 @@ and roadmap work packets should link here rather than to legacy `docs/specs` pat
 Any change to a persisted format, RPC-visible frame, security boundary, catalog lifecycle, recovery
 behavior, or advisory evidence promotion rule must update the relevant `SPEC_*_V0.md` file and any
 test that asserts its decision coverage.
+
+## Closure rule
+
+P01 baseline closure is checked by `python -B tools/testing/p01_spec_baseline_check.py --strict`.
+For new specifications or material revisions after this addendum, closure also requires all of the
+following:
+
+- The spec is listed in this index and uses the current `docs/templates/SPEC_TEMPLATE.md` section
+  model, including source grounding and criticality/evidence classification for the revised scope.
+- Every persisted, network-visible, security-critical, recovery-critical, or semantic IR structure
+  has an explicit owner, canonical representation, and rejection behavior.
+- C4/C5 paths name the doctrine invariant they affect and identify retained evidence, not only a
+  green build, scaffold, demo, benchmark, trace, or simulation-only drill.
+- Durable state, external surfaces, security, admission, audit, backup, restore, HA/DR, WAL, MVCC,
+  or catalog-truth specs define the crash/recovery or fail-closed evidence required for acceptance.
+- The acceptance summary includes literal `Owner`, `Evidence`, and `Reject` entries tying the
+  changed path to criticality, source artifact, validation command or review record, retained
+  evidence, and the claim that must be rejected when proof is missing.
+
+Do not claim production readiness or release readiness from this index. Those claims require the
+separate release evidence packet and roadmap release gates.
 
 ## Terminology rule
 

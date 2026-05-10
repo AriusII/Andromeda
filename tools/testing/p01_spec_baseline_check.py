@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -282,7 +283,11 @@ NEGATED_OR_DISAMBIGUATING = (
     "non-goal",
 )
 
-WATCH_TERMS = ("dynamic sql", "native-layout serialization", "null ambient")
+WATCH_TERMS = ("dynamic sql", "native-layout serialization", "null ambient", "query", "queries", "view", "views")
+GENERIC_ACCEPTANCE_SUMMARY = (
+    "This specification is acceptable when implementation, tests, and documentation can prove "
+    "the listed invariants without hidden defaults."
+)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -302,6 +307,23 @@ def read_text(path: Path) -> str:
 
 def has_token(text: str, token: str) -> bool:
     return token.lower() in text.lower()
+
+
+def has_watch_term(text: str, term: str) -> bool:
+    if term in {"query", "queries", "view", "views"}:
+        return re.search(rf"\b{re.escape(term)}\b", text, flags=re.IGNORECASE) is not None
+    return term.lower() in text.lower()
+
+
+def section_after(text: str, heading: str) -> str:
+    start = text.find(heading)
+    if start == -1:
+        return ""
+    body_start = start + len(heading)
+    next_heading = text.find("\n## ", body_start)
+    if next_heading == -1:
+        return text[body_start:].strip()
+    return text[body_start:next_heading].strip()
 
 
 def required_spec_gaps(root: Path) -> list[Gap]:
@@ -342,6 +364,9 @@ def template_gaps(root: Path) -> list[Gap]:
     for token in ("Native Rust layout is not a valid format", "Acceptance summary"):
         if not has_token(text, token):
             gaps.append(Gap("docs/templates/SPEC_TEMPLATE.md", "template", f"Missing `{token}`."))
+    for token in ("Owner crates", "Acceptance evidence"):
+        if not has_token(text, token):
+            gaps.append(Gap("docs/templates/SPEC_TEMPLATE.md", "template", f"Missing `{token}`."))
     return gaps
 
 
@@ -352,7 +377,7 @@ def terminology_gaps(root: Path) -> list[Gap]:
         for line_no, line in enumerate(text.splitlines(), start=1):
             lowered = line.lower()
             for term in WATCH_TERMS:
-                if term not in lowered:
+                if not has_watch_term(lowered, term):
                     continue
                 if any(marker in lowered for marker in NEGATED_OR_DISAMBIGUATING):
                     continue
@@ -367,12 +392,42 @@ def terminology_gaps(root: Path) -> list[Gap]:
     return gaps
 
 
+def acceptance_summary_gaps(root: Path) -> list[Gap]:
+    gaps: list[Gap] = []
+    for spec in REQUIRED_SPECS:
+        path = root / spec.path
+        text = read_text(path)
+        if not text:
+            continue
+        summary = section_after(text, "## Acceptance summary")
+        if GENERIC_ACCEPTANCE_SUMMARY.lower() in summary.lower():
+            gaps.append(
+                Gap(
+                    spec.path,
+                    "acceptance-summary",
+                    "Acceptance summary is generic; it must name owner, evidence, and rejection proof.",
+                )
+            )
+            continue
+        for token in ("Owner", "Evidence", "Reject"):
+            if not has_token(summary, token):
+                gaps.append(
+                    Gap(
+                        spec.path,
+                        "acceptance-summary",
+                        f"Acceptance summary must include `{token}`.",
+                    )
+                )
+    return gaps
+
+
 def build_report(root: Path) -> dict[str, object]:
     root = root.resolve()
     gaps = [
         *required_spec_gaps(root),
         *template_gaps(root),
         *terminology_gaps(root),
+        *acceptance_summary_gaps(root),
     ]
     return {
         "schema": "andromeda.p01_spec_baseline.v1",
