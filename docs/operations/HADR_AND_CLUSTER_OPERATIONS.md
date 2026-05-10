@@ -12,6 +12,7 @@
 ## Purpose
 
 V0 uses Single Primary with replicas, quorum, fencing, WAL shipping, and explicit promotion evidence.
+HA/DR controls are available only through Administration or HA/DR surfaces.
 
 ## Required policies
 
@@ -41,3 +42,14 @@ DecisionTrace when applicable
 
 > [!IMPORTANT]
 > If an operation affects truth, security, recovery, or availability, it must be auditable and reproducible from recorded evidence.
+
+## Validation evidence commands
+
+```powershell
+cargo test -p andromeda-hadr --test hadr_promotion_runtime_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test hadr_membership_store_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test quorum_membership_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --test wal_shipping_reclaimability_contract --locked -- --nocapture
+cargo test -p andromeda-hadr --locked hadr_streams
+cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture
+```

@@ -1,7 +1,7 @@
 # Andromeda Rust toolchain configuration
 # Channel: stable (production-ready, no nightly dependency)
 # Edition: 2024 (latest language features, strict semantics)
-# MSRV (Minimum Supported Rust Version): 1.85
+# MSRV (Minimum Supported Rust Version): 1.95.0
 #
 # Rationale for stable channel:
 # - Mission-critical database engine requires stability guarantee

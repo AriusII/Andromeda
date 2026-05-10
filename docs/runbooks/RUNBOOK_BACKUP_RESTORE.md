@@ -53,6 +53,17 @@ recovery or rollback behavior is known
 operator evidence is preserved
 ```
 
+Retained audit, `RestoreTrace`, and `RecoveryReport` evidence paths.
+
+### Validation evidence commands
+
+```powershell
+cargo test -p andromeda-backup --test backup_physical_plan_contract --locked -- --nocapture
+cargo test -p andromeda-backup --test backup_execution_plan --locked -- --nocapture
+cargo test -p andromeda-restore --test restore_contract --locked -- --nocapture
+cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture
+```
+
 ## Escalation
 
 Escalate when:

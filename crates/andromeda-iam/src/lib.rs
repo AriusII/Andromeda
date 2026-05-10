@@ -50,9 +50,7 @@ impl<'a> PrincipalAuthorization<'a> {
     }
 
     pub fn grants(self, permission: Permission) -> bool {
-        self.granted_permissions
-            .iter()
-            .any(|granted| *granted == permission)
+        self.granted_permissions.contains(&permission)
     }
 }
 
@@ -176,9 +174,7 @@ impl PreTransactionAdmissionDecision {
 pub struct IamAdmissionRuntime;
 
 impl IamAdmissionRuntime {
-    pub fn evaluate(
-        request: PreTransactionAdmissionRequest,
-    ) -> PreTransactionAdmissionDecision {
+    pub fn evaluate(request: PreTransactionAdmissionRequest) -> PreTransactionAdmissionDecision {
         let boundary_decision =
             AdmissionDecision::evaluate(request.surface, request.class, request.permission);
         let Some(permission_request) = boundary_decision.request() else {

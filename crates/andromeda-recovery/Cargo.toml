@@ -6,15 +6,15 @@ rust-version = "1.95.0"
 publish = false
 
 [dependencies]
-andromeda-error = { path = "../andromeda-error" }
-andromeda-manifest = { path = "../andromeda-manifest" }
-andromeda-storage-heap = { path = "../andromeda-storage-heap" }
-andromeda-storage-index = { path = "../andromeda-storage-index" }
-andromeda-storage-page = { path = "../andromeda-storage-page" }
-andromeda-time = { path = "../andromeda-time" }
-andromeda-transaction-log = { path = "../andromeda-transaction-log" }
-andromeda-types = { path = "../andromeda-types" }
-andromeda-wal = { path = "../andromeda-wal" }
+andromeda-error.workspace = true
+andromeda-manifest.workspace = true
+andromeda-storage-heap.workspace = true
+andromeda-storage-index.workspace = true
+andromeda-storage-page.workspace = true
+andromeda-time.workspace = true
+andromeda-transaction-log.workspace = true
+andromeda-types.workspace = true
+andromeda-wal.workspace = true
 
 [dev-dependencies]
 andromeda-observability.workspace = true

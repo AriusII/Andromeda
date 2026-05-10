@@ -31,9 +31,9 @@ DOC_CHECKS = (
         (
             "tests/README.md",
             "tests/AGENTS.md",
-            "docs/testing/release-gates.md",
-            "docs/testing/testing-strategy.md",
-            "docs/governance/release-gates.md",
+            "docs/testing/RELEASE_GATES.md",
+            "docs/testing/TEST_STRATEGY.md",
+            "docs/testing/CI_GATES.md",
             "fuzz/README.md",
             "fuzz/VALIDATION_MATRIX.md",
         ),
@@ -46,11 +46,11 @@ RUNBOOK_CHECKS = (
         "operations runbooks",
         (
             "docs/runbooks/README.md",
-            "docs/runbooks/backup-restore.md",
-            "docs/runbooks/corruption.md",
-            "docs/runbooks/replica-lag.md",
-            "docs/runbooks/performance.md",
-            "docs/runbooks/wal-pressure.md",
+            "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
+            "docs/runbooks/RUNBOOK_CORRUPTION_SUSPICION.md",
+            "docs/runbooks/RUNBOOK_REPLICA_LAG.md",
+            "docs/runbooks/RUNBOOK_NVME_PRESSURE.md",
+            "docs/runbooks/RUNBOOK_WAL_PRESSURE.md",
         ),
     ),
 )
@@ -91,8 +91,8 @@ EVIDENCE_CHECKS = (
         (
             ".github/workflows/06-nightly-deep-validation.yml",
             "tools/testing/miri_subset.py",
-            "docs/testing/fuzz-miri-loom.md",
-            "docs/testing/release-gates.md",
+            "docs/testing/FUZZING_PLAN.md",
+            "docs/testing/RELEASE_GATES.md",
         ),
     ),
     PathCheck(
@@ -102,7 +102,7 @@ EVIDENCE_CHECKS = (
             "tools/loom-models/README.md",
             "tools/loom-models/Cargo.toml",
             "tools/loom-models/tests/*.rs",
-            "docs/testing/release-gates.md",
+            "docs/testing/RELEASE_GATES.md",
         ),
     ),
     PathCheck(
@@ -114,7 +114,7 @@ EVIDENCE_CHECKS = (
             "crates/andromeda-storage/tests/wal_scan_recovery_contract.rs",
             "crates/andromeda-storage/tests/file_wal_recovery_contract.rs",
             "crates/andromeda-exec/tests/recovery_visibility_gates.rs",
-            "docs/runbooks/backup-restore.md",
+            "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
         ),
     ),
     PathCheck(
@@ -122,8 +122,8 @@ EVIDENCE_CHECKS = (
         (
             "tools/testing/release_evidence.py",
             "tools/testing/release_evidence_schema.md",
-            "docs/testing/release-evidence-template.md",
-            "docs/testing/release-gates.md",
+            "docs/testing/ACCEPTANCE_CHECKLIST.md",
+            "docs/testing/RELEASE_GATES.md",
         ),
     ),
 )

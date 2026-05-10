@@ -44,24 +44,26 @@ class Blocker:
 
 INDEX_SPECS = (
     IndexSpec("docs", "documentation root index", "docs/README.md"),
+    IndexSpec("docs", "documentation navigation index", "docs/INDEX.md"),
+    IndexSpec("docs", "repository status", "docs/status.md"),
+    IndexSpec("docs", "project doctrine", "docs/project/ANDROMEDA_DOCTRINE.md"),
     IndexSpec(
         "docs",
-        "reader roadmap index",
-        "docs/README.md",
+        "crate criticality matrix",
+        "docs/project/CRATE_CLUSTER_CRITICALITY_MATRIX.md",
     ),
-    IndexSpec("docs", "governance release gates", "docs/governance/release-gates.md"),
     IndexSpec("docs", "architecture index", "docs/architecture/README.md"),
     IndexSpec(
         "docs",
-        "implementation index",
-        "docs/implementation/roadmap.md",
+        "roadmap master",
+        "docs/roadmap/ROADMAP_MASTER.md",
     ),
     IndexSpec(
         "docs",
         "governance decision index",
         "docs/adr/README.md",
     ),
-    IndexSpec("specs", "specification index", "docs/specs/README.md"),
+    IndexSpec("specs", "specification index", "docs/specifications/README.md"),
     IndexSpec("crates", "crate index", "crates/README.md"),
     IndexSpec("crates", "workspace manifest", "Cargo.toml"),
     IndexSpec("fuzz", "fuzz index", "fuzz/README.md"),
@@ -78,7 +80,7 @@ INDEX_SPECS = (
     IndexSpec(
         "tests",
         "Step 11 validation matrix",
-        "docs/testing/release-gates.md",
+        "docs/testing/RELEASE_GATES.md",
     ),
     IndexSpec("tests", "crash/recovery test index", "tests/crash-recovery/README.md"),
     IndexSpec("tests", "fuzzing test index", "tests/fuzzing/README.md"),
@@ -91,7 +93,7 @@ UNCONDITIONAL_STATIC_BLOCKERS = (
     Blocker(
         "tests",
         "high",
-        "docs/testing/release-gates.md",
+        "docs/testing/RELEASE_GATES.md",
         "Sustained fuzz evidence remains required before promoted byte, parser, protocol, or admission surfaces can be treated as release evidence.",
     ),
     Blocker(
@@ -273,7 +275,7 @@ def build_docs_inventory(root: Path) -> dict[str, object]:
 
 
 def build_specs_inventory(root: Path) -> dict[str, object]:
-    specs_dir = root / "docs" / "specs"
+    specs_dir = root / "docs" / "specifications"
     spec_files = [
         rel(root, path)
         for path in safe_rglob(specs_dir, "*.md")
@@ -281,7 +283,7 @@ def build_specs_inventory(root: Path) -> dict[str, object]:
     ]
     return {
         "specification_files": len(spec_files),
-        "index": "docs/specs/README.md",
+        "index": "docs/specifications/README.md",
         "sample": spec_files[:12],
     }
 
@@ -626,7 +628,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "tests",
                 "high",
-                "docs/testing/release-gates.md",
+                "docs/testing/RELEASE_GATES.md",
                 "Blocking or release-recorded Miri evidence remains required for unsafe or memory-sensitive C5 release claims; the nightly workflow is advisory when it uses continue-on-error.",
             )
         )
@@ -646,7 +648,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "tests",
                 "critical",
-                "docs/testing/release-gates.md",
+                "docs/testing/RELEASE_GATES.md",
                 "Map publication release approval remains blocked until a Map owner suite proves candidate validation, active switch, rollback, rebuild, and recovery behavior.",
             )
         )
@@ -665,7 +667,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "crates",
                 "high",
-                "docs/implementation/roadmap.md",
+                "docs/roadmap/ROADMAP_MASTER.md",
                 "B-Tree durable promotion remains blocked until insert, delete, split, merge, WAL replay, and crash recovery tests pass together.",
             )
         )
@@ -684,7 +686,7 @@ def static_blockers(root: Path) -> list[Blocker]:
             Blocker(
                 "docs",
                 "high",
-                "docs/implementation/roadmap.md",
+                "docs/roadmap/ROADMAP_MASTER.md",
                 "Release approval still requires exact gate commands, commit SHA, toolchain, pass/fail status, skipped tests, and unresolved gaps.",
             )
         )

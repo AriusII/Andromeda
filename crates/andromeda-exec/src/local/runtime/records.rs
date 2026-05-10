@@ -90,7 +90,7 @@ fn singleton_runtime_plan(
     procedure: &LocalProcedure,
 ) -> AndromedaResult<(PlanCacheKey, ProcedureRuntimePlanId)> {
     let key = PlanCacheKey::build(
-        &procedure.contract_binding,
+        procedure.contract_binding,
         PlanClass::Singleton,
         PlanShapeFingerprint::empty(),
     )

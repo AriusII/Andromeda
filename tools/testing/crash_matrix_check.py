@@ -13,7 +13,7 @@ from typing import Sequence
 
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_MATRIX = Path("docs/testing/release-gates.md")
+DEFAULT_MATRIX = Path("docs/testing/CRASH_RECOVERY_TEST_PLAN.md")
 
 EXPECTED_SCENARIOS = (
     "CR-11-WAL",

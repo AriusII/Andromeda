@@ -117,8 +117,8 @@ fn encode_delta(out: &mut Vec<u8>, delta: &CatalogMutationDelta) {
     match &delta.operation {
         CatalogMutationOperation::CreateObject { object, definition } => {
             push_u8(out, 0);
-            encode_object_ref(out, &object);
-            encode_definition(out, &definition);
+            encode_object_ref(out, object);
+            encode_definition(out, definition);
         },
         CatalogMutationOperation::DeprecateObject { target } => {
             push_u8(out, 1);

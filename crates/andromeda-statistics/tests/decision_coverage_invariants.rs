@@ -10,8 +10,8 @@ fn advisory_spec_path() -> std::path::PathBuf {
         .join("..")
         .join("..")
         .join("docs")
-        .join("specs")
-        .join("advisory-optimizer-hardware.md")
+        .join("specifications")
+        .join("SPEC_ADVISORY_OPTIMIZER_HARDWARE_V0.md")
 }
 
 fn crate_source_path(crate_name: &str, path_segments: &[&str]) -> std::path::PathBuf {
@@ -142,7 +142,7 @@ fn map_refresh_validation_spec_covers_stats_staleness_summarizability_and_truth_
     ] {
         assert!(
             normalized.contains(&required.to_lowercase()),
-            "advisory-optimizer-hardware.md must cover required Map analytics validation topic: {required}"
+            "SPEC_ADVISORY_OPTIMIZER_HARDWARE_V0.md must cover required Map analytics validation topic: {required}"
         );
     }
 }

@@ -7,10 +7,10 @@ pub(crate) fn checked_tuple_len(
     empty_msg: Option<&'static str>,
     too_large_msg: impl FnOnce(usize) -> String,
 ) -> AndromedaResult<u16> {
-    if tuple.is_empty() {
-        if let Some(message) = empty_msg {
-            return Err(heap_error(message));
-        }
+    if tuple.is_empty()
+        && let Some(message) = empty_msg
+    {
+        return Err(heap_error(message));
     }
     if tuple.len() > u16::MAX as usize {
         return Err(heap_error(too_large_msg(tuple.len())));

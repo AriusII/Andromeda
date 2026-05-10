@@ -248,5 +248,5 @@ If `--strict` exits with status 1, inspect supplied `fail` and `gap` records. St
 - `tools/testing/validation_manifest_schema.md`
 - `docs/testing/README.md`
 - `docs/testing/release-evidence-template.md`
-- `docs/testing/release-gates.md`
-- `docs/testing/release-gates.md`
+- `docs/testing/RELEASE_GATES.md`
+- `docs/testing/RELEASE_GATES.md`

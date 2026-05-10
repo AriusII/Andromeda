@@ -16,7 +16,7 @@ python tools/testing/validation_manifest.py --json
 
 The manifest includes:
 
-- index presence checks for `docs`, `specs`, `crates`, `fuzz`, `runbooks`, and `tests`;
+- index presence checks for `docs`, `specifications`, `crates`, `fuzz`, `runbooks`, and `tests`;
 - local inventory counts for documentation files, specification files, workspace crates, fuzz targets, operations runbooks, root test indices, crate test files, and Loom evidence paths;
 - known blocker records gathered from required-path gaps, local consistency checks, and standing release-readiness gaps documented in the repository.
 
@@ -112,7 +112,7 @@ The `inventory` object contains one object per validation category.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `specification_files` | integer | Specification Markdown files under `docs/specs`, excluding `README.md`. |
+| `specification_files` | integer | Specification Markdown files under `docs/specifications`, excluding `README.md`. |
 | `index` | string | Specification index path. |
 | `sample` | array of strings | Up to 12 specification paths for quick inspection. |
 
@@ -224,9 +224,9 @@ If `loom_model_paths` is empty, do not use the manifest to approve concurrency-s
 - `tools/testing/README.md`
 - `tests/README.md`
 - `docs/testing/README.md`
-- `docs/testing/release-gates.md`
-- `docs/testing/release-gates.md`
-- `docs/specs/README.md`
+- `docs/testing/RELEASE_GATES.md`
+- `docs/testing/RELEASE_GATES.md`
+- `docs/specifications/README.md`
 - `docs/runbooks/README.md`
 - `tests/fuzzing/targets.toml`
 - `tests/fuzzing/corpus/manifest.toml`

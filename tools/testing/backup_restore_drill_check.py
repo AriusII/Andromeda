@@ -15,19 +15,18 @@ from typing import Sequence
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 EVIDENCE_DOCUMENTS = (
-    Path("docs/runbooks/backup-restore.md"),
+    Path("docs/runbooks/RUNBOOK_BACKUP_RESTORE.md"),
     Path("docs/runbooks/README.md"),
-    Path("docs/testing/release-gates.md"),
+    Path("docs/testing/RELEASE_GATES.md"),
 )
 
 REQUIRED_PATHS = (
-    "docs/runbooks/backup-restore.md",
+    "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
     "docs/runbooks/README.md",
-    "docs/testing/release-gates.md",
-    "crates/andromeda-storage/tests/backup_physical_plan_contract.rs",
-    "crates/andromeda-storage/tests/backup_execution_plan.rs",
-    "crates/andromeda-storage/tests/restore_contract.rs",
-    "crates/andromeda-storage/tests/wal_gc_four_boundaries_integration.rs",
+    "docs/testing/RELEASE_GATES.md",
+    "crates/andromeda-backup/tests/backup_physical_plan_contract.rs",
+    "crates/andromeda-backup/tests/backup_execution_plan.rs",
+    "crates/andromeda-restore/tests/restore_contract.rs",
     "crates/andromeda-cli/src/cmd_backup.rs",
     "crates/andromeda-cli/src/cmd_restore.rs",
     "crates/andromeda-cli/tests/cli_admin_commands/backup.rs",
@@ -36,24 +35,23 @@ REQUIRED_PATHS = (
 )
 
 EXPECTED_COMMANDS = (
-    "cargo test -p andromeda-storage --test backup_physical_plan_contract --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test backup_execution_plan --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test restore_contract --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test wal_gc_four_boundaries_integration --locked -- --nocapture",
+    "cargo test -p andromeda-backup --test backup_physical_plan_contract --locked -- --nocapture",
+    "cargo test -p andromeda-backup --test backup_execution_plan --locked -- --nocapture",
+    "cargo test -p andromeda-restore --test restore_contract --locked -- --nocapture",
     "cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture",
 )
 
 EXPECTED_DOC_TOKENS = (
     (
-        "docs/runbooks/backup-restore.md",
+        "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
         "Retained audit, `RestoreTrace`, and `RecoveryReport` evidence paths.",
     ),
     (
-        "docs/runbooks/backup-restore.md",
-        "cargo test -p andromeda-storage --test restore_contract",
+        "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
+        "cargo test -p andromeda-restore --test restore_contract",
     ),
     (
-        "docs/runbooks/backup-restore.md",
+        "docs/runbooks/RUNBOOK_BACKUP_RESTORE.md",
         "cargo test -p andromeda-audit --test hadr_backup_audit_contract",
     ),
     (
@@ -61,7 +59,7 @@ EXPECTED_DOC_TOKENS = (
         "Backup validation, restore drill, PITR, retention hold",
     ),
     (
-        "docs/testing/release-gates.md",
+        "docs/testing/RELEASE_GATES.md",
         "Backup/PITR/HA/DR",
     ),
 )

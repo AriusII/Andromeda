@@ -73,5 +73,5 @@ If the model requires production-only behavior that cannot be bounded, split the
 ## References
 
 - `tests/README.md`
-- `docs/testing/fuzz-miri-loom.md`
-- `docs/testing/release-gates.md`
+- `docs/testing/FUZZING_PLAN.md`
+- `docs/testing/RELEASE_GATES.md`

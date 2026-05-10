@@ -15,43 +15,42 @@ from typing import Sequence
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
 EVIDENCE_DOCUMENTS = (
-    Path("docs/runbooks/hadr.md"),
+    Path("docs/operations/HADR_AND_CLUSTER_OPERATIONS.md"),
     Path("docs/runbooks/README.md"),
-    Path("docs/testing/release-gates.md"),
+    Path("docs/testing/RELEASE_GATES.md"),
 )
 
 REQUIRED_PATHS = (
-    "docs/runbooks/hadr.md",
+    "docs/operations/HADR_AND_CLUSTER_OPERATIONS.md",
     "docs/runbooks/README.md",
-    "docs/testing/release-gates.md",
-    "crates/andromeda-storage/tests/hadr_promotion_runtime_contract.rs",
-    "crates/andromeda-storage/tests/hadr_membership_store_contract.rs",
-    "crates/andromeda-storage/tests/quorum_membership_contract.rs",
-    "crates/andromeda-storage/tests/wal_shipping_reclaimability_contract.rs",
-    "crates/andromeda-storage/tests/promotion_boundary_contract.rs",
-    "crates/andromeda-quic/tests/hadr_stream_mapping_contract.rs",
+    "docs/testing/RELEASE_GATES.md",
+    "crates/andromeda-hadr/tests/hadr_promotion_runtime_contract.rs",
+    "crates/andromeda-hadr/tests/hadr_membership_store_contract.rs",
+    "crates/andromeda-hadr/tests/quorum_membership_contract.rs",
+    "crates/andromeda-hadr/tests/wal_shipping_reclaimability_contract.rs",
+    "crates/andromeda-hadr/tests/promotion_boundary_contract.rs",
     "crates/andromeda-audit/tests/hadr_backup_audit_contract.rs",
-    "crates/andromeda-storage/src/hadr",
+    "crates/andromeda-hadr/src",
     "crates/andromeda-cli/src/hadr",
-    "crates/andromeda-quic/src/hadr_streams.rs",
+    "crates/andromeda-hadr/src/hadr_streams.rs",
 )
 
 EXPECTED_COMMANDS = (
-    "cargo test -p andromeda-storage --test hadr_promotion_runtime_contract --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test hadr_membership_store_contract --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test quorum_membership_contract --locked -- --nocapture",
-    "cargo test -p andromeda-storage --test wal_shipping_reclaimability_contract --locked -- --nocapture",
-    "cargo test -p andromeda-quic --test hadr_stream_mapping_contract --locked -- --nocapture",
+    "cargo test -p andromeda-hadr --test hadr_promotion_runtime_contract --locked -- --nocapture",
+    "cargo test -p andromeda-hadr --test hadr_membership_store_contract --locked -- --nocapture",
+    "cargo test -p andromeda-hadr --test quorum_membership_contract --locked -- --nocapture",
+    "cargo test -p andromeda-hadr --test wal_shipping_reclaimability_contract --locked -- --nocapture",
+    "cargo test -p andromeda-hadr --locked hadr_streams",
     "cargo test -p andromeda-audit --test hadr_backup_audit_contract --locked -- --nocapture",
 )
 
 EXPECTED_DOC_TOKENS = (
     (
-        "docs/runbooks/hadr.md",
+        "docs/operations/HADR_AND_CLUSTER_OPERATIONS.md",
         "HA/DR controls are available only through Administration or HA/DR surfaces.",
     ),
     (
-        "docs/runbooks/hadr.md",
+        "docs/operations/HADR_AND_CLUSTER_OPERATIONS.md",
         "cargo test -p andromeda-audit --test hadr_backup_audit_contract",
     ),
     (
@@ -59,7 +58,7 @@ EXPECTED_DOC_TOKENS = (
         "Planned or unplanned HA/DR failover",
     ),
     (
-        "docs/testing/release-gates.md",
+        "docs/testing/RELEASE_GATES.md",
         "Backup/PITR/HA/DR",
     ),
 )

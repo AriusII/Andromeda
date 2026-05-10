@@ -49,6 +49,6 @@ no repository task-runner entry point until a real standalone runner is added.
 
 - `.github/workflows/00-ci.yml`
 - `.github/workflows/release-gate-chain.yml`
-- `docs/governance/supply-chain-policy.md`
+- `docs/adr/ADR-0010-SUPPLY_CHAIN_POLICY.md`
 - `crates/andromeda-catalog-diff/README.md`
 - `.codex/scripts/validate_codex_tooling.py`

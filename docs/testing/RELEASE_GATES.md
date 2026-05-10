@@ -26,6 +26,7 @@ This document applies to Andromeda documentation, implementation planning, and r
 | `backup restore passed` | Must have explicit test evidence or a documented exclusion. |
 | `forensic start passed` | Must have explicit test evidence or a documented exclusion. |
 | `release artifacts identified` | Must have explicit test evidence or a documented exclusion. |
+| `Backup/PITR/HA/DR` | Must have retained restore drill, PITR, quorum, fencing, promotion, and audit evidence or a documented release exclusion. |
 
 
 ## General rules

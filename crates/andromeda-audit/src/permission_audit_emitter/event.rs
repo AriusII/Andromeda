@@ -70,15 +70,14 @@ impl PermissionAuditEvent {
         match &self.decision {
             PermissionDecisionAudit::Allowed => {
                 format!(
-                    "permission allowed: principal {} granted permission {}",
-                    format!("PrincipalId({})", self.principal_id),
-                    self.required_permission
+                    "permission allowed: principal PrincipalId({}) granted permission {}",
+                    self.principal_id, self.required_permission
                 )
             },
             PermissionDecisionAudit::Denied(reason) => {
                 format!(
-                    "permission denied: principal {} - {}",
-                    format!("PrincipalId({})", self.principal_id),
+                    "permission denied: principal PrincipalId({}) - {}",
+                    self.principal_id,
                     reason.explanation()
                 )
             },

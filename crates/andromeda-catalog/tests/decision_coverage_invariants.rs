@@ -9,8 +9,8 @@ fn catalog_spec_path() -> std::path::PathBuf {
         .join("..")
         .join("..")
         .join("docs")
-        .join("specs")
-        .join("catalog-srpl.md")
+        .join("specifications")
+        .join("SPEC_DEFINITION_BATCH_V0.md")
 }
 
 #[test]
@@ -26,7 +26,7 @@ fn catalog_spec_covers_alter_procedure_lifecycle_before_operation_surface_expand
     ] {
         assert!(
             normalized.contains(required),
-            "catalog-srpl.md must cover required Alter Procedure topic: {required}"
+            "SPEC_DEFINITION_BATCH_V0.md must cover required Alter Procedure topic: {required}"
         );
     }
 }
@@ -50,7 +50,7 @@ fn catalog_spec_covers_drop_procedure_lifecycle_before_operation_surface_expands
     ] {
         assert!(
             normalized.contains(&required.to_lowercase()),
-            "catalog-srpl.md must cover required Drop Procedure topic: {required}"
+            "SPEC_DEFINITION_BATCH_V0.md must cover required Drop Procedure topic: {required}"
         );
     }
 }

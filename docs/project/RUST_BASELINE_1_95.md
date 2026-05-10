@@ -39,7 +39,7 @@ resolver = "3"
 
 [workspace.package]
 edition = "2024"
-rust-version = "1.95"
+rust-version = "1.95.0"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

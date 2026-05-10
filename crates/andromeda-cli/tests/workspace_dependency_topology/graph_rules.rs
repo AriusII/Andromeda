@@ -470,13 +470,13 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
         AllowedDependencyRule::new(
             "andromeda-srpl-cardinality may only depend on contract-safe cardinality types",
             "andromeda-srpl-cardinality",
-            &["andromeda-contract"],
+            &["andromeda-procedure-contract"],
         ),
         AllowedDependencyRule::new(
             "andromeda-srpl-ast may only depend on parser-safe language model crates",
             "andromeda-srpl-ast",
             &[
-                "andromeda-contract",
+                "andromeda-procedure-contract",
                 "andromeda-srpl-cardinality",
                 "andromeda-srpl-diagnostics",
                 "andromeda-types",
@@ -486,7 +486,7 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-srpl-parser may only depend on parser-safe language model crates",
             "andromeda-srpl-parser",
             &[
-                "andromeda-contract",
+                "andromeda-procedure-contract",
                 "andromeda-srpl-ast",
                 "andromeda-srpl-cardinality",
                 "andromeda-srpl-diagnostics",
@@ -498,8 +498,8 @@ fn allowed_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-srpl-ir may only depend on contract-safe semantic model crates",
             "andromeda-srpl-ir",
             &[
-                "andromeda-contract",
                 "andromeda-error",
+                "andromeda-procedure-contract",
                 "andromeda-srpl-cardinality",
                 "andromeda-types",
             ],
@@ -737,6 +737,7 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-plan-cache",
                 "andromeda-scenario-evidence",
                 "andromeda-statistics",
+                "andromeda-structured-object",
                 "andromeda-wal",
             ],
         ),
@@ -764,6 +765,7 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
                 "andromeda-recovery",
                 "andromeda-srpl",
                 "andromeda-srpl-binder",
+                "andromeda-srpl-definition-batch",
             ],
         ),
         AllowedDependencyRule::new_for_scope(

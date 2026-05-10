@@ -17,16 +17,16 @@ scope.
 
 - [Documentation index](docs/README.md)
 - [Project status](docs/status.md)
-- [Architecture overview](docs/architecture/README.md)
-- [Domain specifications](docs/specs/README.md)
-- [Operations runbooks](docs/runbooks/README.md)
-- [Testing strategy](docs/testing/README.md)
+- [Architecture overview](docs/architecture/ENGINE_OVERVIEW.md)
+- [Domain specifications](docs/specifications/SPEC_PROCEDURE_CONTRACT_V0.md)
+- [Operations runbooks](docs/runbooks/RUNBOOK_RECOVERY.md)
+- [Testing strategy](docs/testing/TEST_STRATEGY.md)
 
 ## Repository Layout
 
 | Path | Purpose |
 | --- | --- |
-| `crates/` | Rust workspace crates (88 crates total). |
+| `crates/` | Rust workspace crates (89 crates total). |
 | `docs/` | Canonical architecture, specification, governance, implementation, runbook, and testing documentation. |
 | `tests/` | Repository-level test indexes and shared test documentation. |
 | `fuzz/` | Fuzzing targets and corpus organization. |
@@ -48,7 +48,7 @@ New cross-links should target `/docs`.
 
 ## Current Status
 
-- The workspace currently has 88 active crates.
+- The workspace currently has 89 active crates.
 - `/docs` is the canonical documentation surface.
 - The local V0 vertical path remains a prototype, not a production database
   runtime, complete network server, or complete durable storage engine.
@@ -77,10 +77,10 @@ Current readiness must be judged from status docs, release-gate evidence, and
 current validation output. Historical decision records remain useful governance
 context, but they do not by themselves prove current readiness.
 
-- [Architecture decision records](docs/adr/README.md)
-- [Governance documents](docs/governance/README.md)
-- [Implementation roadmap](docs/implementation/roadmap.md)
-- [Extraction status](docs/implementation/extraction-status.md)
+- [Architecture decision records](docs/INDEX.md)
+- [Governance documents](docs/project/FEATURE_ACCEPTANCE_GATE.md)
+- [Implementation roadmap](docs/roadmap/ROADMAP_MASTER.md)
+- [Current repository cross-check](docs/roadmap/00_CURRENT_STATE_CROSS_CHECK.md)
 
 ## Core Validation
 
