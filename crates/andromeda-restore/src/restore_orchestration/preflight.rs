@@ -26,6 +26,11 @@ pub fn validate_restore_artifact_preflight(
     let artifact_root = artifact_root.as_ref();
     let store = map_backup_validation(FileBackedBackupArtifactStore::open_existing(artifact_root))?;
     let record = map_backup_validation(store.validate_artifact_directory(backup_id))?;
+    if !record.has_manifest_bound_catalog_and_audit() {
+        return Err(crate::restore_error(
+            "restore preflight requires current backup artifact manifest with catalog and audit-ledger bindings",
+        ));
+    }
 
     validate_restore_prerequisites(&record.manifest, pitr_target_lsn)?;
     let wal_descriptors = map_backup_validation(record.wal_segment_descriptors())?;
@@ -37,10 +42,13 @@ pub fn validate_restore_artifact_preflight(
         pitr_target_lsn,
         &record.artifact_set.backup_manifest,
         &record.artifact_set.cold_snapshot.artifact,
+        &record.artifact_set.catalog.artifact,
+        &record.artifact_set.audit_ledger.artifact,
         &record.wal_archive_evidence,
     );
 
     Ok(RestoreArtifactPreflight {
+        backup_manifest: record.manifest,
         backup_id,
         artifact_root: store.root().to_path_buf(),
         manifest_format_version: record.manifest_format_version,
@@ -49,6 +57,8 @@ pub fn validate_restore_artifact_preflight(
         source_checkpoint_lsn: record.source_checkpoint_lsn,
         manifest_digest: record.artifact_set.backup_manifest,
         snapshot_digest: record.artifact_set.cold_snapshot.artifact,
+        catalog_digest: record.artifact_set.catalog.artifact,
+        audit_ledger_digest: record.artifact_set.audit_ledger.artifact,
         wal_archive_evidence: record.wal_archive_evidence,
         restore_evidence_checksum,
         replay_segment_count: replay_segments.len(),

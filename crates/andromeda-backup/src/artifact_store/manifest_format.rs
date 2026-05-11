@@ -12,7 +12,8 @@ use super::{
 };
 use crate::{
     artifacts::{
-        BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupColdSnapshotArtifact,
+        BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupAuditLedgerArtifact,
+        BackupCatalogArtifact, BackupColdSnapshotArtifact,
         BackupPhysicalArtifactSet as BackupPhysicalArtifactSetRaw,
         BackupWalSegmentArtifact as BackupWalSegmentArtifactRaw,
     },
@@ -33,14 +34,18 @@ type WalArchiveRange = WalArchiveRangeRaw<Lsn>;
 const ARTIFACT_MANIFEST_FILE_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
 const ARTIFACT_MANIFEST_FORMAT_VERSION_V1: u16 = 1;
 const ARTIFACT_MANIFEST_FORMAT_VERSION_V2: u16 = 2;
-pub(super) const ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
+const ARTIFACT_MANIFEST_FORMAT_VERSION_V3: u16 = 3;
+pub(super) const ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 4;
 const MANIFEST_FILE_HEADER_LEN: usize = ARTIFACT_MANIFEST_FILE_MAGIC.len() + 2 + 8 + 32;
 const BACKUP_ARTIFACT_MANIFEST_MAX_WAL_SEGMENTS: usize = 16_384;
 
 // Durable manifest compatibility policy:
 // - v1 reads are accepted after reconstructing the aggregate WAL archive digest.
 // - v2 reads are accepted with the persisted aggregate WAL archive digest.
-// - v3 is the only write format and must persist compatibility evidence:
+// - v3 reads are accepted with persisted compatibility evidence but without
+//   explicit catalog/audit artifact fields.
+// - v4 is the only write format and must persist compatibility evidence plus
+//   explicit catalog and audit-ledger artifact digests.
 //   manifest format, physical plan format, storage format, and WAL format.
 // Unsupported versions fail closed before any restore preflight can proceed.
 
@@ -52,6 +57,8 @@ pub(super) struct DecodedArtifactManifest {
     pub(super) wal_archive_evidence: BackupWalArchiveEvidence,
     pub(super) compatibility_evidence: BackupArtifactCompatibilityEvidence,
     pub(super) cold_snapshot: BackupColdSnapshotArtifact,
+    pub(super) catalog: Option<BackupCatalogArtifact>,
+    pub(super) audit_ledger: Option<BackupAuditLedgerArtifact>,
     pub(super) wal_segments: Vec<BackupWalSegmentArtifact>,
 }
 
@@ -120,10 +127,14 @@ pub(super) fn encode_manifest_payload(
     evidence: &BackupWalArchiveEvidence,
     compatibility_evidence: BackupArtifactCompatibilityEvidence,
     cold_snapshot: &BackupColdSnapshotArtifact,
+    catalog: &BackupCatalogArtifact,
+    audit_ledger: &BackupAuditLedgerArtifact,
     wal_segments: &[BackupWalSegmentArtifact],
 ) -> BackupResult<Vec<u8>> {
     map_backup_validation(manifest.validate())?;
     map_backup_validation(cold_snapshot.validate_against(manifest))?;
+    map_backup_validation(catalog.validate())?;
+    map_backup_validation(audit_ledger.validate())?;
     evidence.validate_against(manifest, wal_segments)?;
     map_backup_validation(compatibility_evidence.validate())?;
     if compatibility_evidence.manifest_format_version != ARTIFACT_MANIFEST_FORMAT_VERSION
@@ -162,6 +173,12 @@ pub(super) fn encode_manifest_payload(
     push_u32(&mut payload, cold_snapshot.manifest_crc);
     push_digest(&mut payload, cold_snapshot.artifact);
 
+    push_u64(&mut payload, catalog.catalog_version);
+    push_digest(&mut payload, catalog.artifact);
+
+    push_u64(&mut payload, audit_ledger.ledger_epoch);
+    push_digest(&mut payload, audit_ledger.artifact);
+
     push_u64(&mut payload, segment_count);
     for segment in wal_segments {
         push_u64(&mut payload, segment.segment_id);
@@ -173,7 +190,7 @@ pub(super) fn encode_manifest_payload(
         push_digest(&mut payload, segment.artifact);
     }
 
-    // v3 compatibility trailer. It is intentionally placed after the segment
+    // v3+/v4 compatibility trailer. It is intentionally placed after the segment
     // list so v2 fixtures can be produced by truncating this trailer while
     // keeping all earlier offsets stable for corruption tests.
     push_u16(&mut payload, compatibility_evidence.manifest_format_version);
@@ -216,6 +233,7 @@ fn decode_manifest_payload(
         total_bytes: cursor.read_u64()?,
         archive_digest_sha256: match format_version {
             ARTIFACT_MANIFEST_FORMAT_VERSION => cursor.read_array_32()?,
+            ARTIFACT_MANIFEST_FORMAT_VERSION_V3 => cursor.read_array_32()?,
             ARTIFACT_MANIFEST_FORMAT_VERSION_V2 => cursor.read_array_32()?,
             ARTIFACT_MANIFEST_FORMAT_VERSION_V1 => [0; 32],
             _ => {
@@ -233,6 +251,26 @@ fn decode_manifest_payload(
         snapshot_descriptor_hash: cursor.read_array_32()?,
         manifest_crc: cursor.read_u32()?,
         artifact: cursor.read_digest()?,
+    };
+    let (catalog, audit_ledger) = match format_version {
+        ARTIFACT_MANIFEST_FORMAT_VERSION => (
+            Some(BackupCatalogArtifact {
+                catalog_version: cursor.read_u64()?,
+                artifact: cursor.read_digest()?,
+            }),
+            Some(BackupAuditLedgerArtifact {
+                ledger_epoch: cursor.read_u64()?,
+                artifact: cursor.read_digest()?,
+            }),
+        ),
+        ARTIFACT_MANIFEST_FORMAT_VERSION_V1
+        | ARTIFACT_MANIFEST_FORMAT_VERSION_V2
+        | ARTIFACT_MANIFEST_FORMAT_VERSION_V3 => (None, None),
+        _ => {
+            return Err(backup_error(
+                "backup artifact manifest format version is unsupported",
+            ));
+        },
     };
 
     let wal_segment_count = usize::try_from(cursor.read_u64()?)
@@ -264,6 +302,13 @@ fn decode_manifest_payload(
             wal_format_version: cursor.read_u16()?,
             recorded_in_manifest: true,
         },
+        ARTIFACT_MANIFEST_FORMAT_VERSION_V3 => BackupArtifactCompatibilityEvidence {
+            manifest_format_version: cursor.read_u16()?,
+            physical_plan_version: cursor.read_u16()?,
+            storage_format_version: cursor.read_u16()?,
+            wal_format_version: cursor.read_u16()?,
+            recorded_in_manifest: true,
+        },
         ARTIFACT_MANIFEST_FORMAT_VERSION_V1 | ARTIFACT_MANIFEST_FORMAT_VERSION_V2 => {
             // Older manifests predate explicit compatibility persistence.
             // Restore still gets bounded evidence, but callers can distinguish
@@ -288,6 +333,8 @@ fn decode_manifest_payload(
         wal_archive_evidence,
         compatibility_evidence,
         cold_snapshot,
+        catalog,
+        audit_ledger,
         wal_segments,
     };
     map_backup_validation(decoded.compatibility_evidence.validate())?;
@@ -306,18 +353,22 @@ fn decode_manifest_payload(
     decoded
         .wal_archive_evidence
         .validate_against(&decoded.manifest, &decoded.wal_segments)?;
-    map_backup_validation(
-        BackupPhysicalArtifactSet {
-            backup_manifest: BackupArtifactDigest {
-                sha256: [1; 32],
-                crc64: 1,
-                byte_len: 1,
-            },
-            cold_snapshot: decoded.cold_snapshot,
-            wal_segments: decoded.wal_segments.clone(),
-        }
-        .validate_against(&decoded.manifest),
-    )?;
+    if let (Some(catalog), Some(audit_ledger)) = (decoded.catalog, decoded.audit_ledger) {
+        map_backup_validation(
+            BackupPhysicalArtifactSet {
+                backup_manifest: BackupArtifactDigest {
+                    sha256: [1; 32],
+                    crc64: 1,
+                    byte_len: 1,
+                },
+                cold_snapshot: decoded.cold_snapshot,
+                catalog,
+                audit_ledger,
+                wal_segments: decoded.wal_segments.clone(),
+            }
+            .validate_against(&decoded.manifest),
+        )?;
+    }
 
     Ok(decoded)
 }
@@ -336,7 +387,7 @@ fn manifest_payload_capacity(
     has_compatibility_trailer: bool,
 ) -> BackupResult<usize> {
     let trailer_len = if has_compatibility_trailer { 8 } else { 0 };
-    288usize
+    400usize
         .checked_add(
             segment_count
                 .checked_mul(91)
@@ -351,6 +402,7 @@ pub(super) const fn is_supported_manifest_format_version(version: u16) -> bool {
         version,
         ARTIFACT_MANIFEST_FORMAT_VERSION_V1
             | ARTIFACT_MANIFEST_FORMAT_VERSION_V2
+            | ARTIFACT_MANIFEST_FORMAT_VERSION_V3
             | ARTIFACT_MANIFEST_FORMAT_VERSION
     )
 }

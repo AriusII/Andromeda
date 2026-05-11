@@ -27,15 +27,17 @@ pub fn compute_restore_checksum(manifest: &RestoreBackupManifest) -> u64 {
 /// Compute an audit-friendly checksum for restore preflight evidence.
 ///
 /// This binds the selected PITR target to durable artifact evidence: manifest
-/// bytes, snapshot bytes, and aggregate WAL archive evidence. It is not a
-/// replacement for byte-level SHA-256 checks; those are validated before this
-/// value is returned.
+/// bytes, snapshot bytes, catalog bytes, audit-ledger bytes, and aggregate WAL
+/// archive evidence. It is not a replacement for byte-level SHA-256 checks;
+/// those are validated before this value is returned.
 pub(super) fn compute_restore_preflight_checksum(
     manifest: &RestoreBackupManifest,
     manifest_format_version: u16,
     pitr_target_lsn: Lsn,
     manifest_digest: &BackupArtifactDigest,
     snapshot_digest: &BackupArtifactDigest,
+    catalog_digest: &BackupArtifactDigest,
+    audit_ledger_digest: &BackupArtifactDigest,
     wal_archive_evidence: &BackupWalArchiveEvidence,
 ) -> u64 {
     let mut hash = compute_restore_checksum(manifest);
@@ -43,6 +45,8 @@ pub(super) fn compute_restore_preflight_checksum(
     hash = mix_restore_checksum(hash, pitr_target_lsn.get());
     hash = mix_artifact_digest(hash, manifest_digest);
     hash = mix_artifact_digest(hash, snapshot_digest);
+    hash = mix_artifact_digest(hash, catalog_digest);
+    hash = mix_artifact_digest(hash, audit_ledger_digest);
     hash = mix_restore_checksum(hash, wal_archive_evidence.start_lsn.get());
     hash = mix_restore_checksum(hash, wal_archive_evidence.end_lsn.get());
     hash = mix_restore_checksum(hash, wal_archive_evidence.segment_count as u64);

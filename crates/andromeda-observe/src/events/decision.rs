@@ -203,6 +203,96 @@ impl GpuPolicyDecisionTrace {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuExecutionJobClass {
+    Statistics,
+    Analytics,
+    Benchmark,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuExecutionOutcome {
+    Success,
+    Failed(String),
+    Cancelled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GpuValidationOutcome {
+    NotValidated,
+    Validated,
+    Rejected(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GpuExecutionFallbackReason {
+    Disabled,
+    BudgetExceeded,
+    KillSwitchActive,
+    CpuValidationFailed,
+    GpuComputationFailed,
+    DeviceUnavailable,
+    Cancelled,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GpuBudgetTraceEvidence {
+    pub requested_memory_bytes: u64,
+    pub requested_time_ms: u64,
+    pub requested_transfer_bytes: u64,
+    pub budget_memory_bytes: u64,
+    pub budget_time_ms: u64,
+    pub budget_transfer_bytes: u64,
+}
+
+impl GpuBudgetTraceEvidence {
+    pub const fn has_budget_limits(self) -> bool {
+        self.budget_memory_bytes != 0 || self.budget_time_ms != 0 || self.budget_transfer_bytes != 0
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GpuExecutionTraceEvent {
+    pub trace_id: TraceId,
+    pub job_class: GpuExecutionJobClass,
+    pub started_at_unix_ms: u64,
+    pub finished_at_unix_ms: u64,
+    pub outcome: GpuExecutionOutcome,
+    pub validation: GpuValidationOutcome,
+    pub fallback_reason: Option<GpuExecutionFallbackReason>,
+    pub budget_evidence: GpuBudgetTraceEvidence,
+}
+
+impl GpuExecutionTraceEvent {
+    pub fn has_execution_evidence(&self) -> bool {
+        match &self.outcome {
+            GpuExecutionOutcome::Failed(reason) => !reason.trim().is_empty(),
+            GpuExecutionOutcome::Success | GpuExecutionOutcome::Cancelled => true,
+        }
+    }
+
+    pub fn has_validation_evidence(&self) -> bool {
+        match &self.validation {
+            GpuValidationOutcome::Rejected(reason) => !reason.trim().is_empty(),
+            GpuValidationOutcome::NotValidated | GpuValidationOutcome::Validated => true,
+        }
+    }
+
+    pub const fn has_budget_evidence(&self) -> bool {
+        self.budget_evidence.has_budget_limits()
+    }
+
+    pub fn contains_sensitive_evidence(&self) -> bool {
+        match &self.outcome {
+            GpuExecutionOutcome::Failed(reason) if super::contains_sensitive_marker(reason) => true,
+            _ => matches!(
+                &self.validation,
+                GpuValidationOutcome::Rejected(reason) if super::contains_sensitive_marker(reason)
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlacementAuditTransition {
     PlacementDecisionMade,
     SegmentSealed,

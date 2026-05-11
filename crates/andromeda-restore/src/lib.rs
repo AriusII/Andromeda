@@ -3,10 +3,11 @@
 pub mod restore_orchestration;
 
 pub use restore_orchestration::{
-    RecoveryStage, RestoreArtifactPreflight, RestoreAuditTrace, RestoreBackupManifest,
-    RestoreCompletion, RestoreOrchestration, RestoreValidationPolicy, WalSegmentToReplay,
-    compute_restore_checksum, plan_replay_segments, validate_restore_artifact_preflight,
-    validate_restore_prerequisites,
+    RecoveryStage, ReplaySegmentPlanSummaryV0, RestoreArtifactPreflight, RestoreAuditTrace,
+    RestoreBackupManifest, RestoreCompletion, RestoreOrchestration,
+    RestorePlanCompletionEvidenceV0, RestorePlanError, RestorePlanResult, RestorePlanV0,
+    RestoreValidationPolicy, WalSegmentToReplay, compute_restore_checksum, plan_replay_segments,
+    validate_restore_artifact_preflight, validate_restore_prerequisites,
 };
 
 use andromeda_backup::{BackupId, BackupLsn, BackupManifest};

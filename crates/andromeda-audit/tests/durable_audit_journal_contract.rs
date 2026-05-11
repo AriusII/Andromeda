@@ -293,6 +293,23 @@ fn audit_owned_permissioned_records_require_policy_evidence() {
             .contains("permissioned critical AdminDecision records")
     );
 
+    let mut missing_forensic_policy = principal_binding(25, "user:forensic-audit");
+    missing_forensic_policy.permission = Some(Permission::ForensicStart);
+    missing_forensic_policy.surface = Some(SurfaceScope::Administration);
+    missing_forensic_policy.policy_version = None;
+    let err = DurableAuditAppendRecord::new(
+        identity(25, 125, DurableAuditEventFamily::ForensicDecision, 25),
+        missing_forensic_policy,
+        DurableAuditRetentionBoundary::ForensicHold,
+        DurableAuditReplayBehavior::ForensicOnly,
+        "AdminOperation",
+    )
+    .expect_err("permissioned forensic durable audit records require policy evidence");
+    assert!(
+        err.message()
+            .contains("permissioned critical ForensicDecision records")
+    );
+
     let mut zero_policy = principal_binding(29, "user:admin-audit");
     zero_policy.policy_version = Some(SecurityPolicyVersionEvidence {
         policy_version: 0,

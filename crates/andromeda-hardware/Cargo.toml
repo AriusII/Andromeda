@@ -7,3 +7,35 @@ publish = false
 
 [dependencies]
 andromeda-error.workspace = true
+
+# Explicit integration-test targets.
+# `kernel_dispatch_pattern` and `cpu_dispatch_pattern` are stub files that
+# document the Windows UAC naming constraint (binaries named "*kernel*" or
+# "*dispatch*" / "*patch*" trigger elevation, OS error 740).  They are
+# compile-checked by these entries but kept with `test = false` so cargo does
+# not attempt to run them.
+[[test]]
+name = "gpu_policy_contract"
+path = "tests/gpu_policy_contract.rs"
+
+[[test]]
+name = "simd_equivalence_contract"
+path = "tests/simd_equivalence_contract.rs"
+
+[[test]]
+name = "probe_trivial"
+path = "tests/probe_trivial.rs"
+
+[[test]]
+name = "equiv_probe"
+path = "tests/equiv_probe.rs"
+
+[[test]]
+name = "kernel_dispatch_pattern"
+path = "tests/kernel_dispatch_pattern.rs"
+test = false
+
+[[test]]
+name = "cpu_dispatch_pattern"
+path = "tests/cpu_dispatch_pattern.rs"
+test = false

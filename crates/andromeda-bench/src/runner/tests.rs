@@ -29,8 +29,19 @@ fn bounded_runner_produces_deterministic_diagnostic_evidence() {
     let first = run_bounded_benchmark(&request).unwrap();
     let second = run_bounded_benchmark(&request).unwrap();
 
-    assert_eq!(first, second);
-    assert_eq!(first.started_at_unix_ms, 0);
+    // Evidence should have the same structure and values for deterministic fields
+    assert_eq!(first.workload_id, second.workload_id);
+    assert_eq!(first.elapsed_ms, second.elapsed_ms);
+    assert_eq!(first.sample_count, second.sample_count);
+    assert_eq!(first.p50_latency_us, second.p50_latency_us);
+    assert_eq!(first.p95_latency_us, second.p95_latency_us);
+
+    // Timestamps will be different across runs (now captured at runtime)
+    assert!(first.started_at_unix_ms > 0);
+    assert!(second.started_at_unix_ms > 0);
+    // Andromeda project creation baseline: 2023-11-15 00:00:00 UTC = 1700000000000 ms
+    assert!(first.started_at_unix_ms > 1700000000000);
+
     assert_eq!(first.elapsed_ms, 6);
     assert_eq!(first.sample_count, 5);
     assert!(first.workload_hypothesis.contains("protocol contract"));

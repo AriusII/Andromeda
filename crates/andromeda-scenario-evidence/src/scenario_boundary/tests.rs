@@ -303,6 +303,9 @@ fn boundary_from_runtime_evidence_carries_profile_context() {
             5,
             "samples",
         )],
+        commit_sha: None,
+        rustc_version: "unknown",
+        process_pid: 0,
     };
 
     let boundary = BenchmarkScenarioEvidence::from_benchmark_evidence(
@@ -373,6 +376,9 @@ fn boundary_rejects_incoherent_runtime_context() {
             5,
             "ops",
         )],
+        commit_sha: None,
+        rustc_version: "unknown",
+        process_pid: 0,
     };
 
     assert_eq!(

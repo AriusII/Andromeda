@@ -48,6 +48,9 @@ fn evidence_from_request(request: &BenchmarkRunRequest) -> BenchmarkEvidence {
         engine_harness: None,
         synthetic_model_version: Some("regression-test.synthetic.v1"),
         workload_counters: Vec::new(),
+        commit_sha: None,
+        rustc_version: "unknown",
+        process_pid: 0,
     }
 }
 

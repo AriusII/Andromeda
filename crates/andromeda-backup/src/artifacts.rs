@@ -5,6 +5,46 @@ use super::{
     types::{BACKUP_PHYSICAL_PLAN_VERSION_V0, BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0},
 };
 
+/// Catalog artifact persisted in a v4 backup manifest.
+///
+/// `catalog_version` must be nonzero. `artifact.validate()` must pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackupCatalogArtifact {
+    pub catalog_version: u64,
+    pub artifact: BackupArtifactDigest,
+}
+
+impl BackupCatalogArtifact {
+    pub fn validate(&self) -> BackupResult<()> {
+        if self.catalog_version == 0 {
+            return Err(backup_error(
+                "backup catalog artifact catalog version must not be zero",
+            ));
+        }
+        self.artifact.validate("backup catalog artifact")
+    }
+}
+
+/// Audit ledger artifact persisted in a v4 backup manifest.
+///
+/// `ledger_epoch` must be nonzero. `artifact.validate()` must pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BackupAuditLedgerArtifact {
+    pub ledger_epoch: u64,
+    pub artifact: BackupArtifactDigest,
+}
+
+impl BackupAuditLedgerArtifact {
+    pub fn validate(&self) -> BackupResult<()> {
+        if self.ledger_epoch == 0 {
+            return Err(backup_error(
+                "backup audit ledger artifact ledger epoch must not be zero",
+            ));
+        }
+        self.artifact.validate("backup audit ledger artifact")
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BackupArtifactDigest {
     pub sha256: [u8; 32],
@@ -213,6 +253,8 @@ impl<L: BackupLsn> BackupWalSegmentArtifact<L> {
 pub struct BackupPhysicalArtifactSet<L = super::Lsn> {
     pub backup_manifest: BackupArtifactDigest,
     pub cold_snapshot: BackupColdSnapshotArtifact,
+    pub catalog: BackupCatalogArtifact,
+    pub audit_ledger: BackupAuditLedgerArtifact,
     pub wal_segments: Vec<BackupWalSegmentArtifact<L>>,
 }
 
@@ -220,6 +262,8 @@ impl<L: BackupLsn> BackupPhysicalArtifactSet<L> {
     pub fn validate_against(&self, manifest: &BackupManifest<L>) -> BackupResult<()> {
         self.backup_manifest.validate("backup manifest artifact")?;
         self.cold_snapshot.validate_against(manifest)?;
+        self.catalog.validate()?;
+        self.audit_ledger.validate()?;
         validate_wal_segment_chain(manifest.wal_archive, &self.wal_segments)
     }
 

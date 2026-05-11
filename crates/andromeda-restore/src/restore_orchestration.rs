@@ -28,11 +28,14 @@ mod types;
 mod validation;
 
 pub use checksum::compute_restore_checksum;
+pub use error::RestorePlanError;
 pub use preflight::validate_restore_artifact_preflight;
+pub use replay_plan::ReplaySegmentPlanSummaryV0;
 pub use replay_plan::{WalSegmentToReplay, plan_replay_segments};
 pub use types::{
     RecoveryStage, RestoreArtifactPreflight, RestoreAuditTrace, RestoreBackupManifest,
-    RestoreCompletion, RestoreOrchestration, RestoreValidationPolicy,
+    RestoreCompletion, RestoreOrchestration, RestorePlanCompletionEvidenceV0, RestorePlanResult,
+    RestorePlanV0, RestoreValidationPolicy,
 };
 pub use validation::validate_restore_prerequisites;
 

@@ -27,6 +27,13 @@ pub enum DiskManagerError {
     DiskSpaceExhausted { reason: String },
     /// A page flush was attempted before the page LSN was durable in WAL.
     WalFenceViolation { page_lsn: u64, durable_lsn: u64 },
+    /// A temp/spill write was attempted with an invalid `WalIoQueueClass`.
+    ///
+    /// Temp writes must never be classified as `P0Durability`.  Only the
+    /// WAL→commit critical path may hold that class.  This error is returned
+    /// by [`crate::FileDiskManager::atomic_write_page`] and by
+    /// [`crate::FileDiskManager::with_temp_write_class`] when P0 is supplied.
+    QueueClassViolation { reason: String },
 }
 
 impl std::fmt::Display for DiskManagerError {
@@ -59,6 +66,9 @@ impl std::fmt::Display for DiskManagerError {
                 "WAL-before-page flush violated: page LSN {} exceeds durable WAL LSN {}",
                 page_lsn, durable_lsn
             ),
+            Self::QueueClassViolation { reason } => {
+                write!(f, "WAL queue class violation: {}", reason)
+            },
         }
     }
 }

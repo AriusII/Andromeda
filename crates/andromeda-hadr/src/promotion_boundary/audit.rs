@@ -2,7 +2,7 @@ use andromeda_error::AndromedaResult;
 
 use crate::{
     Lsn,
-    cluster_security::HadrClusterSecurityEvidence,
+    cluster_security::{HadrClusterDurableAuditProof, HadrClusterSecurityEvidence},
     fencing::HadrFencingToken,
     quorum::HadrAuditRecord,
     types::{HadrEpoch, HadrNodeId},
@@ -45,6 +45,14 @@ impl HadrPromotionAuditReceipt {
             audit_lsn,
             marker_digest_sha256,
         })
+    }
+}
+
+impl TryFrom<HadrPromotionAuditReceipt> for HadrClusterDurableAuditProof {
+    type Error = andromeda_error::AndromedaError;
+
+    fn try_from(value: HadrPromotionAuditReceipt) -> Result<Self, Self::Error> {
+        HadrClusterDurableAuditProof::new(value.audit_lsn, value.marker_digest_sha256)
     }
 }
 

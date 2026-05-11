@@ -21,7 +21,9 @@ mod crash_recovery_matrix;
 mod fast_start;
 mod file_wal_report;
 mod file_wal_startup;
+mod forensic_report;
 mod forensic_start;
+mod forensic_startup_gate;
 mod planning;
 mod replay;
 mod safe_start;
@@ -58,9 +60,18 @@ pub use file_wal_startup::{
     plan_file_wal_startup_recovery_v0, plan_file_wal_startup_recovery_v0_with_segment_index,
     recover_from_file_wal, recovered_transaction_id_floor_from_records,
 };
+pub use forensic_report::{
+    FORENSIC_REPORT_CODEC_VERSION_V0, FORENSIC_REPORT_MAGIC, ForensicCatalogSection,
+    ForensicIndexSection, ForensicMapRefreshState, ForensicMapsSection,
+    ForensicSecurityAuditSection, ForensicSnapshotSection, ForensicStartReport,
+    ForensicValidationState, ForensicWalSection,
+};
 pub use forensic_start::{
     ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport, ForensicStartAcceptance,
-    forensic_start_from_manifest_and_scan,
+    forensic_start_with_report,
+};
+pub use forensic_startup_gate::{
+    ApplicationSurfaceDisposition, application_surface_disposition, block_application_surface,
 };
 pub use planning::{
     ConceptualRedoPlan, PreRedoStorageFormatDecision, PreRedoStorageFormatGate,

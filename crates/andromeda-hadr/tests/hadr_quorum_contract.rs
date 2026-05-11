@@ -200,12 +200,14 @@ fn wal_shipping_ack_requires_durable_contiguous_validated_batch() -> TestResult 
     assert_eq!(accepted.next_expected_lsn, Lsn::new(4));
 
     let mut tracker = WalReplicaSafeLsnTracker::new([2, 3])?;
+    tracker.record_validated_range(2, accepted.range)?;
     tracker.record_ack(WalShippingAck::new(2, accepted.range.last))?;
 
     assert_eq!(tracker.replica_safe_lsn(2), Some(Lsn::new(3)));
     assert_eq!(tracker.replica_safe_lsn(3), Some(Lsn::ZERO));
     assert!(!tracker.all_required_replicas_have_shipped(accepted.range.last));
 
+    tracker.record_validated_range(3, accepted.range)?;
     tracker.record_ack(WalShippingAck::new(3, accepted.range.last))?;
 
     assert!(tracker.all_required_replicas_have_shipped(accepted.range.last));

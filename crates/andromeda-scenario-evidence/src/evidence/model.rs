@@ -34,6 +34,9 @@ pub struct BenchmarkEvidence {
     pub engine_harness: Option<&'static str>,
     pub synthetic_model_version: Option<&'static str>,
     pub workload_counters: Vec<BenchmarkWorkloadCounter>,
+    pub commit_sha: Option<String>,
+    pub rustc_version: &'static str,
+    pub process_pid: u32,
 }
 
 impl BenchmarkEvidence {

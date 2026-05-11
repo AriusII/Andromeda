@@ -18,5 +18,9 @@ mod pitr_validation;
 mod preflight;
 #[path = "restore_contract/replay_planning.rs"]
 mod replay_planning;
+#[path = "restore_contract/restore_drill_proof.rs"]
+mod restore_drill_proof;
+#[path = "restore_contract/restore_plan_v0.rs"]
+mod restore_plan_v0;
 #[path = "restore_contract/support.rs"]
 mod support;

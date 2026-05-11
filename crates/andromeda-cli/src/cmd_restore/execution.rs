@@ -191,7 +191,7 @@ fn run_restore_preflight(
 
     Ok(RestorePreflightReport {
         pitr_target_lsn,
-        source_checkpoint_lsn: preflight.source_checkpoint_lsn.get(),
+        source_checkpoint_lsn: preflight.source_checkpoint_lsn().get(),
         replay_segments: replay_segments
             .into_iter()
             .map(|segment| RestoreReplaySegmentOutput {

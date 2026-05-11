@@ -4,11 +4,12 @@ use super::{
     AdminOperationTrace, AuditTrace, AuthorizationDeniedTrace, BackpressureTrace,
     CatalogMutationTrace, CommitVisibleTrace, CompletionEmittedTrace, ContractRejectedTrace,
     CorruptionBoundaryTrace, CriticalDecisionKind, DecisionTrace, ExecutionTransitionTrace,
-    FrameRejectionTrace, GpuPolicyDecisionTrace, InvocationTrace, IoBudgetDecisionTrace,
-    IoPlacementDecisionTrace, ManifestEventKind, ManifestTrace, MvccTrace, PlacementAuditEvent,
-    ProtocolEventScope, RecoveryTrace, ResourceTrace, RollbackDurableTrace,
-    SchemaLayoutDecisionTrace, SecurityAuditOutcome, SecurityAuditTrace, StreamRoleRejectionTrace,
-    TransactionTransitionTrace, UnsupportedVersionTrace, WalEventTrace, WalOperation, WalTrace,
+    FrameRejectionTrace, GpuExecutionTraceEvent, GpuPolicyDecisionTrace, HadrAuditTrace,
+    InvocationTrace, IoBudgetDecisionTrace, IoPlacementDecisionTrace, ManifestEventKind,
+    ManifestTrace, MvccTrace, PlacementAuditEvent, ProtocolEventScope, RecoveryTrace,
+    ResourceTrace, RollbackDurableTrace, SchemaLayoutDecisionTrace, SecurityAuditOutcome,
+    SecurityAuditTrace, StreamRoleRejectionTrace, TransactionTransitionTrace,
+    UnsupportedVersionTrace, WalEventTrace, WalOperation, WalTrace,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,8 +41,10 @@ pub enum TraceEvent {
     PlacementAudit(PlacementAuditEvent),
     IoBudgetDecision(IoBudgetDecisionTrace),
     GpuPolicyDecision(GpuPolicyDecisionTrace),
+    GpuExecution(GpuExecutionTraceEvent),
     TransactionTransition(TransactionTransitionTrace),
     ExecutionTransition(ExecutionTransitionTrace),
+    HadrCluster(HadrAuditTrace),
 }
 
 impl TraceEvent {
@@ -74,8 +77,10 @@ impl TraceEvent {
             Self::PlacementAudit(trace) => trace.trace_id,
             Self::IoBudgetDecision(trace) => trace.trace_id,
             Self::GpuPolicyDecision(trace) => trace.trace_id,
+            Self::GpuExecution(trace) => trace.trace_id,
             Self::TransactionTransition(trace) => trace.trace_id,
             Self::ExecutionTransition(trace) => trace.trace_id,
+            Self::HadrCluster(trace) => trace.trace_id,
         }
     }
 
@@ -114,8 +119,10 @@ impl TraceEvent {
             Self::PlacementAudit(_) => CriticalDecisionKind::PlacementAudit,
             Self::IoBudgetDecision(_) => CriticalDecisionKind::IoBudgetValidation,
             Self::GpuPolicyDecision(_) => CriticalDecisionKind::GpuPolicyDecision,
+            Self::GpuExecution(_) => CriticalDecisionKind::GpuExecutionTrace,
             Self::TransactionTransition(_) => CriticalDecisionKind::TransactionTransition,
             Self::ExecutionTransition(_) => CriticalDecisionKind::ExecutionTransition,
+            Self::HadrCluster(_) => CriticalDecisionKind::RecoveryStartup,
         }
     }
 

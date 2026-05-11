@@ -337,6 +337,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "andromeda-gpu"
+version = "0.1.0"
+dependencies = [
+ "andromeda-error",
+ "andromeda-hardware",
+ "andromeda-observability",
+ "andromeda-observe",
+ "andromeda-types",
+]
+
+[[package]]
 name = "andromeda-hadr"
 version = "0.1.0"
 dependencies = [

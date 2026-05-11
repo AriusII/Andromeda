@@ -5,6 +5,8 @@ mod support;
 mod backup_events;
 #[path = "hadr_backup_audit_contract/backup_trace.rs"]
 mod backup_trace;
+#[path = "hadr_backup_audit_contract/cluster_event_trace.rs"]
+mod cluster_event_trace;
 #[path = "hadr_backup_audit_contract/hadr_events.rs"]
 mod hadr_events;
 #[path = "hadr_backup_audit_contract/hadr_trace.rs"]

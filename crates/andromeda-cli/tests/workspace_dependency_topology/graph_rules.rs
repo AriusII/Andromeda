@@ -14,7 +14,7 @@ use std::{
     fs,
     path::PathBuf,
 };
-const WORKSPACE_CRATE_COUNT: usize = 89;
+const WORKSPACE_CRATE_COUNT: usize = 90;
 const C5_DURABLE_KERNEL_CRATES: &[&str] = &[
     "andromeda-backup",
     "andromeda-buffer-pool",

@@ -35,6 +35,9 @@ fn diagnostic_evidence_is_explicit() {
             BenchmarkWorkloadCounter::new("requested_samples", 5, "samples"),
             BenchmarkWorkloadCounter::new("requested_warmups", 1, "warmups"),
         ],
+        commit_sha: None,
+        rustc_version: "unknown",
+        process_pid: 0,
     };
 
     assert!(evidence.diagnostic_only);

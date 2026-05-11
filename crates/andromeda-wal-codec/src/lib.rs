@@ -17,6 +17,7 @@ mod scan;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
+pub use checksum::fnv64_nonzero;
 pub use frame::{
     WalCodecRecordFrame, decode_wal_record_frame, encode_wal_record_frame,
     encoded_wal_record_frame_len,

@@ -199,7 +199,7 @@ fn validate_admin_operation_decision_binding(
     validate_request_session_correlation(record, &subject)?;
 
     let binding = &record.principal_binding;
-    validate_required_binding_evidence(binding, &subject, false)?;
+    validate_required_binding_evidence(binding, &subject, true)?;
     validate_binding_correlation(record, &subject)?;
 
     validate_trace_binding(

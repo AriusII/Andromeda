@@ -24,19 +24,23 @@ pub mod immutability;
 pub mod physical_plan;
 pub mod plan;
 pub mod primitives;
+pub mod recoverable_gate;
+pub mod restore_evidence;
+pub mod retention;
 pub mod scheduler;
 pub mod types;
 pub mod wal_archive_integration;
 
 pub use artifact_store::{
     BackupArtifactManifestRecord, BackupArtifactWriteReport, BackupWalArchiveEvidence,
-    FileBackedBackupArtifactStore,
+    FileBackedBackupArtifactStore, RecoverableBackupArtifactWriteReport,
+    RecoverablePublicationError,
 };
 pub use artifacts::{
-    BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupAuditTraceFields,
-    BackupColdSnapshotArtifact, BackupCompatibility, BackupIncompleteTransactionBoundary,
-    BackupIncompleteTransactionPolicy, BackupPhysicalArtifactSet, BackupResourceBounds,
-    BackupWalSegmentArtifact,
+    BackupArtifactCompatibilityEvidence, BackupArtifactDigest, BackupAuditLedgerArtifact,
+    BackupAuditTraceFields, BackupCatalogArtifact, BackupColdSnapshotArtifact, BackupCompatibility,
+    BackupIncompleteTransactionBoundary, BackupIncompleteTransactionPolicy,
+    BackupPhysicalArtifactSet, BackupResourceBounds, BackupWalSegmentArtifact,
 };
 pub use checkpoint_manager::{
     BackupCheckpoint, BackupCheckpointManager, BackupCheckpointMetadata, BackupRecoveryInfo,
@@ -53,6 +57,9 @@ pub use primitives::{
     BackupCatalogVersion, BackupLsn, BackupTraceId, CatalogVersion, Lsn, TraceId,
     WAL_FORMAT_VERSION,
 };
+pub use recoverable_gate::{AlreadyFinalizedError, RecoverableGate, RecoverableGateError};
+pub use restore_evidence::RestoreEvidence;
+pub use retention::BackupRetentionPolicy;
 pub use scheduler::{BackupIOSchedule, BackupIOScheduler, BackupIOTask};
 pub use types::{
     BACKUP_PHYSICAL_PLAN_VERSION_V0, BACKUP_SUPPORTED_STORAGE_FORMAT_VERSION_V0, BackupId,

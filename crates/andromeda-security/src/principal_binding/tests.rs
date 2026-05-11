@@ -265,6 +265,33 @@ fn admin_action_required_permission_matches_admin_op() {
 }
 
 #[test]
+fn forensic_start_admin_audit_keeps_non_zero_policy_evidence() {
+    let reg = registry_with(vec![binding(
+        "fp-forensic-admin",
+        SurfaceScope::Administration,
+        "ops-forensic",
+        vec![Permission::ForensicStart],
+    )]);
+    let auth = SurfaceAuthorizer::new(&reg);
+
+    let outcome = auth
+        .authorize(
+            TraceId::new(6001),
+            SurfaceScope::Administration,
+            "fp-forensic-admin",
+            SurfaceAction::Admin(AdminOperation::ForensicStart),
+        )
+        .unwrap();
+
+    assert!(outcome.is_allowed());
+    let audit = outcome.audit();
+    assert!(audit.has_policy_version_evidence());
+    assert_ne!(audit.policy_version.policy_version, 0);
+    assert!(audit.policy_version.policy_digest.starts_with("sha256:"));
+    assert!(!audit.contains_sensitive_evidence());
+}
+
+#[test]
 fn fingerprint_evidence_is_sanitized_for_unknown_certs() {
     let reg = registry_with(vec![]);
     let auth = SurfaceAuthorizer::new(&reg);

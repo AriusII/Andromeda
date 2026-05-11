@@ -31,8 +31,10 @@ pub(crate) fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEve
         | TraceEvent::PlacementAudit(_)
         | TraceEvent::IoBudgetDecision(_)
         | TraceEvent::GpuPolicyDecision(_)
+        | TraceEvent::GpuExecution(_)
         | TraceEvent::TransactionTransition(_)
-        | TraceEvent::ExecutionTransition(_) => None,
+        | TraceEvent::ExecutionTransition(_)
+        | TraceEvent::HadrCluster(_) => None,
     }
 }
 

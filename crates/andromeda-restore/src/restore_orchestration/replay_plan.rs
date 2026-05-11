@@ -24,6 +24,28 @@ pub struct WalSegmentToReplay {
     pub replay_stop_lsn: Lsn,
 }
 
+/// Immutable replay segment summary retained in RestorePlanV0 evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReplaySegmentPlanSummaryV0 {
+    pub sequence_index: usize,
+    pub first_lsn: Lsn,
+    pub last_lsn: Lsn,
+    pub replay_stop_lsn: Lsn,
+    pub contains_pitr_target: bool,
+}
+
+impl From<&WalSegmentToReplay> for ReplaySegmentPlanSummaryV0 {
+    fn from(value: &WalSegmentToReplay) -> Self {
+        Self {
+            sequence_index: value.sequence_index,
+            first_lsn: value.segment_descriptor.first_lsn,
+            last_lsn: value.segment_descriptor.last_lsn,
+            replay_stop_lsn: value.replay_stop_lsn,
+            contains_pitr_target: value.contains_pitr_target,
+        }
+    }
+}
+
 /// Plan WAL segment replay sequence to reach PITR target LSN.
 ///
 /// Pure function; no I/O or async.

@@ -19,20 +19,22 @@ use andromeda_wal::{Lsn, WalSegmentDescriptor};
 
 use crate::{
     artifacts::{
-        BackupArtifactCompatibilityEvidence, BackupColdSnapshotArtifact,
-        BackupPhysicalArtifactSet as BackupPhysicalArtifactSetRaw,
+        BackupArtifactCompatibilityEvidence, BackupAuditLedgerArtifact, BackupCatalogArtifact,
+        BackupColdSnapshotArtifact, BackupPhysicalArtifactSet as BackupPhysicalArtifactSetRaw,
         BackupWalSegmentArtifact as BackupWalSegmentArtifactRaw,
     },
     error::{BackupResult, backup_error, map_backup_validation},
     execution_plan::{BackupExecutionPlan, BackupSourceTier},
     plan::BackupManifest as BackupManifestRaw,
+    recoverable_gate::{RecoverableGate, RecoverableGateError},
+    restore_evidence::RestoreEvidence,
     types::BackupId,
 };
 use digest::{compute_wal_archive_digest, digest_bytes};
 use filesystem::{
-    MANIFEST_FILE_NAME, SNAPSHOT_FILE_NAME, WAL_DIRECTORY_NAME, backup_dir_name, io_error,
-    read_file_with_expected_len, read_manifest_file, sync_directory_best_effort, wal_segment_path,
-    write_file_atomically,
+    AUDIT_LEDGER_FILE_NAME, CATALOG_FILE_NAME, MANIFEST_FILE_NAME, SNAPSHOT_FILE_NAME,
+    WAL_DIRECTORY_NAME, backup_dir_name, io_error, read_file_with_expected_len, read_manifest_file,
+    sync_directory_best_effort, wal_segment_path, write_file_atomically,
 };
 
 pub type BackupManifest = BackupManifestRaw<Lsn>;
@@ -111,10 +113,16 @@ pub struct BackupArtifactManifestRecord {
     pub artifact_set: BackupPhysicalArtifactSet,
     pub manifest_path: PathBuf,
     pub snapshot_path: PathBuf,
+    pub catalog_path: PathBuf,
+    pub audit_ledger_path: PathBuf,
     pub wal_segment_paths: Vec<PathBuf>,
 }
 
 impl BackupArtifactManifestRecord {
+    pub const fn has_manifest_bound_catalog_and_audit(&self) -> bool {
+        self.manifest_format_version == ARTIFACT_MANIFEST_FORMAT_VERSION
+    }
+
     pub fn validate_metadata(&self) -> BackupResult<()> {
         map_backup_validation(self.manifest.validate())?;
         if !is_supported_manifest_format_version(self.manifest_format_version) {
@@ -178,15 +186,122 @@ impl BackupArtifactManifestRecord {
 /// Result of writing a physical backup plan to a durable artifact directory.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackupArtifactWriteReport {
-    pub backup_id: BackupId,
-    pub artifact_root: PathBuf,
-    pub manifest_path: PathBuf,
-    pub snapshot_path: PathBuf,
-    pub wal_segment_paths: Vec<PathBuf>,
-    pub source_checkpoint_lsn: Lsn,
-    pub artifact_set: BackupPhysicalArtifactSet,
-    pub wal_archive_evidence: BackupWalArchiveEvidence,
-    pub compatibility_evidence: BackupArtifactCompatibilityEvidence,
+    manifest: BackupManifest,
+    backup_id: BackupId,
+    artifact_root: PathBuf,
+    manifest_path: PathBuf,
+    snapshot_path: PathBuf,
+    catalog_path: PathBuf,
+    audit_ledger_path: PathBuf,
+    wal_segment_paths: Vec<PathBuf>,
+    source_checkpoint_lsn: Lsn,
+    artifact_set: BackupPhysicalArtifactSet,
+    wal_archive_evidence: BackupWalArchiveEvidence,
+    compatibility_evidence: BackupArtifactCompatibilityEvidence,
+}
+
+/// Typed result returned only after restore evidence is validated against the
+/// exact manifest bound to a backup artifact write report.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoverableBackupArtifactWriteReport {
+    write_report: BackupArtifactWriteReport,
+    restore_evidence: RestoreEvidence,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RecoverablePublicationError {
+    InvalidEvidence(RecoverableGateError),
+}
+
+impl core::fmt::Display for RecoverablePublicationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidEvidence(error) => error.fmt(f),
+        }
+    }
+}
+
+impl BackupArtifactWriteReport {
+    pub const fn manifest(&self) -> &BackupManifest {
+        &self.manifest
+    }
+
+    pub const fn backup_id(&self) -> BackupId {
+        self.backup_id
+    }
+
+    pub fn artifact_root(&self) -> &Path {
+        &self.artifact_root
+    }
+
+    pub fn manifest_path(&self) -> &Path {
+        &self.manifest_path
+    }
+
+    pub fn snapshot_path(&self) -> &Path {
+        &self.snapshot_path
+    }
+
+    pub fn catalog_path(&self) -> &Path {
+        &self.catalog_path
+    }
+
+    pub fn audit_ledger_path(&self) -> &Path {
+        &self.audit_ledger_path
+    }
+
+    pub fn wal_segment_paths(&self) -> &[PathBuf] {
+        &self.wal_segment_paths
+    }
+
+    pub const fn source_checkpoint_lsn(&self) -> Lsn {
+        self.source_checkpoint_lsn
+    }
+
+    pub const fn artifact_set(&self) -> &BackupPhysicalArtifactSet {
+        &self.artifact_set
+    }
+
+    pub const fn wal_archive_evidence(&self) -> &BackupWalArchiveEvidence {
+        &self.wal_archive_evidence
+    }
+
+    pub const fn compatibility_evidence(&self) -> &BackupArtifactCompatibilityEvidence {
+        &self.compatibility_evidence
+    }
+
+    /// Build a recoverable gate bound to this write report's exact manifest.
+    pub fn recoverable_gate(&self) -> RecoverableGate<Lsn> {
+        RecoverableGate::new(self.manifest)
+    }
+
+    /// Finalize publication as recoverable.
+    ///
+    /// This is fail-closed: if restore evidence is absent, mismatched, or
+    /// outside the manifest PITR range, no recoverable report is produced.
+    pub fn finalize_recoverable_publication(
+        self,
+        evidence: RestoreEvidence,
+    ) -> Result<RecoverableBackupArtifactWriteReport, RecoverablePublicationError> {
+        self.recoverable_gate()
+            .attach_restore_evidence(evidence)
+            .map_err(RecoverablePublicationError::InvalidEvidence)?;
+
+        Ok(RecoverableBackupArtifactWriteReport {
+            write_report: self,
+            restore_evidence: evidence,
+        })
+    }
+}
+
+impl RecoverableBackupArtifactWriteReport {
+    pub const fn write_report(&self) -> &BackupArtifactWriteReport {
+        &self.write_report
+    }
+
+    pub const fn restore_evidence(&self) -> &RestoreEvidence {
+        &self.restore_evidence
+    }
 }
 
 /// File-backed artifact store rooted at a directory controlled by the caller.
@@ -227,6 +342,8 @@ impl FileBackedBackupArtifactStore {
         plan: &BackupExecutionPlan<S>,
         snapshot_bytes: &[u8],
         wal_segment_bytes: &[&[u8]],
+        catalog_bytes: &[u8],
+        audit_ledger_bytes: &[u8],
     ) -> BackupResult<BackupArtifactWriteReport>
     where
         S: BackupSourceTier,
@@ -258,6 +375,10 @@ impl FileBackedBackupArtifactStore {
         let snapshot_path = backup_dir.join(SNAPSHOT_FILE_NAME);
         write_file_atomically(&snapshot_path, snapshot_bytes)?;
         let snapshot_digest = digest_bytes(snapshot_bytes)?;
+        let catalog_path = backup_dir.join(CATALOG_FILE_NAME);
+        write_file_atomically(&catalog_path, catalog_bytes)?;
+        let audit_ledger_path = backup_dir.join(AUDIT_LEDGER_FILE_NAME);
+        write_file_atomically(&audit_ledger_path, audit_ledger_bytes)?;
 
         let cold_snapshot = BackupColdSnapshotArtifact {
             database_id: plan.manifest.database_id,
@@ -266,6 +387,14 @@ impl FileBackedBackupArtifactStore {
             snapshot_descriptor_hash: plan.manifest.snapshot.snapshot_descriptor_hash,
             manifest_crc: plan.manifest.manifest_crc,
             artifact: snapshot_digest,
+        };
+        let catalog = BackupCatalogArtifact {
+            catalog_version: plan.manifest.created_epoch,
+            artifact: digest_bytes(catalog_bytes)?,
+        };
+        let audit_ledger = BackupAuditLedgerArtifact {
+            ledger_epoch: plan.manifest.created_epoch,
+            artifact: digest_bytes(audit_ledger_bytes)?,
         };
 
         let mut wal_segments = Vec::with_capacity(plan.wal_segment_copy_plan.len());
@@ -306,6 +435,8 @@ impl FileBackedBackupArtifactStore {
             &wal_archive_evidence,
             BackupArtifactCompatibilityEvidence::recorded(ARTIFACT_MANIFEST_FORMAT_VERSION),
             &cold_snapshot,
+            &catalog,
+            &audit_ledger,
             &wal_segments,
         )?;
         let manifest_bytes = encode_manifest_file(&manifest_payload)?;
@@ -316,6 +447,8 @@ impl FileBackedBackupArtifactStore {
         let artifact_set = BackupPhysicalArtifactSet {
             backup_manifest: digest_bytes(&manifest_bytes)?,
             cold_snapshot,
+            catalog,
+            audit_ledger,
             wal_segments,
         };
 
@@ -330,16 +463,21 @@ impl FileBackedBackupArtifactStore {
             artifact_set: artifact_set.clone(),
             manifest_path: manifest_path.clone(),
             snapshot_path: snapshot_path.clone(),
+            catalog_path: catalog_path.clone(),
+            audit_ledger_path: audit_ledger_path.clone(),
             wal_segment_paths: wal_segment_paths.clone(),
         };
         record.validate_metadata()?;
         self.validate_artifact_files(&record)?;
 
         Ok(BackupArtifactWriteReport {
+            manifest: plan.manifest,
             backup_id: plan.manifest.backup_id,
             artifact_root: backup_dir,
             manifest_path,
             snapshot_path,
+            catalog_path,
+            audit_ledger_path,
             wal_segment_paths,
             source_checkpoint_lsn: plan.manifest.snapshot.base_checkpoint_lsn,
             artifact_set,
@@ -348,6 +486,26 @@ impl FileBackedBackupArtifactStore {
                 ARTIFACT_MANIFEST_FORMAT_VERSION,
             ),
         })
+    }
+
+    pub fn write_execution_plan_artifact_strict<S>(
+        &self,
+        plan: &BackupExecutionPlan<S>,
+        snapshot_bytes: &[u8],
+        wal_segment_bytes: &[&[u8]],
+        catalog_bytes: &[u8],
+        audit_ledger_bytes: &[u8],
+    ) -> BackupResult<BackupArtifactWriteReport>
+    where
+        S: BackupSourceTier,
+    {
+        self.write_execution_plan_artifact(
+            plan,
+            snapshot_bytes,
+            wal_segment_bytes,
+            catalog_bytes,
+            audit_ledger_bytes,
+        )
     }
 
     pub fn load_artifact_manifest(
@@ -371,12 +529,25 @@ impl FileBackedBackupArtifactStore {
         }
 
         let snapshot_path = backup_dir.join(SNAPSHOT_FILE_NAME);
+        let catalog_path = backup_dir.join(CATALOG_FILE_NAME);
+        let audit_ledger_path = backup_dir.join(AUDIT_LEDGER_FILE_NAME);
         let wal_segment_paths = decoded
             .wal_segments
             .iter()
             .enumerate()
             .map(|(index, segment)| wal_segment_path(&backup_dir, index, segment.segment_id))
             .collect();
+
+        let catalog = match decoded.catalog {
+            Some(catalog) => catalog,
+            None => reconstruct_legacy_catalog_artifact(&decoded.manifest, &catalog_path)?,
+        };
+        let audit_ledger = match decoded.audit_ledger {
+            Some(audit_ledger) => audit_ledger,
+            None => {
+                reconstruct_legacy_audit_ledger_artifact(&decoded.manifest, &audit_ledger_path)?
+            },
+        };
 
         let record = BackupArtifactManifestRecord {
             manifest: decoded.manifest,
@@ -387,10 +558,14 @@ impl FileBackedBackupArtifactStore {
             artifact_set: BackupPhysicalArtifactSet {
                 backup_manifest: manifest_digest,
                 cold_snapshot: decoded.cold_snapshot,
+                catalog,
+                audit_ledger,
                 wal_segments: decoded.wal_segments,
             },
             manifest_path,
             snapshot_path,
+            catalog_path,
+            audit_ledger_path,
             wal_segment_paths,
         };
         record.validate_metadata()?;
@@ -415,6 +590,28 @@ impl FileBackedBackupArtifactStore {
         let snapshot_digest = digest_bytes(&snapshot_bytes)?;
         if snapshot_digest != record.artifact_set.cold_snapshot.artifact {
             return Err(backup_error("backup snapshot artifact checksum mismatch"));
+        }
+
+        let catalog_bytes = read_file_with_expected_len(
+            &record.catalog_path,
+            record.artifact_set.catalog.artifact.byte_len,
+            "backup catalog",
+        )?;
+        let catalog_digest = digest_bytes(&catalog_bytes)?;
+        if catalog_digest != record.artifact_set.catalog.artifact {
+            return Err(backup_error("backup catalog artifact checksum mismatch"));
+        }
+
+        let audit_ledger_bytes = read_file_with_expected_len(
+            &record.audit_ledger_path,
+            record.artifact_set.audit_ledger.artifact.byte_len,
+            "backup audit ledger",
+        )?;
+        let audit_ledger_digest = digest_bytes(&audit_ledger_bytes)?;
+        if audit_ledger_digest != record.artifact_set.audit_ledger.artifact {
+            return Err(backup_error(
+                "backup audit ledger artifact checksum mismatch",
+            ));
         }
 
         for (path, segment) in record
@@ -453,5 +650,29 @@ fn total_wal_artifact_bytes(wal_segments: &[BackupWalSegmentArtifact]) -> Backup
         total_bytes
             .checked_add(segment.artifact.byte_len)
             .ok_or_else(|| backup_error("backup WAL archive evidence byte total overflow"))
+    })
+}
+
+fn reconstruct_legacy_catalog_artifact(
+    manifest: &BackupManifest,
+    catalog_path: &Path,
+) -> BackupResult<BackupCatalogArtifact> {
+    let catalog_bytes =
+        fs::read(catalog_path).map_err(|err| io_error("read backup catalog", err))?;
+    Ok(BackupCatalogArtifact {
+        catalog_version: manifest.created_epoch,
+        artifact: digest_bytes(&catalog_bytes)?,
+    })
+}
+
+fn reconstruct_legacy_audit_ledger_artifact(
+    manifest: &BackupManifest,
+    audit_ledger_path: &Path,
+) -> BackupResult<BackupAuditLedgerArtifact> {
+    let audit_ledger_bytes =
+        fs::read(audit_ledger_path).map_err(|err| io_error("read backup audit ledger", err))?;
+    Ok(BackupAuditLedgerArtifact {
+        ledger_epoch: manifest.created_epoch,
+        artifact: digest_bytes(&audit_ledger_bytes)?,
     })
 }

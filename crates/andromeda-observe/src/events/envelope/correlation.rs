@@ -11,6 +11,7 @@ pub(super) fn validate(envelope: &EventEnvelope) -> AndromedaResult<()> {
     validate_protocol_scope(envelope)?;
     validate_request_session(envelope)?;
     validate_denied_path(envelope)?;
+    validate_gpu_execution(envelope)?;
     validate_transaction(envelope)?;
     validate_catalog(envelope)
 }
@@ -219,6 +220,40 @@ fn validate_transaction(envelope: &EventEnvelope) -> AndromedaResult<()> {
             )?;
         },
         _ => {},
+    }
+
+    Ok(())
+}
+
+fn validate_gpu_execution(envelope: &EventEnvelope) -> AndromedaResult<()> {
+    if !matches!(envelope.event, TraceEvent::GpuExecution(_)) {
+        return Ok(());
+    }
+
+    if !envelope.correlation.has_no_transaction_evidence() {
+        return Err(observe_error(
+            "GPU execution traces must not include transaction or durable LSN correlation",
+        ));
+    }
+
+    if envelope.correlation.protocol.is_some() {
+        return Err(observe_error(
+            "GPU execution traces must not include protocol correlation",
+        ));
+    }
+
+    if envelope.correlation.request_id.is_some() != envelope.correlation.session_id.is_some() {
+        return Err(observe_error(
+            "GPU execution traces require request_id and session_id correlation to be paired",
+        ));
+    }
+
+    if envelope.correlation.contract_hash.is_some()
+        != envelope.correlation.catalog_version.is_some()
+    {
+        return Err(observe_error(
+            "GPU execution traces require contract_hash and catalog_version correlation to be paired",
+        ));
     }
 
     Ok(())

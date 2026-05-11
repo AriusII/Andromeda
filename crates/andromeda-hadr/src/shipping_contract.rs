@@ -5,14 +5,18 @@
 //! Runtime dispatch and quorum coordination live in adjacent HADR modules.
 
 mod batch;
+mod evidence;
 mod identity;
 mod rejection;
 mod tracker;
 
 pub use batch::{WalReplicaExpectation, WalShipmentAccepted, WalShipmentBatch, WalShipmentRange};
+pub use evidence::{
+    WalShippingEvidenceCodecRejection, WalShippingEvidenceRejectionReason, WalShippingEvidenceV0,
+};
 pub use identity::{WalNodeIdentity, WalNodeRole};
 pub use rejection::WalShipmentRejection;
-pub use tracker::{WalReplicaSafeLsnTracker, WalShippingAck};
+pub use tracker::{WalReplicaSafeLsnTracker, WalShippingAck, WalShippingAckBindingRejection};
 
 #[cfg(test)]
 mod tests;

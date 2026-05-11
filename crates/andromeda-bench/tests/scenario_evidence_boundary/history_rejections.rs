@@ -148,6 +148,9 @@ fn boundary_rejects_workload_measurement_mode_mismatch() {
         engine_harness: Some("ReadOnlyBTreeIndexModel"),
         synthetic_model_version: None,
         workload_counters: vec![BenchmarkWorkloadCounter::new("lookup_operations", 5, "ops")],
+        commit_sha: None,
+        rustc_version: "unknown",
+        process_pid: 0,
     };
 
     let error = BenchmarkScenarioEvidence::from_benchmark_evidence(

@@ -5,13 +5,16 @@
 //! policy mutation code into storage.
 
 use andromeda_audit::{
-    AdminOperation, Permission, SecurityAuditOutcome, SecurityAuditTrace, SurfaceScope,
+    AdminOperation, Permission, PermissionFamily, SecurityAuditOutcome, SecurityAuditTrace,
+    SurfaceScope,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_wal::Lsn;
 
 use super::types::HadrEpoch;
 
 const HADR_CLUSTER_MANIFEST_REASON_MAX_BYTES: usize = 512;
+const HADR_CLUSTER_AUDIT_REASON_MAX_BYTES: usize = 512;
 
 /// HADR cluster operation guarded by cluster-scope security audit evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -83,13 +86,117 @@ impl HadrClusterSecurityEvidence {
     }
 }
 
+/// Durable audit receipt proof that can be enforced at cluster mutation boundaries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct HadrClusterDurableAuditProof {
+    audit_lsn: Lsn,
+    marker_digest_sha256: [u8; 32],
+}
+
+impl HadrClusterDurableAuditProof {
+    pub fn new(audit_lsn: Lsn, marker_digest_sha256: [u8; 32]) -> AndromedaResult<Self> {
+        if audit_lsn == Lsn::ZERO {
+            return Err(hadr_security_error(
+                "HADR durable audit proof requires a non-zero audit LSN",
+            ));
+        }
+        if marker_digest_sha256.iter().all(|byte| *byte == 0) {
+            return Err(hadr_security_error(
+                "HADR durable audit proof requires a non-zero marker digest",
+            ));
+        }
+        Ok(Self {
+            audit_lsn,
+            marker_digest_sha256,
+        })
+    }
+
+    pub const fn audit_lsn(self) -> Lsn {
+        self.audit_lsn
+    }
+
+    pub const fn marker_digest_sha256(self) -> [u8; 32] {
+        self.marker_digest_sha256
+    }
+}
+
+pub fn require_cluster_promotion_admission(
+    security: &HadrClusterSecurityEvidence,
+    durable_audit: Option<&HadrClusterDurableAuditProof>,
+) -> AndromedaResult<()> {
+    security.require_operation(HadrClusterOperation::PromotePrimary)?;
+    if durable_audit.is_none() {
+        return Err(hadr_security_error(
+            "HADR cluster primary promotion requires durable audit proof",
+        ));
+    }
+    Ok(())
+}
+
+pub fn require_cluster_fence_admission(
+    security: &HadrClusterSecurityEvidence,
+) -> AndromedaResult<()> {
+    security.require_operation(HadrClusterOperation::FenceNode)
+}
+
+pub fn require_cluster_manifest_update_admission(
+    security: &HadrClusterSecurityEvidence,
+) -> AndromedaResult<()> {
+    security.require_operation(HadrClusterOperation::UpdateManifest)
+}
+
+pub fn require_wal_shipping_control_admission(
+    required_permission: Permission,
+    audit: &SecurityAuditTrace,
+    durable_audit: Option<&HadrClusterDurableAuditProof>,
+) -> AndromedaResult<()> {
+    if required_permission.family() != PermissionFamily::Cluster
+        || !required_permission.is_admin_operation_permission()
+    {
+        return Err(hadr_security_error(
+            "HADR WAL shipping control requires an explicit cluster admin permission",
+        ));
+    }
+    validate_cluster_permission_audit(
+        "cluster WAL shipping control",
+        required_permission,
+        None,
+        audit,
+    )?;
+    if durable_audit.is_none() {
+        return Err(hadr_security_error(
+            "HADR WAL shipping control requires durable audit proof",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_cluster_security_audit(
     operation: HadrClusterOperation,
+    audit: &SecurityAuditTrace,
+) -> AndromedaResult<()> {
+    validate_cluster_permission_audit(
+        operation.label(),
+        operation.required_permission(),
+        Some(operation.admin_operation()),
+        audit,
+    )
+}
+
+fn validate_cluster_permission_audit(
+    operation_label: &str,
+    required_permission: Permission,
+    required_admin_operation: Option<AdminOperation>,
     audit: &SecurityAuditTrace,
 ) -> AndromedaResult<()> {
     if audit.trace_id.is_zero() {
         return Err(hadr_security_error(
             "HADR cluster security audit evidence requires a non-zero trace id",
+        ));
+    }
+    if !audit.has_supported_schema_version() {
+        return Err(hadr_security_error(
+            "HADR cluster security audit evidence requires a supported schema version",
         ));
     }
     if audit.surface != SurfaceScope::Cluster {
@@ -107,15 +214,18 @@ fn validate_cluster_security_audit(
             "HADR cluster security audit surface must permit the requested permission",
         ));
     }
-    if audit.permission != operation.required_permission()
-        || !audit
-            .permission
-            .authorizes_admin_operation(operation.admin_operation())
-    {
+    if audit.permission != required_permission {
         return Err(hadr_security_error(format!(
             "HADR {} requires {:?} permission",
-            operation.label(),
-            operation.required_permission()
+            operation_label, required_permission
+        )));
+    }
+    if required_admin_operation
+        .is_some_and(|operation| !audit.permission.authorizes_admin_operation(operation))
+    {
+        return Err(hadr_security_error(format!(
+            "HADR {} requires permission/admin operation alignment",
+            operation_label
         )));
     }
     if audit.outcome != SecurityAuditOutcome::Allowed {
@@ -136,6 +246,11 @@ fn validate_cluster_security_audit(
     if !audit.has_reason() {
         return Err(hadr_security_error(
             "HADR cluster security audit evidence requires a reason",
+        ));
+    }
+    if audit.reason.len() > HADR_CLUSTER_AUDIT_REASON_MAX_BYTES {
+        return Err(hadr_security_error(
+            "HADR cluster security audit evidence reason exceeds bounded evidence length",
         ));
     }
     if audit.contains_sensitive_evidence() {
@@ -251,9 +366,35 @@ fn validate_manifest_update_request(
             "HADR manifest update reason exceeds bounded evidence length",
         ));
     }
+    if contains_sensitive_marker(&request.reason) {
+        return Err(hadr_security_error(
+            "HADR manifest update evidence reason must not contain sensitive markers",
+        ));
+    }
     Ok(())
 }
 
 fn hadr_security_error(message: impl Into<String>) -> AndromedaError {
     AndromedaError::new(AndromedaErrorKind::Storage, message)
+}
+
+fn contains_sensitive_marker(text: &str) -> bool {
+    let lowered = text.to_ascii_lowercase();
+    [
+        "-----begin",
+        "private key",
+        "private_key",
+        "bearer ",
+        "credential=",
+        "password=",
+        "passwd=",
+        "secret=",
+        "token=",
+        "authorization:",
+        "x-api-key",
+        "payload:",
+        "payload body",
+    ]
+    .iter()
+    .any(|marker| lowered.contains(marker))
 }

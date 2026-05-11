@@ -1,5 +1,6 @@
 use crate::{
     diagnostics::{relative_slash_path, rust_source_files, strip_rust_comments},
+    forbidden_dependencies::SECURITY_CRITICAL_PATH_CRATES,
     graph_rules::{
         TemporaryDependencyException, assert_temporary_exception_edges_match,
         dev_dependency_back_edges,
@@ -193,6 +194,8 @@ const TEMPORARY_DEV_DEPENDENCY_BACKEDGE_EXCEPTIONS: &[TemporaryDependencyExcepti
     },
 ];
 const TEMPORARY_C5_CORE_FACADE_EXCEPTIONS: &[TemporaryDependencyException] = &[];
+const GPU_RUNTIME_INBOUND_ALLOWLIST: &[&str] = &[];
+const GPU_KERNELS_RUNTIME_INBOUND_ALLOWLIST: &[&str] = &["andromeda-gpu"];
 #[test]
 fn core_facade_does_not_grow_new_local_modules_during_foundation_migration() {
     let core_src = workspace_root().join("crates/andromeda-core/src");
@@ -458,6 +461,59 @@ fn roadmap_runtime_critical_crates_do_not_import_sql_proto_gpu_domains() {
     );
 }
 
+#[test]
+fn andromeda_gpu_stays_leaf_like_with_explicit_runtime_inbound_allowlist() {
+    let manifests = load_crate_manifests(&workspace_root().join("crates"));
+    let mut violations = Vec::new();
+
+    for dependent in runtime_dependents_of(&manifests, "andromeda-gpu") {
+        if !GPU_RUNTIME_INBOUND_ALLOWLIST.contains(&dependent.as_str()) {
+            violations.push(format!(
+                "{dependent} must not add a runtime dependency on andromeda-gpu; allowed runtime dependents: {:?}",
+                GPU_RUNTIME_INBOUND_ALLOWLIST
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-gpu must remain an optional leaf-like crate unless runtime dependents are explicitly allowlisted:\n{}",
+        violations.join("\n")
+    );
+}
+
+#[test]
+fn andromeda_gpu_kernels_stays_outside_c5_and_security_paths_even_if_introduced_later() {
+    let manifests = load_crate_manifests(&workspace_root().join("crates"));
+    let mut violations = Vec::new();
+    let runtime_dependents = runtime_dependents_of(&manifests, "andromeda-gpu-kernels");
+
+    for dependent in &runtime_dependents {
+        if !GPU_KERNELS_RUNTIME_INBOUND_ALLOWLIST.contains(&dependent.as_str()) {
+            violations.push(format!(
+                "{dependent} must not add a runtime dependency on andromeda-gpu-kernels; allowed runtime dependents: {:?}",
+                GPU_KERNELS_RUNTIME_INBOUND_ALLOWLIST
+            ));
+        }
+        if C5_DURABLE_KERNEL_CRATES.contains(&dependent.as_str()) {
+            violations.push(format!(
+                "{dependent} is C5 and must never depend on andromeda-gpu-kernels"
+            ));
+        }
+        if SECURITY_CRITICAL_PATH_CRATES.contains(&dependent.as_str()) {
+            violations.push(format!(
+                "{dependent} is security-critical and must never depend on andromeda-gpu-kernels"
+            ));
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "andromeda-gpu-kernels must stay outside C5/security-critical runtime paths (rule is enforced even if the crate is absent today):\n{}",
+        violations.join("\n")
+    );
+}
+
 fn is_allowed_runtime_critical_proto_dependency(crate_name: &str, dependency: &str) -> bool {
     ALLOWED_RUNTIME_CRITICAL_PROTO_DEPENDENCIES
         .iter()
@@ -472,6 +528,17 @@ fn is_allowed_runtime_critical_proto_source_token(crate_name: &str, token: &str)
         .any(|(allowed_crate, allowed_tokens)| {
             *allowed_crate == crate_name && allowed_tokens.contains(&token)
         })
+}
+
+fn runtime_dependents_of(
+    manifests: &std::collections::BTreeMap<String, crate::manifest_loading::CrateManifest>,
+    dependency: &str,
+) -> BTreeSet<String> {
+    manifests
+        .values()
+        .filter(|manifest| manifest.runtime_dependencies.contains(dependency))
+        .map(|manifest| manifest.package_name.clone())
+        .collect()
 }
 
 fn source_line_contains_token(line: &str, token: &str) -> bool {

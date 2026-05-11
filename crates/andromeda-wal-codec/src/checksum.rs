@@ -19,7 +19,20 @@ pub(crate) fn header_checksum_without_checksum(header: &WalCodecFrameHeader) -> 
     fnv64_nonzero(&bytes)
 }
 
-fn fnv64_nonzero(bytes: &[u8]) -> u64 {
+/// FNV-64a with nonzero guard for WAL frame header checksums.
+///
+/// This is FNV-1a (XOR-then-multiply variant) over 64 bits with the standard
+/// parameters (offset-basis = 0xcbf2_9ce4_8422_2325, prime = 0x0000_0100_0000_01b3).
+/// The only deviation from bare FNV-64a is the nonzero guard: if the FNV-64a
+/// digest of the input is 0, the function returns 1 instead.
+///
+/// **Durable byte contract.** This function is used to compute the header
+/// checksum of WAL record frames persisted to durable storage.  Any change
+/// to this function is a breaking binary-format change and requires a
+/// Doctrine review.  Golden-vector tests in
+/// `andromeda-wal-codec/tests/fnv64_nonzero_golden_vectors.rs` are the
+/// primary regression line.
+pub fn fnv64_nonzero(bytes: &[u8]) -> u64 {
     const FNV_OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
     const FNV_PRIME: u64 = 0x0000_0100_0000_01b3;
     let mut state = FNV_OFFSET;

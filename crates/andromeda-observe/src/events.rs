@@ -39,9 +39,10 @@ use andromeda_observability::ProtocolCorrelation;
 pub(crate) use andromeda_observability::{EventCorrelation, EventId, ProtocolEventScope};
 pub use andromeda_observability::{InvocationTrace, MvccTrace, ResourceTrace};
 pub use decision::{
-    CriticalDecisionKind, DecisionTrace, GpuPolicyDecisionTrace, IoBudgetDecisionTrace,
-    IoPipelineStage, IoPlacementDecisionTrace, IoStorageTier, PlacementAuditEvent,
-    PlacementAuditTransition, SchemaLayoutDecisionTrace,
+    CriticalDecisionKind, DecisionTrace, GpuBudgetTraceEvidence, GpuExecutionFallbackReason,
+    GpuExecutionJobClass, GpuExecutionOutcome, GpuExecutionTraceEvent, GpuPolicyDecisionTrace,
+    GpuValidationOutcome, IoBudgetDecisionTrace, IoPipelineStage, IoPlacementDecisionTrace,
+    IoStorageTier, PlacementAuditEvent, PlacementAuditTransition, SchemaLayoutDecisionTrace,
 };
 pub use durability::{
     CatalogMutationTrace, CommitVisibleTrace, CorruptionBoundaryTrace, ManifestEventKind,

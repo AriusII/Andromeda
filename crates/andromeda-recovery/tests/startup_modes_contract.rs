@@ -1,8 +1,11 @@
 use andromeda_manifest::DatabaseManifest;
 use andromeda_recovery::{
-    ForensicAnomalyKind, ObservedBoundary, fast_start_from_manifest_and_scan,
-    forensic_start_from_manifest_and_scan, safe_start_from_manifest_and_scan,
-    verify_safe_start_invariants,
+    ApplicationSurfaceDisposition, ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport,
+    ForensicCatalogSection, ForensicIndexSection, ForensicMapRefreshState, ForensicMapsSection,
+    ForensicSecurityAuditSection, ForensicSnapshotSection, ForensicStartReport,
+    ForensicValidationState, ForensicWalSection, ObservedBoundary, StartupMode,
+    block_application_surface, fast_start_from_manifest_and_scan, forensic_start_with_report,
+    safe_start_from_manifest_and_scan, verify_safe_start_invariants,
 };
 use andromeda_wal::{Lsn, WalScanResult, WalScanStop, WalScanStopReason};
 
@@ -27,6 +30,58 @@ fn clean_scan() -> WalScanResult {
         last_valid_lsn: Some(Lsn::new(20)),
         stopped: None,
     }
+}
+
+fn valid_forensic_report() -> ForensicStartReport {
+    ForensicStartReport {
+        catalog: ForensicCatalogSection {
+            catalog_version: 1,
+            object_count: 1,
+            validation_state: ForensicValidationState::Validated,
+        },
+        wal: ForensicWalSection {
+            coverage_start_lsn: 10,
+            coverage_end_lsn: 20,
+            anomaly: None,
+            scan_complete: true,
+        },
+        snapshot: ForensicSnapshotSection {
+            snapshot_id: 1,
+            snapshot_hash: [0xAA; 32],
+            manifest_validated: true,
+        },
+        indexes: ForensicIndexSection {
+            segment_index_count: 1,
+            segment_index_validated: true,
+            last_segment_id: 1,
+        },
+        maps: ForensicMapsSection {
+            map_count: 1,
+            refresh_plan_state: ForensicMapRefreshState::Idle,
+            staleness_max_lsn_lag: 0,
+        },
+        security_audit: ForensicSecurityAuditSection {
+            last_audit_lsn: 20,
+            retention_boundary_satisfied: true,
+            audit_record_count: 1,
+        },
+        generated_at_epoch: 1_700_000_000,
+    }
+}
+
+fn valid_forensic_report_for_stop(stop: WalScanStop) -> ForensicStartReport {
+    let mut report = valid_forensic_report();
+    report.wal.anomaly = Some(ForensicAnomalyReport {
+        anomalies: vec![ForensicAnomaly {
+            kind: ForensicAnomalyKind::LsnChainBreak {
+                offset: stop.offset as u64,
+            },
+            detail: "test WAL chain break".to_string(),
+        }],
+        scan_stop: Some(stop),
+    });
+    report.wal.scan_complete = false;
+    report
 }
 
 #[test]
@@ -79,15 +134,14 @@ fn forensic_start_requires_report_and_classifies_chain_breaks() {
         }),
         ..clean_scan()
     };
+    let stop = scan.stopped.expect("fixture carries a WAL scan stop");
 
-    assert!(
-        forensic_start_from_manifest_and_scan(&clean_manifest(), &scan, false)
-            .unwrap_err()
-            .message()
-            .contains("ForensicStart rejected")
-    );
-
-    let proof = forensic_start_from_manifest_and_scan(&clean_manifest(), &scan, true).unwrap();
+    let proof = forensic_start_with_report(
+        &clean_manifest(),
+        &scan,
+        valid_forensic_report_for_stop(stop),
+    )
+    .expect("typed forensic report path must accept a validated report");
     assert!(!proof.replay_allowed());
     assert!(proof.has_chain_break());
     assert_eq!(
@@ -99,4 +153,47 @@ fn forensic_start_requires_report_and_classifies_chain_breaks() {
         ObservedBoundary::ForensicChainBreak
     );
     assert!(!proof.inner.replay_allowed);
+}
+
+#[test]
+fn forensic_start_with_valid_report_always_blocks_application_surface() {
+    let proof =
+        forensic_start_with_report(&clean_manifest(), &clean_scan(), valid_forensic_report())
+            .expect("validated forensic report must be accepted");
+
+    assert_eq!(
+        proof.application_surface_disposition(),
+        ApplicationSurfaceDisposition::BlockForensic,
+        "ForensicStart acceptance must emit BlockForensic disposition"
+    );
+    assert_ne!(
+        proof.application_surface_disposition(),
+        ApplicationSurfaceDisposition::Allow,
+        "ForensicStart must never produce Allow application disposition"
+    );
+    assert!(
+        block_application_surface(StartupMode::ForensicStart),
+        "startup-mode gate must remain blocked for ForensicStart"
+    );
+}
+
+#[test]
+fn forensic_start_rejects_report_claiming_complete_scan_when_wal_stopped() {
+    let scan = WalScanResult {
+        stopped: Some(WalScanStop {
+            reason: WalScanStopReason::LsnGap,
+            offset: 42,
+        }),
+        ..clean_scan()
+    };
+    let stop = scan.stopped.expect("fixture carries a WAL scan stop");
+    let mut report = valid_forensic_report_for_stop(stop);
+    report.wal.scan_complete = true;
+
+    let err = forensic_start_with_report(&clean_manifest(), &scan, report)
+        .expect_err("stopped WAL scan cannot be reported as complete");
+    assert!(
+        err.message().contains("scan_complete"),
+        "unexpected error: {err}"
+    );
 }

@@ -1,5 +1,5 @@
 use crate::support::*;
-use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_backup::{BackupId, BackupRetentionPolicy, FileBackedBackupArtifactStore};
 use andromeda_segment::ExtentState;
 use andromeda_wal::Lsn;
 use andromeda_wal::write_ahead_log::{
@@ -31,11 +31,23 @@ fn file_backed_artifact_store_refuses_to_overwrite_existing_backup_id() {
     );
 
     store
-        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal_bytes.as_slice()],
+            TEST_CATALOG_BYTES,
+            TEST_AUDIT_LEDGER_BYTES,
+        )
         .expect("initial backup artifact write should succeed");
 
     let err = store
-        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal_bytes.as_slice()],
+            TEST_CATALOG_BYTES,
+            TEST_AUDIT_LEDGER_BYTES,
+        )
         .expect_err("backup artifact directory must be immutable for a completed backup id");
 
     assert!(
@@ -83,4 +95,83 @@ fn pitr_retention_boundary_blocks_wal_segment_reclaim_until_window_moves() {
         expired.can_reclaim_segment(&segment),
         ReclaimabilityDecision::Reclaimable
     );
+}
+
+#[test]
+fn backup_retention_policy_rejects_zero_or_inverted_windows() {
+    let zero_start = BackupRetentionPolicy {
+        pitr_window_start_lsn: 0,
+        pitr_window_end_lsn: 200,
+        expires_at_epoch: 1,
+    };
+    assert!(zero_start.validate().is_err());
+
+    let zero_end = BackupRetentionPolicy {
+        pitr_window_start_lsn: 100,
+        pitr_window_end_lsn: 0,
+        expires_at_epoch: 1,
+    };
+    assert!(zero_end.validate().is_err());
+
+    let inverted = BackupRetentionPolicy {
+        pitr_window_start_lsn: 200,
+        pitr_window_end_lsn: 100,
+        expires_at_epoch: 1,
+    };
+    assert!(inverted.validate().is_err());
+}
+
+#[test]
+fn backup_retention_policy_predicate_is_safe_for_pitr_required_artifacts() {
+    let policy = BackupRetentionPolicy {
+        pitr_window_start_lsn: 100,
+        pitr_window_end_lsn: 200,
+        expires_at_epoch: 1_700_000_000,
+    };
+
+    assert!(policy.requires_pitr_artifact(100, 100).unwrap());
+    assert!(policy.requires_pitr_artifact(80, 100).unwrap());
+    assert!(policy.requires_pitr_artifact(150, 250).unwrap());
+    assert!(!policy.requires_pitr_artifact(1, 99).unwrap());
+    assert!(!policy.requires_pitr_artifact(201, 300).unwrap());
+
+    let zero_start = policy.requires_pitr_artifact(0, 10).unwrap_err();
+    assert!(zero_start.message().contains("must not be zero"));
+    let inverted = policy.requires_pitr_artifact(10, 9).unwrap_err();
+    assert!(inverted.message().contains("must not exceed"));
+}
+
+#[test]
+fn backup_retention_policy_predicate_fails_closed_for_unsafe_policy_and_artifact_values() {
+    let zero_expiry_policy = BackupRetentionPolicy {
+        pitr_window_start_lsn: 100,
+        pitr_window_end_lsn: 200,
+        expires_at_epoch: 0,
+    };
+    let zero_expiry = zero_expiry_policy
+        .requires_pitr_artifact(100, 150)
+        .unwrap_err();
+    assert!(
+        zero_expiry
+            .message()
+            .contains("expiry epoch must not be zero")
+    );
+
+    let collapsed_window_policy = BackupRetentionPolicy {
+        pitr_window_start_lsn: 100,
+        pitr_window_end_lsn: 100,
+        expires_at_epoch: 1,
+    };
+    let collapsed_window = collapsed_window_policy
+        .requires_pitr_artifact(100, 150)
+        .unwrap_err();
+    assert!(collapsed_window.message().contains("must precede end LSN"));
+
+    let policy = BackupRetentionPolicy {
+        pitr_window_start_lsn: 100,
+        pitr_window_end_lsn: 200,
+        expires_at_epoch: 1,
+    };
+    let zero_artifact_end = policy.requires_pitr_artifact(100, 0).unwrap_err();
+    assert!(zero_artifact_end.message().contains("must not be zero"));
 }

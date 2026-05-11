@@ -90,6 +90,7 @@ members = [
     "crates/andromeda-types",
     "crates/andromeda-wal-codec",
     "crates/andromeda-wal",
+    "crates/andromeda-gpu",
 ]
 
 [workspace.package]
@@ -186,6 +187,7 @@ andromeda-transaction-log = { path = "crates/andromeda-transaction-log", version
 andromeda-types = { path = "crates/andromeda-types", version = "0.1.0" }
 andromeda-wal = { path = "crates/andromeda-wal", version = "0.1.0" }
 andromeda-wal-codec = { path = "crates/andromeda-wal-codec", version = "0.1.0" }
+andromeda-gpu = { path = "crates/andromeda-gpu", version = "0.1.0", default-features = false }
 
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
 rcgen = { version = "0.14.7" }

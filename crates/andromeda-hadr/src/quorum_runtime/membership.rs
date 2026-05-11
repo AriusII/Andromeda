@@ -87,14 +87,14 @@ impl ReplicaMember {
         primary_durable_lsn.get() as i64 - self.received_lsn.get() as i64
     }
 
-    /// Replica is eligible for promotion if it is alive and not too far behind
-    /// the primary's durable LSN (within ~100 bytes is considered acceptable).
+    /// Replica is eligible for promotion only if it is alive and fully caught up
+    /// to the primary durable LSN (or ahead due to observation skew).
     pub fn is_promotion_eligible(&self, primary_durable_lsn: Lsn) -> bool {
         if !self.health_state.is_alive() {
             return false;
         }
         let distance = self.lsn_distance_from(primary_durable_lsn);
-        distance < 100
+        distance <= 0
     }
 }
 

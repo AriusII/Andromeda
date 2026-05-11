@@ -14,7 +14,9 @@ impl TraceEventFamilyClassified for TraceEvent {
             | TraceEvent::CommitVisible(_)
             | TraceEvent::RollbackDurable(_)
             | TraceEvent::CorruptionBoundary(_) => TraceEventFamily::Wal,
-            TraceEvent::RecoveryStartup(_) => TraceEventFamily::Recovery,
+            TraceEvent::RecoveryStartup(_) | TraceEvent::HadrCluster(_) => {
+                TraceEventFamily::Recovery
+            },
             TraceEvent::Manifest(_) | TraceEvent::CatalogMutation(_) => {
                 TraceEventFamily::ManifestCatalog
             },
@@ -33,7 +35,7 @@ impl TraceEventFamilyClassified for TraceEvent {
             TraceEvent::IoPlacementDecision(_)
             | TraceEvent::PlacementAudit(_)
             | TraceEvent::IoBudgetDecision(_) => TraceEventFamily::Io,
-            TraceEvent::GpuPolicyDecision(_) => TraceEventFamily::Gpu,
+            TraceEvent::GpuPolicyDecision(_) | TraceEvent::GpuExecution(_) => TraceEventFamily::Gpu,
             TraceEvent::Mvcc(_) | TraceEvent::TransactionTransition(_) => {
                 TraceEventFamily::Transaction
             },

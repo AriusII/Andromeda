@@ -1,6 +1,8 @@
 #[path = "io_pipeline_contract/support.rs"]
 mod support;
 
+#[path = "io_pipeline_contract/gpu_execution.rs"]
+mod gpu_execution;
 #[path = "io_pipeline_contract/gpu_policy.rs"]
 mod gpu_policy;
 #[path = "io_pipeline_contract/placement_budget.rs"]

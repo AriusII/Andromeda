@@ -22,12 +22,20 @@ const ARTIFACT_MANIFEST_HEADER_LEN: usize = ARTIFACT_MANIFEST_MAGIC.len() + 2 + 
 const WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET: usize = 140;
 const COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET: usize = 180;
 const COLD_SNAPSHOT_MANIFEST_CRC_PAYLOAD_OFFSET: usize = 228;
-const WAL_SEGMENT_COUNT_PAYLOAD_OFFSET: usize = 280;
+const CATALOG_VERSION_PAYLOAD_OFFSET: usize = 280;
+const CATALOG_DIGEST_PAYLOAD_OFFSET: usize = 288;
+const AUDIT_LEDGER_EPOCH_PAYLOAD_OFFSET: usize = 336;
+const AUDIT_LEDGER_DIGEST_PAYLOAD_OFFSET: usize = 344;
+const WAL_SEGMENT_COUNT_PAYLOAD_OFFSET: usize = 392;
+const CATALOG_AUDIT_PAYLOAD_LEN: usize = 112;
 const COMPATIBILITY_EVIDENCE_PAYLOAD_LEN: usize = 8;
 
-pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
+pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 4;
+pub(crate) const LEGACY_V3_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 3;
 pub(crate) const LEGACY_V2_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 2;
 pub(crate) const LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 1;
+pub(crate) const TEST_CATALOG_BYTES: &[u8] = b"andromeda backup test catalog artifact v4";
+pub(crate) const TEST_AUDIT_LEDGER_BYTES: &[u8] = b"andromeda backup test audit ledger artifact v4";
 
 pub(crate) fn test_extent(
     extent_id: u64,
@@ -191,6 +199,10 @@ pub(crate) fn rewrite_manifest_to_v1_without_archive_digest(path: &Path) {
         |payload| {
             payload
                 .drain(WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32);
+            payload.drain(
+                CATALOG_VERSION_PAYLOAD_OFFSET - 32
+                    ..CATALOG_VERSION_PAYLOAD_OFFSET - 32 + CATALOG_AUDIT_PAYLOAD_LEN,
+            );
             let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
             payload.truncate(legacy_len);
         },
@@ -198,10 +210,30 @@ pub(crate) fn rewrite_manifest_to_v1_without_archive_digest(path: &Path) {
     );
 }
 
+pub(crate) fn rewrite_manifest_to_v3_without_catalog_audit(path: &Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload.drain(
+                CATALOG_VERSION_PAYLOAD_OFFSET
+                    ..CATALOG_VERSION_PAYLOAD_OFFSET + CATALOG_AUDIT_PAYLOAD_LEN,
+            );
+            let compatibility_offset = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
+            payload[compatibility_offset..compatibility_offset + 2]
+                .copy_from_slice(&LEGACY_V3_ARTIFACT_MANIFEST_FORMAT_VERSION.to_le_bytes());
+        },
+        LEGACY_V3_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
 pub(crate) fn rewrite_manifest_to_v2_without_compatibility_evidence(path: &Path) {
     rewrite_manifest_payload(
         path,
         |payload| {
+            payload.drain(
+                CATALOG_VERSION_PAYLOAD_OFFSET
+                    ..CATALOG_VERSION_PAYLOAD_OFFSET + CATALOG_AUDIT_PAYLOAD_LEN,
+            );
             let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
             payload.truncate(legacy_len);
         },
@@ -239,6 +271,49 @@ pub(crate) fn rewrite_cold_snapshot_manifest_version(path: &Path, manifest_versi
             payload[COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET
                 ..COLD_SNAPSHOT_MANIFEST_VERSION_PAYLOAD_OFFSET + 8]
                 .copy_from_slice(&manifest_version.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+pub(crate) fn rewrite_catalog_version(path: &Path, catalog_version: u64) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[CATALOG_VERSION_PAYLOAD_OFFSET..CATALOG_VERSION_PAYLOAD_OFFSET + 8]
+                .copy_from_slice(&catalog_version.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+pub(crate) fn zero_catalog_digest(path: &Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[CATALOG_DIGEST_PAYLOAD_OFFSET..CATALOG_DIGEST_PAYLOAD_OFFSET + 32].fill(0);
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+pub(crate) fn rewrite_audit_ledger_epoch(path: &Path, ledger_epoch: u64) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[AUDIT_LEDGER_EPOCH_PAYLOAD_OFFSET..AUDIT_LEDGER_EPOCH_PAYLOAD_OFFSET + 8]
+                .copy_from_slice(&ledger_epoch.to_le_bytes());
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+pub(crate) fn zero_audit_ledger_digest(path: &Path) {
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[AUDIT_LEDGER_DIGEST_PAYLOAD_OFFSET..AUDIT_LEDGER_DIGEST_PAYLOAD_OFFSET + 32]
+                .fill(0);
         },
         CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
     );

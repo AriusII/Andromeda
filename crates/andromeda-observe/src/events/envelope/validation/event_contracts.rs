@@ -170,6 +170,18 @@ pub(super) fn validate_event_contracts(envelope: &EventEnvelope) -> AndromedaRes
                 "GPU policy decision outcome must match availability, policy, and pipeline",
             ))
         },
+        TraceEvent::GpuExecution(trace) if !trace.has_execution_evidence() => Err(observe_error(
+            "GPU execution traces require explicit execution outcome evidence",
+        )),
+        TraceEvent::GpuExecution(trace) if !trace.has_validation_evidence() => Err(observe_error(
+            "GPU execution traces require explicit validation outcome evidence",
+        )),
+        TraceEvent::GpuExecution(trace) if !trace.has_budget_evidence() => Err(observe_error(
+            "GPU execution traces require explicit budget request and limit evidence",
+        )),
+        TraceEvent::HadrCluster(trace) if !trace.validate() => Err(observe_error(
+            "HADR cluster traces require V0 schema, bounded non-secret reason evidence, consistent result/error fields, and security policy/principal evidence when security-sensitive",
+        )),
         _ => Ok(()),
     }
 }

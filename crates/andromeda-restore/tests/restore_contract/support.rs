@@ -13,21 +13,74 @@ use andromeda_restore::{
 };
 use andromeda_segment::ExtentState;
 use andromeda_wal::{Lsn, WalSegmentDescriptor};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 
 pub(crate) type BackupManifest = BackupManifestRaw<Lsn>;
 
-pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 =
-    backup_support::CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION;
+const ARTIFACT_MANIFEST_MAGIC: &[u8] = b"ANDROMEDA-BACKUP-ARTIFACT-V1\n";
+const ARTIFACT_MANIFEST_HEADER_LEN: usize = ARTIFACT_MANIFEST_MAGIC.len() + 2 + 8 + 32;
+const WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET: usize = 140;
+const CATALOG_VERSION_PAYLOAD_OFFSET: usize = 280;
+const CATALOG_AUDIT_PAYLOAD_LEN: usize = 112;
+const COMPATIBILITY_EVIDENCE_PAYLOAD_LEN: usize = 8;
+
+pub(crate) const CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 = 4;
 pub(crate) const LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION: u16 =
     backup_support::LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION;
 
 pub(crate) fn rewrite_manifest_to_v1_without_archive_digest(path: &Path) {
-    backup_support::rewrite_manifest_to_v1_without_archive_digest(path);
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload
+                .drain(WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32);
+            payload.drain(
+                CATALOG_VERSION_PAYLOAD_OFFSET - 32
+                    ..CATALOG_VERSION_PAYLOAD_OFFSET - 32 + CATALOG_AUDIT_PAYLOAD_LEN,
+            );
+            let legacy_len = payload.len() - COMPATIBILITY_EVIDENCE_PAYLOAD_LEN;
+            payload.truncate(legacy_len);
+        },
+        LEGACY_V1_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
 }
 
 pub(crate) fn zero_manifest_archive_digest(path: &Path) {
-    backup_support::zero_manifest_archive_digest(path);
+    rewrite_manifest_payload(
+        path,
+        |payload| {
+            payload[WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET..WAL_ARCHIVE_DIGEST_PAYLOAD_OFFSET + 32]
+                .fill(0);
+        },
+        CURRENT_ARTIFACT_MANIFEST_FORMAT_VERSION,
+    );
+}
+
+fn rewrite_manifest_payload(
+    path: &Path,
+    mutate_payload: impl FnOnce(&mut Vec<u8>),
+    format_version: u16,
+) {
+    let mut bytes = std::fs::read(path).unwrap();
+    assert_eq!(
+        &bytes[..ARTIFACT_MANIFEST_MAGIC.len()],
+        ARTIFACT_MANIFEST_MAGIC
+    );
+    let mut payload = bytes[ARTIFACT_MANIFEST_HEADER_LEN..].to_vec();
+    mutate_payload(&mut payload);
+
+    bytes.truncate(ARTIFACT_MANIFEST_HEADER_LEN);
+    let version_offset = ARTIFACT_MANIFEST_MAGIC.len();
+    bytes[version_offset..version_offset + 2].copy_from_slice(&format_version.to_le_bytes());
+    let payload_len_offset = version_offset + 2;
+    bytes[payload_len_offset..payload_len_offset + 8]
+        .copy_from_slice(&(payload.len() as u64).to_le_bytes());
+    let checksum_offset = payload_len_offset + 8;
+    let checksum: [u8; 32] = Sha256::digest(&payload).into();
+    bytes[checksum_offset..checksum_offset + 32].copy_from_slice(&checksum);
+    bytes.extend_from_slice(&payload);
+    std::fs::write(path, bytes).unwrap();
 }
 
 pub(crate) fn make_test_manifest() -> BackupManifest {
@@ -90,6 +143,20 @@ pub(crate) fn write_test_artifact(
     temp: &tempfile::TempDir,
     backup_id: BackupId,
 ) -> BackupArtifactWriteReport {
+    write_test_artifact_with_catalog_audit(
+        temp,
+        backup_id,
+        b"restore preflight catalog artifact",
+        b"restore preflight audit ledger artifact",
+    )
+}
+
+pub(crate) fn write_test_artifact_with_catalog_audit(
+    temp: &tempfile::TempDir,
+    backup_id: BackupId,
+    catalog_bytes: &[u8],
+    audit_ledger_bytes: &[u8],
+) -> BackupArtifactWriteReport {
     let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
     let snapshot_bytes = b"restore preflight snapshot artifact";
     let wal_bytes = b"restore preflight wal segment";
@@ -114,6 +181,12 @@ pub(crate) fn write_test_artifact(
     );
 
     store
-        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .write_execution_plan_artifact_strict(
+            &plan,
+            snapshot_bytes,
+            &[wal_bytes.as_slice()],
+            catalog_bytes,
+            audit_ledger_bytes,
+        )
         .unwrap()
 }

@@ -1,6 +1,7 @@
 use andromeda_wal::Lsn;
 
 use super::{
+    checksum::compute_restore_preflight_checksum,
     error::{map_backup_validation, restore_error},
     types::{
         RecoveryStage, RestoreArtifactPreflight, RestoreBackupManifest, RestoreOrchestration,
@@ -32,15 +33,45 @@ pub(super) fn validate_preflight_matches_orchestration(
             "restore preflight backup ID must match backup manifest",
         ));
     }
+    if orchestration.backup_manifest != preflight.backup_manifest {
+        return Err(restore_error(
+            "restore preflight backup manifest must match orchestration manifest",
+        ));
+    }
+    if preflight.manifest_format_version != 4 {
+        return Err(restore_error(
+            "restore preflight requires current backup artifact manifest format",
+        ));
+    }
     if preflight.validation_policy != orchestration.validation_policy {
         return Err(restore_error(
             "restore preflight validation policy must match orchestration policy",
+        ));
+    }
+    if preflight.pitr_target_lsn != orchestration.pitr_target_lsn {
+        return Err(restore_error(
+            "restore preflight PITR target LSN must match orchestration target",
         ));
     }
     if preflight.source_checkpoint_lsn != orchestration.backup_manifest.snapshot.base_checkpoint_lsn
     {
         return Err(restore_error(
             "restore preflight source checkpoint LSN must match backup manifest",
+        ));
+    }
+    let computed_checksum = compute_restore_preflight_checksum(
+        &preflight.backup_manifest,
+        preflight.manifest_format_version,
+        preflight.pitr_target_lsn,
+        &preflight.manifest_digest,
+        &preflight.snapshot_digest,
+        &preflight.catalog_digest,
+        &preflight.audit_ledger_digest,
+        &preflight.wal_archive_evidence,
+    );
+    if preflight.restore_evidence_checksum != computed_checksum {
+        return Err(restore_error(
+            "restore preflight evidence checksum must match preflight artifact graph",
         ));
     }
 

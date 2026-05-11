@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use andromeda_error::AndromedaResult;
 use andromeda_segment::{ExtentDescriptor, ExtentId};
 use andromeda_storage_page::{Lsn, PageId, PageImage};
+use andromeda_wal::WalIoQueueClass;
 
 use crate::PageFlushDurabilityBoundary;
 
@@ -25,6 +26,19 @@ pub struct FileDiskManager {
     pub(crate) temp_dir: PathBuf,
     pub(crate) allocated_page_ranges: Vec<(u64, u64)>, // (start, end) inclusive
     pub(crate) page_integrity_mode: PageIntegrityMode,
+    /// I/O queue classification for all temp/spill writes issued by this manager.
+    ///
+    /// Default: [`WalIoQueueClass::P1Maintenance`].  Must never be set to
+    /// [`WalIoQueueClass::P0Durability`] — that class is reserved for the
+    /// WAL→commit critical path.  Enforced at write time by
+    /// [`Self::atomic_write_page`] and at construction time by
+    /// [`Self::with_temp_write_class`].
+    pub(crate) temp_write_queue_class: WalIoQueueClass,
+    /// Running count of classified temp writes completed by this manager.
+    ///
+    /// Incremented by [`Self::atomic_write_page`] after each successful write.
+    /// Observable via [`Self::temp_write_count`] for integration-test evidence.
+    pub(crate) temp_write_count: u64,
 }
 
 impl FileDiskManager {
@@ -66,6 +80,9 @@ impl FileDiskManager {
             temp_dir,
             allocated_page_ranges: Vec::new(),
             page_integrity_mode: PageIntegrityMode::None,
+            // Default: P1Maintenance — temp writes must never share the P0 commit-critical queue.
+            temp_write_queue_class: WalIoQueueClass::P1Maintenance,
+            temp_write_count: 0,
         })
     }
 
@@ -78,6 +95,59 @@ impl FileDiskManager {
         let mut manager = Self::open(file_path, temp_dir)?;
         manager.page_integrity_mode = page_integrity_mode;
         Ok(manager)
+    }
+
+    /// Returns the I/O queue classification for temp/spill writes issued by this manager.
+    ///
+    /// The default is [`WalIoQueueClass::P1Maintenance`].  This classification is enforced
+    /// at write time: [`Self::atomic_write_page`] returns a typed
+    /// [`DiskManagerError::QueueClassViolation`] if the stored class is ever
+    /// [`WalIoQueueClass::P0Durability`].
+    ///
+    /// # P10 coordination note
+    /// `MapRefresh` writes should also be classified as `P1Maintenance` (not `P0Durability`).
+    /// Callers can use [`Self::with_temp_write_class`] to supply an explicit
+    /// `WalIoQueueClass::P1Maintenance` annotation for all such workloads.
+    #[must_use]
+    pub fn temp_write_queue_class(&self) -> WalIoQueueClass {
+        self.temp_write_queue_class
+    }
+
+    /// Returns the total count of classified temp/spill writes completed by this manager.
+    ///
+    /// Each successful call to [`Self::atomic_write_page`] increments this counter by one.
+    /// Exposed for integration-test observability — the count is NOT durable (it resets on
+    /// manager re-open) and must not be used as authoritative truth.
+    #[must_use]
+    pub fn temp_write_count(&self) -> u64 {
+        self.temp_write_count
+    }
+
+    /// Builder: override the default temp-write queue class.
+    ///
+    /// The default is [`WalIoQueueClass::P1Maintenance`].  Passing any class other
+    /// than [`WalIoQueueClass::P0Durability`] is accepted.
+    ///
+    /// # Errors
+    /// Returns [`DiskManagerError::QueueClassViolation`] immediately if `class` is
+    /// [`WalIoQueueClass::P0Durability`].  Temp/spill writes must never be placed on
+    /// the commit-critical P0 queue — that class is reserved exclusively for the
+    /// WAL→commit path.
+    ///
+    /// # P10 coordination note
+    /// `MapRefresh` writes should pass `WalIoQueueClass::P1Maintenance` here to
+    /// explicitly document their separation from the WAL P0 queue.
+    pub fn with_temp_write_class(mut self, class: WalIoQueueClass) -> AndromedaResult<Self> {
+        if class == WalIoQueueClass::P0Durability {
+            return Err(DiskManagerError::QueueClassViolation {
+                reason: "temp/spill writes must not be classified as P0Durability; \
+                     use P1Maintenance — P0 is reserved for the WAL→commit critical path"
+                    .to_string(),
+            }
+            .into());
+        }
+        self.temp_write_queue_class = class;
+        Ok(self)
     }
 
     /// Register an extent with this disk manager.

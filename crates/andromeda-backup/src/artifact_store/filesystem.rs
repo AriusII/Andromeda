@@ -12,6 +12,8 @@ use crate::{
 
 pub(super) const MANIFEST_FILE_NAME: &str = "backup.manifest";
 pub(super) const SNAPSHOT_FILE_NAME: &str = "snapshot.bin";
+pub(super) const CATALOG_FILE_NAME: &str = "catalog.bin";
+pub(super) const AUDIT_LEDGER_FILE_NAME: &str = "audit-ledger.bin";
 pub(super) const WAL_DIRECTORY_NAME: &str = "wal";
 
 const BACKUP_ARTIFACT_MANIFEST_MAX_FILE_BYTES: u64 = 64 * 1024 * 1024;

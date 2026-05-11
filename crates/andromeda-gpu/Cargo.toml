@@ -1,0 +1,34 @@
+[package]
+name = "andromeda-gpu"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Optional GPU batch acceleration primitives for advisory-only analytical workloads. Never C5."
+
+[dependencies]
+andromeda-error.workspace = true
+andromeda-hardware.workspace = true
+
+[dependencies.andromeda-observe]
+workspace = true
+optional = true
+
+[dependencies.andromeda-observability]
+workspace = true
+optional = true
+
+[dependencies.andromeda-types]
+workspace = true
+optional = true
+
+[features]
+# Enable optional integration with andromeda-observe for emitting GpuExecutionTrace events.
+trace = [
+    "dep:andromeda-observe",
+    "dep:andromeda-observability",
+    "dep:andromeda-types",
+]
+
+[lints]
+workspace = true

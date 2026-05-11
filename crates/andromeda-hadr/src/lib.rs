@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod cluster_manifest;
 mod cluster_security;
 mod fencing;
 pub mod hadr_streams;
@@ -16,6 +17,7 @@ pub mod shipping_contract;
 pub mod shipping_runtime;
 mod types;
 
+pub use cluster_manifest::*;
 pub use cluster_security::*;
 pub use fencing::*;
 pub use hadr_streams::{

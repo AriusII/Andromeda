@@ -35,6 +35,10 @@ fn event_has_sensitive_marker(event: &TraceEvent) -> bool {
         TraceEvent::PlacementAudit(trace) => contains_sensitive_marker(&trace.reason),
         TraceEvent::IoBudgetDecision(trace) => contains_sensitive_marker(&trace.reason),
         TraceEvent::GpuPolicyDecision(trace) => contains_sensitive_marker(&trace.reason),
+        TraceEvent::GpuExecution(trace) => trace.contains_sensitive_evidence(),
+        TraceEvent::HadrCluster(trace) => {
+            contains_sensitive_marker(&trace.principal) || trace.event.contains_sensitive_evidence()
+        },
         TraceEvent::Audit(trace) => {
             contains_sensitive_marker(&trace.actor)
                 || contains_sensitive_marker(&trace.object)

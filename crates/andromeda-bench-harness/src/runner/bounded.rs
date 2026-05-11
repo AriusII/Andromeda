@@ -12,6 +12,12 @@ pub fn run_bounded_benchmark_with_latency_dispatch(
         &BenchmarkRunRequest,
     ) -> Result<LatencyEvidence, BenchmarkError>,
 ) -> Result<BenchmarkEvidence, BenchmarkError> {
+    // Capture the current timestamp at the start of the benchmark
+    let started_at_unix_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0);
+
     let workload = request.validate()?;
     let _profile = request.hardware_profile.materialize();
 
@@ -28,6 +34,17 @@ pub fn run_bounded_benchmark_with_latency_dispatch(
     let requested_iterations = u64::from(request.samples) + u64::from(request.warmups);
     let elapsed_ms = request.duration_ms.min(requested_iterations.max(1));
 
+    // Capture commit SHA from environment variable if available
+    let commit_sha = option_env!("VERGEN_GIT_SHA")
+        .or_else(|| option_env!("GIT_COMMIT"))
+        .map(|s| s.to_string());
+
+    // Capture rustc version from environment variable, or use default
+    let rustc_version = option_env!("RUSTC_VERSION").unwrap_or("unknown");
+
+    // Get the current process ID
+    let process_pid = std::process::id();
+
     Ok(BenchmarkEvidence {
         workload_id: workload.id.to_string(),
         workload_hypothesis: workload.hypothesis,
@@ -42,7 +59,7 @@ pub fn run_bounded_benchmark_with_latency_dispatch(
         samples: request.samples,
         warmups: request.warmups,
         temp_budget_bytes: request.temp_budget_bytes,
-        started_at_unix_ms: 0,
+        started_at_unix_ms,
         elapsed_ms,
         sample_count,
         p50_latency_us: latency_evidence.p50_latency_us,
@@ -56,5 +73,8 @@ pub fn run_bounded_benchmark_with_latency_dispatch(
         engine_harness: latency_evidence.engine_harness,
         synthetic_model_version: latency_evidence.synthetic_model_version,
         workload_counters: latency_evidence.workload_counters,
+        commit_sha,
+        rustc_version,
+        process_pid,
     })
 }

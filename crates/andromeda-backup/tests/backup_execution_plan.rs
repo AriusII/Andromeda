@@ -8,6 +8,8 @@
 //! - WAL archive range coverage and evidence
 //! - compatibility and failure modes for artifact validation
 
+#[path = "backup_execution_plan/artifact_dto_validation.rs"]
+mod artifact_dto_validation;
 #[path = "backup_execution_plan/compatibility_failure_modes.rs"]
 mod compatibility_failure_modes;
 #[path = "backup_execution_plan/manifest.rs"]
@@ -16,6 +18,8 @@ mod manifest;
 mod physical_plan;
 #[path = "backup_execution_plan/pitr.rs"]
 mod pitr;
+#[path = "backup_execution_plan/recoverable_gate.rs"]
+mod recoverable_gate;
 #[path = "backup_execution_plan/retention.rs"]
 mod retention;
 #[path = "backup_execution_plan/support.rs"]

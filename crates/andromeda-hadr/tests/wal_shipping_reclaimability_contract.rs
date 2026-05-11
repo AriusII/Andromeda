@@ -1,9 +1,21 @@
-use andromeda_hadr::shipping_contract::{WalReplicaSafeLsnTracker, WalShippingAck};
+use andromeda_hadr::shipping_contract::{
+    WalReplicaSafeLsnTracker, WalShipmentRange, WalShippingAck,
+};
 use andromeda_wal::Lsn;
 
 #[test]
 fn shipped_catalog_publication_marks_storage_lsn_boundary_replica_safe() {
     let mut tracker = WalReplicaSafeLsnTracker::new([2]).expect("tracker");
+    tracker
+        .record_validated_range(
+            2,
+            WalShipmentRange {
+                first: Lsn::new(1),
+                last: Lsn::new(20),
+                count: 20,
+            },
+        )
+        .expect("catalog publication range validated");
     tracker
         .record_ack(WalShippingAck::new(2, Lsn::new(20)))
         .expect("catalog publication shipped");

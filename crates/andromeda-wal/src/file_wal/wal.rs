@@ -47,6 +47,24 @@ pub struct FileWal {
     /// via [`Self::observer`].  Buffer-pool callers read this to gate page
     /// flush eligibility with `Acquire` ordering.
     shared_durable_lsn: Arc<AtomicU64>,
+    /// Queue separation evidence asserted by every [`Self::flush_through`] call.
+    ///
+    /// Default: [`WalQueueSeparationEvidence::p0_durable()`] — i.e.
+    /// `queue_class = P0Durability` and `shares_queue_with_temp_spill = false`.
+    /// This is the **safe conservative default**: it asserts that the P0 WAL
+    /// flush is NOT sharing a logical queue with temp/spill.
+    ///
+    /// Callers that detect a shared-device configuration MUST pass an explicit
+    /// evidence value via [`Self::with_flush_separation`].  If the resulting
+    /// evidence would be invalid (P0 + shared = true), [`Self::flush_through`]
+    /// returns a typed [`andromeda_error::AndromedaError`] before performing
+    /// any I/O.
+    ///
+    /// # Backward compatibility
+    /// Existing callers that do not call [`Self::with_flush_separation`] retain
+    /// the p0_durable default, which always passes validation.  No silent
+    /// acceptance of a shared queue is possible under this default.
+    flush_separation: WalQueueSeparationEvidence,
 }
 
 impl FileWal {
@@ -114,6 +132,11 @@ impl FileWal {
             // that any observer created immediately after open() reports the
             // correct value without requiring an extra flush_through call.
             shared_durable_lsn: Arc::new(AtomicU64::new(durable_lsn.get())),
+            // Default: p0_durable() — asserts that WAL flush is NOT sharing a
+            // logical queue with temp/spill.  This is the safe conservative
+            // default; existing callers that do not supply explicit separation
+            // configuration are covered by this assertion automatically.
+            flush_separation: WalQueueSeparationEvidence::p0_durable(),
         })
     }
 
@@ -146,6 +169,37 @@ impl FileWal {
     #[must_use]
     pub fn observer(&self) -> FileWalDurabilityObserver {
         FileWalDurabilityObserver::from_shared(Arc::clone(&self.shared_durable_lsn))
+    }
+
+    /// Returns the queue separation evidence configured for all [`Self::flush_through`] calls.
+    ///
+    /// The default is [`WalQueueSeparationEvidence::p0_durable()`] —
+    /// `queue_class = P0Durability`, `shares_queue_with_temp_spill = false`.
+    /// Integration tests can use this accessor to assert that the WAL flush
+    /// invariant holds at runtime without relying on the optional metrics path.
+    #[must_use]
+    pub fn flush_separation_evidence(&self) -> WalQueueSeparationEvidence {
+        self.flush_separation
+    }
+
+    /// Builder: override the queue separation evidence used by [`Self::flush_through`].
+    ///
+    /// The default is [`WalQueueSeparationEvidence::p0_durable()`] which asserts that
+    /// separation holds (`shares_queue_with_temp_spill = false`).
+    ///
+    /// Callers that detect a shared-device configuration should pass explicit evidence
+    /// here; [`Self::flush_through`] will call `.validate()` on it and return a typed
+    /// error if the evidence is invalid (e.g., P0 + shared = true).
+    ///
+    /// # P10 coordination note
+    /// `MapRefresh` writes are classified `P1Maintenance` and are NOT WAL flushes.
+    /// This builder is for WAL flush evidence only.  The [`crate::WalIoQueueClass`]
+    /// type is shared and can represent `MapRefresh` as `P1Maintenance` without
+    /// any changes to this API.
+    #[must_use]
+    pub fn with_flush_separation(mut self, separation: WalQueueSeparationEvidence) -> Self {
+        self.flush_separation = separation;
+        self
     }
 
     pub const fn durable_bytes(&self) -> u64 {
@@ -237,7 +291,31 @@ impl FileWal {
         self.append_payload(WalRecordKind::TxRollback, Some(transaction_id), Vec::new())
     }
 
+    /// Flush WAL records through `lsn` to disk and advance the durable LSN.
+    ///
+    /// # C5 invariant
+    /// Calls [`WalQueueSeparationEvidence::validate`] on the configured
+    /// [`Self::flush_separation`] evidence before performing any I/O.  If the
+    /// evidence indicates that the P0 WAL flush queue shares a logical queue
+    /// with temp/spill (i.e., `P0Durability + shares_queue_with_temp_spill = true`),
+    /// this method returns a typed error without touching the WAL file.
+    ///
+    /// The default evidence is [`WalQueueSeparationEvidence::p0_durable()`]
+    /// (`shares_queue_with_temp_spill = false`) which always passes validation.
+    /// Existing callers that do not call [`Self::with_flush_separation`] are
+    /// unaffected.
+    ///
+    /// # Errors
+    /// Returns an error if queue separation is violated, if `lsn` is beyond
+    /// the last appended record, or if the underlying `sync_data()` call fails.
     pub fn flush_through(&mut self, lsn: Lsn) -> AndromedaResult<Lsn> {
+        // C5 invariant: P0 WAL flush must not share the logical I/O queue with
+        // temp/spill.  This is non-advisory: queue separation is commit-critical.
+        // The default configuration (p0_durable) always passes.  Callers that
+        // configure P0Durability + shares_queue_with_temp_spill = true will
+        // receive a typed error here, before any I/O is attempted.
+        self.flush_separation.validate()?;
+
         let Some(lsn) = append_chain::validate_flush_target(
             lsn,
             self.durable_lsn,

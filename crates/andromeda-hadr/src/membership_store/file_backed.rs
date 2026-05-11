@@ -1,5 +1,5 @@
 use std::{
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
 };
@@ -90,10 +90,18 @@ impl FileBackedHadrMembershipStore {
         if backup_path.exists() {
             fs::remove_file(&backup_path)
                 .map_err(|err| io_error("remove stale HADR membership backup file", err))?;
+            sync_parent_directory(
+                &backup_path,
+                "sync HADR membership directory after removing stale backup",
+            )?;
         }
         if self.path.exists() {
             fs::rename(&self.path, &backup_path)
                 .map_err(|err| io_error("backup HADR membership file", err))?;
+            sync_parent_directory(
+                &backup_path,
+                "sync HADR membership directory after backing up membership file",
+            )?;
         }
         if let Err(err) = fs::rename(&tmp_path, &self.path) {
             if backup_path.exists() && !self.path.exists() {
@@ -101,13 +109,59 @@ impl FileBackedHadrMembershipStore {
             }
             return Err(io_error("rename HADR membership temp file", err));
         }
+        sync_file(&self.path, "sync published HADR membership file")?;
+        sync_parent_directory(
+            &self.path,
+            "sync HADR membership directory after publishing membership file",
+        )?;
 
         if backup_path.exists() {
-            let _ = fs::remove_file(&backup_path);
+            fs::remove_file(&backup_path)
+                .map_err(|err| io_error("remove committed HADR membership backup file", err))?;
+            sync_parent_directory(
+                &backup_path,
+                "sync HADR membership directory after removing committed backup",
+            )?;
         }
 
         Ok(())
     }
+}
+
+fn sync_file(path: &Path, action: &'static str) -> AndromedaResult<()> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+        .map_err(|err| io_error(action, err))?;
+    file.sync_all().map_err(|err| io_error(action, err))
+}
+
+fn sync_parent_directory(path: &Path, action: &'static str) -> AndromedaResult<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    sync_directory(parent, action)
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path, action: &'static str) -> AndromedaResult<()> {
+    let dir = File::open(path).map_err(|err| io_error(action, err))?;
+    dir.sync_all().map_err(|err| io_error(action, err))
+}
+
+#[cfg(windows)]
+fn sync_directory(path: &Path, action: &'static str) -> AndromedaResult<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+
+    let dir = OpenOptions::new()
+        .read(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(path)
+        .map_err(|err| io_error(action, err))?;
+    dir.sync_all().map_err(|err| io_error(action, err))
 }
 
 impl HadrMembershipStore for FileBackedHadrMembershipStore {

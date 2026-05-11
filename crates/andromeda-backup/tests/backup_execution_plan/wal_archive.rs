@@ -1,5 +1,5 @@
 use crate::support::*;
-use andromeda_backup::{BackupId, FileBackedBackupArtifactStore};
+use andromeda_backup::{BackupId, FileBackedBackupArtifactStore, WalArchiveIntegration};
 use andromeda_segment::ExtentState;
 use andromeda_wal::Lsn;
 
@@ -188,6 +188,58 @@ fn test_backup_rejects_incomplete_wal() {
 }
 
 #[test]
+fn backup_plan_rejects_missing_wal_segment_coverage_entirely() {
+    let manifest = test_manifest(41, 101, 500);
+    let extent = test_extent(1, 1000, 100, ExtentState::PublishedCold);
+    let missing_wal_plan = backup_plan(
+        manifest,
+        vec![cold_extent_copy_task(extent, 100 * 4096)],
+        vec![],
+        false,
+        100 * 4096,
+        0,
+    );
+
+    let err = missing_wal_plan
+        .validate()
+        .expect_err("plan must fail when no WAL segment covers the archive");
+    assert!(
+        err.message()
+            .contains("must include at least one WAL segment"),
+        "unexpected error: {err}"
+    );
+}
+
+#[test]
+fn wal_archive_target_validation_fails_closed_for_zero_before_and_after_bounds() {
+    let manifest = test_manifest(42, 101, 200);
+
+    let zero = WalArchiveIntegration::validate_pitr_target(&manifest, Lsn::new(0)).unwrap_err();
+    assert!(
+        zero.message().contains("must not be zero"),
+        "unexpected error: {zero}"
+    );
+
+    let before_base =
+        WalArchiveIntegration::validate_pitr_target(&manifest, Lsn::new(99)).unwrap_err();
+    assert!(
+        before_base
+            .message()
+            .contains("precedes earliest restorable"),
+        "unexpected error: {before_base}"
+    );
+
+    let after_archive =
+        WalArchiveIntegration::validate_pitr_target(&manifest, Lsn::new(201)).unwrap_err();
+    assert!(
+        after_archive
+            .message()
+            .contains("exceeds latest restorable"),
+        "unexpected error: {after_archive}"
+    );
+}
+
+#[test]
 fn file_backed_artifact_store_rejects_zero_wal_archive_evidence_digest() {
     let temp = temp_dir();
     let store = FileBackedBackupArtifactStore::open(temp.path()).unwrap();
@@ -208,9 +260,15 @@ fn file_backed_artifact_store_rejects_zero_wal_archive_evidence_digest() {
     );
 
     let report = store
-        .write_execution_plan_artifact(&plan, snapshot_bytes, &[wal_bytes.as_slice()])
+        .write_execution_plan_artifact(
+            &plan,
+            snapshot_bytes,
+            &[wal_bytes.as_slice()],
+            TEST_CATALOG_BYTES,
+            TEST_AUDIT_LEDGER_BYTES,
+        )
         .unwrap();
-    zero_manifest_archive_digest(&report.manifest_path);
+    zero_manifest_archive_digest(report.manifest_path());
 
     let err = store
         .validate_artifact_directory(BackupId::new(58))

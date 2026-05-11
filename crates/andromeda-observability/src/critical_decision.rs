@@ -32,6 +32,7 @@ pub enum CriticalDecisionKind {
     PlacementAudit,
     IoBudgetValidation,
     GpuPolicyDecision,
+    GpuExecutionTrace,
     TransactionTransition,
     ExecutionTransition,
 }

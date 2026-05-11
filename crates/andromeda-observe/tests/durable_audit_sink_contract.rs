@@ -71,6 +71,49 @@ fn pending_durable_audit_record_maps_admin_operation_families() {
     )
     .expect("cluster admin operation is durable-audit eligible");
     assert_eq!(hadr.identity.family, DurableAuditEventFamily::HadrDecision);
+
+    let forensic = PendingDurableAuditRecord::new(
+        4,
+        admin_principal_binding(22, SurfaceScope::Administration, Permission::ForensicStart),
+        DurableAuditRetentionBoundary::ForensicHold,
+        DurableAuditReplayBehavior::ForensicOnly,
+        admin_envelope(
+            22,
+            122,
+            AdminOperation::ForensicStart,
+            SurfaceScope::Administration,
+            Permission::ForensicStart,
+        ),
+    )
+    .expect("forensic start admin operation is durable-audit eligible");
+    assert_eq!(
+        forensic.identity.family,
+        DurableAuditEventFamily::ForensicDecision
+    );
+}
+
+#[test]
+fn pending_durable_forensic_record_fails_closed_without_policy_evidence() {
+    let mut binding =
+        admin_principal_binding(30, SurfaceScope::Administration, Permission::ForensicStart);
+    binding.policy_version = None;
+
+    let err = PendingDurableAuditRecord::new(
+        6,
+        binding,
+        DurableAuditRetentionBoundary::ForensicHold,
+        DurableAuditReplayBehavior::ForensicOnly,
+        admin_envelope(
+            30,
+            130,
+            AdminOperation::ForensicStart,
+            SurfaceScope::Administration,
+            Permission::ForensicStart,
+        ),
+    )
+    .expect_err("forensic/admin durable records require policy evidence");
+
+    assert!(err.message().contains("policy version evidence"));
 }
 
 #[test]

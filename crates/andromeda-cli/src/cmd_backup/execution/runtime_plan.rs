@@ -13,6 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const RUNTIME_SNAPSHOT_BYTES: &[u8] = b"andromeda-cli file-backed backup snapshot fixture v1";
 const RUNTIME_WAL_SEGMENT_0_BYTES: &[u8] = b"andromeda-cli file-backed backup wal segment 0 v1";
 const RUNTIME_WAL_SEGMENT_1_BYTES: &[u8] = b"andromeda-cli file-backed backup wal segment 1 v1";
+const RUNTIME_CATALOG_BYTES: &[u8] = b"andromeda-cli file-backed backup catalog fixture v1";
+const RUNTIME_AUDIT_LEDGER_BYTES: &[u8] =
+    b"andromeda-cli file-backed backup audit-ledger fixture v1";
 
 pub(super) struct RuntimeBackupExecutionReport {
     pub(super) backup_id: u64,
@@ -37,7 +40,13 @@ pub(super) fn execute_file_backed_backup(
     })?;
     let wal_segments = [RUNTIME_WAL_SEGMENT_0_BYTES, RUNTIME_WAL_SEGMENT_1_BYTES];
     let report = store
-        .write_execution_plan_artifact(&plan, RUNTIME_SNAPSHOT_BYTES, &wal_segments)
+        .write_execution_plan_artifact(
+            &plan,
+            RUNTIME_SNAPSHOT_BYTES,
+            &wal_segments,
+            RUNTIME_CATALOG_BYTES,
+            RUNTIME_AUDIT_LEDGER_BYTES,
+        )
         .map_err(|error| {
             cli_error(format!(
                 "failed to write backup execution plan artifact: {}",
@@ -46,12 +55,12 @@ pub(super) fn execute_file_backed_backup(
         })?;
 
     Ok(RuntimeBackupExecutionReport {
-        backup_id: report.backup_id.get(),
-        artifact_root: report.artifact_root.display().to_string(),
-        manifest_path: report.manifest_path.display().to_string(),
-        snapshot_path: report.snapshot_path.display().to_string(),
+        backup_id: report.backup_id().get(),
+        artifact_root: report.artifact_root().display().to_string(),
+        manifest_path: report.manifest_path().display().to_string(),
+        snapshot_path: report.snapshot_path().display().to_string(),
         wal_segment_paths: report
-            .wal_segment_paths
+            .wal_segment_paths()
             .iter()
             .map(|path| path.display().to_string())
             .collect(),
