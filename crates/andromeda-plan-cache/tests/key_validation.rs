@@ -137,9 +137,20 @@ fn test_plan_cache_shaped_class_requires_fingerprint() {
     let bind = binding(600, 40, 0xAA, 9, 0xBB);
 
     for plan_class in &[
+        // Legacy shaped classes
         PlanClass::ParameterShape,
         PlanClass::Cardinality,
         PlanClass::StatsAdaptive,
+        // P09 spec classes — all non-Singleton and therefore require a
+        // non-empty PlanShapeFingerprint.
+        PlanClass::Generic,
+        PlanClass::Small,
+        PlanClass::Medium,
+        PlanClass::Large,
+        PlanClass::Skewed,
+        PlanClass::StructuredObjectSmall,
+        PlanClass::StructuredObjectLarge,
+        PlanClass::Maintenance,
     ] {
         let err = PlanCacheKey::build(bind, *plan_class, PlanShapeFingerprint::empty());
         match err {

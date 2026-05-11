@@ -94,7 +94,33 @@ impl OptimizerPlanKind {
         Self::SingleRowInsert
     }
 
+    /// Stable machine-readable label for this plan kind.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::SingleRowInsert => "single-row-insert",
+            Self::BulkInsert => "bulk-insert",
+            Self::PointLookup => "point-lookup",
+            Self::RangeScan => "range-scan",
+            Self::Aggregation => "aggregation",
+            Self::Join => "join",
+            Self::WindowFunction => "window-function",
+            Self::MapLookup => "map-lookup",
+            Self::UnionAll => "union-all",
+        }
+    }
+
     /// Map to the coarse external class accepted by plan-cache keys.
+    ///
+    /// # P09 spec variants
+    ///
+    /// The mapping below preserves the four legacy `PlanClass` variants used
+    /// by the optimizer before the P09 spec landed.  The eight new spec
+    /// variants (`Generic`, `Small`, `Medium`, `Large`, `Skewed`,
+    /// `StructuredObjectSmall`, `StructuredObjectLarge`, `Maintenance`) are
+    /// reachable as explicit targets from classification helpers in the
+    /// statistics layer once row-count buckets and object-shape signals are
+    /// available.  The optimizer will route to them when a statistics-based
+    /// classification supersedes the structural heuristics below.
     pub const fn to_plan_class(self) -> PlanClass {
         match self {
             Self::SingleRowInsert | Self::PointLookup | Self::MapLookup => PlanClass::Singleton,

@@ -7,11 +7,15 @@
 //! let statistics, benchmark, ScenarioEvidence, learned output, or GPU output
 //! select a plan alone.
 
+pub mod columnar_pruning;
 mod error;
 mod plan_decision;
 mod policy;
 pub mod srpl;
 
+pub use columnar_pruning::{
+    ColumnScanPredicate, ColumnarPruningDecision, evaluate_columnar_pruning,
+};
 pub use error::OptimizerError;
 pub use plan_decision::{
     OptimizerPlanDecision, OptimizerPlanReason, evaluate_optimizer_plan_inputs,

@@ -442,6 +442,7 @@ version = "0.1.0"
 dependencies = [
  "andromeda-analytics",
  "andromeda-columnar",
+ "andromeda-wal",
 ]
 
 [[package]]
@@ -479,6 +480,7 @@ dependencies = [
 name = "andromeda-optimizer"
 version = "0.1.0"
 dependencies = [
+ "andromeda-columnar",
  "andromeda-decision-trace",
  "andromeda-error",
  "andromeda-plan-cache",

@@ -15,6 +15,12 @@ pub enum DecisionTraceError {
     ContractHashZero,
     StatsVersionZero,
     PolicyVersionZero,
+    /// The plan-kind label for a cost-breakdown alternative is empty.
+    PlanKindLabelEmpty,
+    /// The plan-kind label for a cost-breakdown alternative exceeds the bounded limit.
+    PlanKindLabelTooLong,
+    /// The cost-breakdown alternative list exceeds the bounded limit.
+    TooManyAlternatives,
 }
 
 impl core::fmt::Display for DecisionTraceError {
@@ -48,6 +54,15 @@ impl core::fmt::Display for DecisionTraceError {
             Self::ContractHashZero => f.write_str("DecisionTrace contract hash must not be zero"),
             Self::StatsVersionZero => f.write_str("DecisionTrace stats version must not be zero"),
             Self::PolicyVersionZero => f.write_str("DecisionTrace policy version must not be zero"),
+            Self::PlanKindLabelEmpty => {
+                f.write_str("DecisionTrace plan-kind label must not be empty")
+            },
+            Self::PlanKindLabelTooLong => {
+                f.write_str("DecisionTrace plan-kind label exceeds the bounded limit")
+            },
+            Self::TooManyAlternatives => f.write_str(
+                "DecisionTrace cost-breakdown alternative count exceeds the bounded limit",
+            ),
         }
     }
 }

@@ -167,6 +167,95 @@ fn immediate_map_refresh_requires_bounded_cost_and_same_transaction_wal_records(
     assert!(decision.preserves_wal_priority());
 }
 
+/// Immediate refresh whose cost exceeds the policy ceiling must be hard-rejected.
+///
+/// Invariants verified:
+/// 1. `admit()` returns `Err(MapDescriptorError::RefreshCostExceedsBudget)` — no silent
+///    fallback, no downgrade to Deferred.
+/// 2. No `MapRefreshAdmissionDecision` is produced — therefore no publication candidate
+///    and no `wal_records_reserved` are created.
+/// 3. The error is matchable with `matches!` on the precise typed variant.
+///
+/// P10 exit criterion: "Immediate Map coût borné ou rejeté".
+#[test]
+fn immediate_map_refresh_rejects_when_cost_exceeds_policy_ceiling() {
+    let descriptor = MapDescriptor::new(
+        MapId::new(47).unwrap(),
+        MapGrain::Relation,
+        MapRefreshMode::Immediate,
+        MapStalenessPolicy::CurrentOnly,
+    );
+    let plan = MapRefreshPlan::new(
+        descriptor,
+        cpu_first_map_job(AnalyticsWorkloadKind::MapRefresh),
+        Some(columnar_segment(ColumnarConsumer::Maps)),
+    )
+    .unwrap();
+
+    // refresh_cost = 65 exceeds the ceiling of 64 enforced by policy().
+    let result = policy(descriptor).admit(
+        &plan,
+        MapRefreshAdmissionRequest::new(65, 0, 3)
+            .with_table_wal_records(2)
+            .with_map_wal_records(1)
+            .with_decision_trace(),
+        83,
+        89,
+    );
+
+    // Plan is hard-rejected: Err path means no decision, no publication candidate,
+    // and no WAL records are reserved for Map maintenance.
+    assert!(
+        result.is_err(),
+        "expected Err but admit() returned Ok — cost ceiling not enforced"
+    );
+    let error = result.unwrap_err();
+    assert!(
+        matches!(error, MapDescriptorError::RefreshCostExceedsBudget),
+        "expected RefreshCostExceedsBudget, got {error:?}"
+    );
+}
+
+/// Immediate refresh whose cost equals the policy ceiling exactly must be admitted.
+///
+/// This is the boundary condition for the `>` check at `consistency.rs:55`:
+///   `request.refresh_cost > self.max_refresh_cost.get()`
+/// A cost equal to the ceiling is permitted; a cost of ceiling+1 is not.
+#[test]
+fn immediate_map_refresh_admits_refresh_cost_at_exact_policy_ceiling() {
+    let descriptor = MapDescriptor::new(
+        MapId::new(53).unwrap(),
+        MapGrain::Relation,
+        MapRefreshMode::Immediate,
+        MapStalenessPolicy::CurrentOnly,
+    );
+    let plan = MapRefreshPlan::new(
+        descriptor,
+        cpu_first_map_job(AnalyticsWorkloadKind::MapRefresh),
+        Some(columnar_segment(ColumnarConsumer::Maps)),
+    )
+    .unwrap();
+
+    // refresh_cost = 64 is exactly at the ceiling — must be admitted.
+    let decision = policy(descriptor)
+        .admit(
+            &plan,
+            MapRefreshAdmissionRequest::new(64, 0, 3)
+                .with_table_wal_records(2)
+                .with_map_wal_records(1)
+                .with_decision_trace(),
+            97,
+            101,
+        )
+        .unwrap();
+
+    assert_eq!(decision.refresh_cost, 64);
+    assert_eq!(decision.wal_records_reserved, 3);
+    assert_eq!(decision.candidate.descriptor, descriptor);
+    assert_eq!(decision.candidate.catalog_version, 97);
+    assert_eq!(decision.candidate.stats_version, 101);
+}
+
 #[test]
 fn incremental_map_refresh_requires_controlled_delta_log() {
     let descriptor = MapDescriptor::new(
@@ -187,7 +276,8 @@ fn incremental_map_refresh_requires_controlled_delta_log() {
         NonZeroU64::new(96).unwrap(),
         NonZeroU64::new(4).unwrap(),
         NonZeroU64::new(2).unwrap(),
-    );
+    )
+    .unwrap();
 
     let decision = policy(descriptor)
         .admit(

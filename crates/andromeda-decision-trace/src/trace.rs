@@ -3,6 +3,9 @@ use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
 use crate::{
     AdaptiveControl, DecisionTraceError, DecisionTraceSchemaVersion,
+    cost_breakdown::{
+        COST_BREAKDOWN_ALTERNATIVE_LIMIT, ColumnarPruningEvidence, PlanAlternativeEvidence,
+    },
     version::DECISION_TRACE_SCHEMA_VERSION,
 };
 
@@ -262,7 +265,7 @@ impl VersionBinding {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DecisionTrace {
     schema_version: DecisionTraceSchemaVersion,
     trace_id: DecisionTraceId,
@@ -273,6 +276,8 @@ pub struct DecisionTrace {
     version_binding: VersionBinding,
     adaptive_control: Option<AdaptiveControl>,
     evidence: Vec<TraceEvidence>,
+    alternative_costs: Vec<PlanAlternativeEvidence>,
+    columnar_pruning: Option<ColumnarPruningEvidence>,
 }
 
 impl DecisionTrace {
@@ -315,6 +320,8 @@ impl DecisionTrace {
             version_binding,
             adaptive_control,
             evidence: Vec::new(),
+            alternative_costs: Vec::new(),
+            columnar_pruning: None,
         })
     }
 
@@ -375,6 +382,132 @@ impl DecisionTrace {
             || self
                 .adaptive_control
                 .is_some_and(AdaptiveControl::is_disabled)
+    }
+
+    /// Attach a list of per-alternative cost breakdown entries to this trace.
+    ///
+    /// # Errors
+    /// Returns [`DecisionTraceError::TooManyAlternatives`] when `alternatives`
+    /// would push the total past [`COST_BREAKDOWN_ALTERNATIVE_LIMIT`].
+    pub fn with_alternative_costs(
+        mut self,
+        alternatives: Vec<PlanAlternativeEvidence>,
+    ) -> Result<Self, DecisionTraceError> {
+        if alternatives.len() > COST_BREAKDOWN_ALTERNATIVE_LIMIT {
+            return Err(DecisionTraceError::TooManyAlternatives);
+        }
+        self.alternative_costs = alternatives;
+        Ok(self)
+    }
+
+    /// Per-alternative cost breakdown evidence attached to this trace.
+    pub fn alternative_costs(&self) -> &[PlanAlternativeEvidence] {
+        &self.alternative_costs
+    }
+
+    /// Attach advisory columnar pruning evidence to this trace.
+    ///
+    /// Overwrites any previously attached evidence.  Advisory only — the
+    /// evidence records which chunks were skipped; it must never decide
+    /// correctness.
+    pub fn with_columnar_pruning(mut self, evidence: ColumnarPruningEvidence) -> Self {
+        self.columnar_pruning = Some(evidence);
+        self
+    }
+
+    /// Advisory columnar pruning evidence, if any was attached to this trace.
+    pub fn columnar_pruning(&self) -> Option<ColumnarPruningEvidence> {
+        self.columnar_pruning
+    }
+}
+
+impl core::fmt::Display for DecisionTrace {
+    /// Human-readable, deterministic representation of the trace.
+    ///
+    /// Cost alternatives are sorted by their `plan_kind` label so that output
+    /// is stable regardless of insertion order.  Version fields are formatted
+    /// as plain integers or hex prefixes; no `Debug` formatting is used.
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // ── Header ──────────────────────────────────────────────────────────
+        write!(
+            f,
+            "DecisionTrace[schema={} id={} family={} outcome={}]",
+            self.schema_version.get(),
+            self.trace_id.get(),
+            self.family.as_str(),
+            self.outcome.as_str(),
+        )?;
+
+        // ── Reason + explanation ────────────────────────────────────────────
+        write!(f, "\n  reason: {}", self.reason_code.as_str())?;
+        write!(f, "\n  explanation: {}", self.explanation)?;
+
+        // ── Version binding ─────────────────────────────────────────────────
+        let vb = &self.version_binding;
+        if vb.has_version_evidence() {
+            write!(f, "\n  versions:")?;
+            if let Some(cv) = vb.catalog_version() {
+                write!(f, " catalog={}", cv.get())?;
+            }
+            if let Some(sv) = vb.stats_version() {
+                write!(f, " stats={}", sv.get())?;
+            }
+            if let Some(pv) = vb.policy_version() {
+                write!(f, " policy=")?;
+                for byte in pv.as_bytes().iter().take(4) {
+                    write!(f, "{byte:02x}")?;
+                }
+            }
+        }
+
+        // ── Digest evidence ─────────────────────────────────────────────────
+        for (i, ev) in self.evidence.iter().enumerate() {
+            let digest = ev.digest().as_bytes();
+            write!(f, "\n  evidence[{i}]: {} digest=", ev.label().as_str())?;
+            for byte in digest.iter().take(8) {
+                write!(f, "{byte:02x}")?;
+            }
+        }
+
+        // ── Cost breakdown (sorted by plan_kind for determinism) ─────────────
+        if !self.alternative_costs.is_empty() {
+            let mut sorted: Vec<&PlanAlternativeEvidence> = self.alternative_costs.iter().collect();
+            sorted.sort_by_key(|a| a.plan_kind());
+            for (i, alt) in sorted.iter().enumerate() {
+                let c = alt.cost();
+                write!(
+                    f,
+                    "\n  cost_alternatives[{i}]: {} cpu={:.2} lio={:.2} pio={:.2} wal={:.2} tmp={:.2} net={:.2} risk={:.2} total={:.2}",
+                    alt.plan_kind(),
+                    c.cpu_cost,
+                    c.logical_io_cost,
+                    c.physical_io_cost,
+                    c.wal_cost,
+                    c.temp_cost,
+                    c.network_cost,
+                    c.risk_penalty_cost,
+                    c.total_cost,
+                )?;
+                if alt.chosen() {
+                    write!(f, " CHOSEN")?;
+                } else if let Some(r) = alt.rejection() {
+                    write!(f, " REJECTED({})", r.as_str())?;
+                }
+            }
+        }
+
+        // ── Columnar pruning advisory evidence ──────────────────────────────
+        if let Some(cp) = self.columnar_pruning {
+            write!(
+                f,
+                "\n  columnar-pruning: skipped={} total={} scannable={}",
+                cp.skipped,
+                cp.total,
+                cp.scannable(),
+            )?;
+        }
+
+        Ok(())
     }
 }
 
@@ -468,5 +601,170 @@ mod tests {
             ))
             .unwrap_err();
         assert_eq!(err, DecisionTraceError::TooManyEvidenceReferences);
+    }
+
+    #[test]
+    fn display_decision_trace_is_deterministic_and_includes_cost_breakdown() {
+        use crate::cost_breakdown::{
+            PlanAlternativeCost, PlanAlternativeEvidence, PlanRejectionReason,
+        };
+
+        // Build two alternatives: RangeScan (rejected) and PointLookup (chosen).
+        // Insert in RangeScan-first order; the Display should sort alphabetically
+        // so "point-lookup" appears before "range-scan".
+        let range_cost = PlanAlternativeCost {
+            cpu_cost: 50.0,
+            logical_io_cost: 2.0,
+            physical_io_cost: 8.0,
+            wal_cost: 0.0,
+            temp_cost: 2.0,
+            network_cost: 0.0,
+            risk_penalty_cost: 0.0,
+            total_cost: 62.0,
+        };
+        let point_cost = PlanAlternativeCost {
+            cpu_cost: 0.5,
+            logical_io_cost: 2.0,
+            physical_io_cost: 8.0,
+            wal_cost: 0.0,
+            temp_cost: 2.0,
+            network_cost: 0.0,
+            risk_penalty_cost: 0.0,
+            total_cost: 12.5,
+        };
+
+        let alternatives = vec![
+            PlanAlternativeEvidence::new(
+                "range-scan",
+                range_cost,
+                false,
+                Some(PlanRejectionReason::HigherCost),
+            )
+            .unwrap(),
+            PlanAlternativeEvidence::new("point-lookup", point_cost, true, None).unwrap(),
+        ];
+
+        let trace = DecisionTrace::new(
+            DecisionTraceId::new(42).unwrap(),
+            DecisionFamily::OptimizerPlan,
+            DecisionOutcome::Accepted,
+            DecisionReasonCode::new("plan-chosen").unwrap(),
+            "selected minimum-cost plan",
+            VersionBinding::for_statistics(
+                CatalogVersion::new(3),
+                StatsVersion::new(4),
+                Some(policy(5)),
+            ),
+        )
+        .unwrap()
+        .with_alternative_costs(alternatives)
+        .unwrap();
+
+        // Display must be deterministic: calling it twice yields identical output.
+        let display_first = trace.to_string();
+        let display_second = trace.to_string();
+        assert_eq!(
+            display_first, display_second,
+            "Display must be deterministic"
+        );
+
+        // Header contains trace id, family, and outcome.
+        assert!(
+            display_first.contains("id=42"),
+            "missing trace id: {display_first}"
+        );
+        assert!(
+            display_first.contains("family=optimizer-plan"),
+            "missing family: {display_first}"
+        );
+        assert!(
+            display_first.contains("outcome=accepted"),
+            "missing outcome: {display_first}"
+        );
+
+        // Explanation and reason are present.
+        assert!(
+            display_first.contains("reason: plan-chosen"),
+            "missing reason: {display_first}"
+        );
+        assert!(
+            display_first.contains("explanation: selected minimum-cost plan"),
+            "missing explanation: {display_first}"
+        );
+
+        // Version binding is present.
+        assert!(
+            display_first.contains("catalog=3"),
+            "missing catalog version: {display_first}"
+        );
+        assert!(
+            display_first.contains("stats=4"),
+            "missing stats version: {display_first}"
+        );
+
+        // Cost breakdown appears sorted: point-lookup before range-scan.
+        let pos_point = display_first
+            .find("point-lookup")
+            .expect("missing point-lookup in display");
+        let pos_range = display_first
+            .find("range-scan")
+            .expect("missing range-scan in display");
+        assert!(
+            pos_point < pos_range,
+            "point-lookup must appear before range-scan (sorted by plan_kind)"
+        );
+
+        // Chosen marker for point-lookup.
+        assert!(
+            display_first.contains("CHOSEN"),
+            "missing CHOSEN marker: {display_first}"
+        );
+
+        // Rejection reason for range-scan.
+        assert!(
+            display_first.contains("REJECTED(higher-cost)"),
+            "missing REJECTED label: {display_first}"
+        );
+
+        // Total costs are formatted as two-decimal floats.
+        assert!(
+            display_first.contains("total=12.50"),
+            "missing point-lookup total: {display_first}"
+        );
+        assert!(
+            display_first.contains("total=62.00"),
+            "missing range-scan total: {display_first}"
+        );
+    }
+
+    #[test]
+    fn alternative_costs_limit_is_enforced() {
+        use crate::cost_breakdown::{COST_BREAKDOWN_ALTERNATIVE_LIMIT, PlanAlternativeEvidence};
+
+        let trace = DecisionTrace::new(
+            DecisionTraceId::new(1).unwrap(),
+            DecisionFamily::OptimizerPlan,
+            DecisionOutcome::Accepted,
+            DecisionReasonCode::new("plan-chosen").unwrap(),
+            "accepted plan",
+            VersionBinding::empty().with_policy_version(policy(1)),
+        )
+        .unwrap();
+
+        // Build one more than the limit.
+        let alts: Vec<PlanAlternativeEvidence> = (0..=COST_BREAKDOWN_ALTERNATIVE_LIMIT)
+            .map(|i| {
+                PlanAlternativeEvidence::new(
+                    format!("plan-kind-{i:02}"),
+                    crate::cost_breakdown::PlanAlternativeCost::zero(),
+                    i == 0,
+                    None,
+                )
+                .unwrap()
+            })
+            .collect();
+
+        let err = trace.with_alternative_costs(alts).unwrap_err();
+        assert_eq!(err, DecisionTraceError::TooManyAlternatives);
     }
 }

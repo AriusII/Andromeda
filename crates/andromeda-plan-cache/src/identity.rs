@@ -12,23 +12,82 @@ pub const PLAN_CACHE_KEY_SCHEMA_VERSION: u16 = 0;
 const PLAN_SHAPE_DOMAIN: &[u8] = b"andromeda.plan_cache.shape.v0";
 const PLAN_CACHE_DOMAIN: &[u8] = b"andromeda.plan_cache.key.v0";
 
+/// Coarse plan classification carried in every [`PlanCacheKey`].
+///
+/// # Wire-tag stability contract
+///
+/// Tags 0x01–0x04 are **legacy / internal** variants introduced before the P09
+/// specification.  Their wire values are frozen and **must never be reused** for
+/// new variants, even if a legacy variant is deprecated.
+///
+/// Tags 0x05–0x0C are the **P09 spec classes** (GAP-3 reconciliation, audit
+/// A4).  They are assigned in spec order and are likewise immutable once
+/// published.
+///
+/// New variants, when added in future phases, must claim tags starting from
+/// 0x0D to avoid silent wire-level collisions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(u8)]
 pub enum PlanClass {
-    Singleton,
-    ParameterShape,
-    Cardinality,
-    StatsAdaptive,
+    // ── Legacy / internal classification ─────────────────────────────────────
+    // Wire tags MUST NOT be reused even if a variant is later deprecated.
+    /// Single-result plan with no shape variation.  Uses the empty
+    /// [`PlanShapeFingerprint`].
+    Singleton = 0x01,
+    /// Shape driven by the parameter-type signature of the procedure.
+    ParameterShape = 0x02,
+    /// Shape driven by the input cardinality bucket.
+    Cardinality = 0x03,
+    /// Shape selected with statistics-adaptive hints (non-authoritative).
+    StatsAdaptive = 0x04,
+
+    // ── P09 spec plan classes (GAP-3 reconciliation) ──────────────────────────
+    // Defined in P09_STATISTICS_OPTIMIZER_PROCEDURE_STORE_V0.md §Tâches détaillées.
+    // Classification helpers that map row-count buckets or object-shape signals
+    // to these variants live in the optimizer layer; the cache itself is class-agnostic.
+    /// Generic plan with no row-count or shape specialisation.
+    Generic = 0x05,
+    /// Specialised for small row-count inputs (bucket: rows ≤ 64).
+    Small = 0x06,
+    /// Specialised for medium row-count inputs (bucket: 65 ≤ rows ≤ 4 096).
+    Medium = 0x07,
+    /// Specialised for large row-count inputs (bucket: 4 097 ≤ rows ≤ 262 144).
+    Large = 0x08,
+    /// Specialised for skewed cardinality distributions (NDV / skew signal).
+    Skewed = 0x09,
+    /// Specialised for small structured-object payloads.
+    StructuredObjectSmall = 0x0A,
+    /// Specialised for large structured-object payloads.
+    StructuredObjectLarge = 0x0B,
+    /// Plan class reserved for maintenance and administrative procedures.
+    Maintenance = 0x0C,
 }
 
 impl PlanClass {
-    pub const VARIANT_COUNT: usize = 4;
+    /// Total number of variants (4 legacy + 8 P09 spec).
+    pub const VARIANT_COUNT: usize = 12;
 
+    /// Stable wire tag for this variant.
+    ///
+    /// The mapping is intentionally `const` and exhaustive so that any future
+    /// variant addition forces a compiler error here, preventing silent tag
+    /// drift.
     pub const fn as_tag(self) -> u8 {
         match self {
+            // Legacy variants — tags frozen at 0x01–0x04
             Self::Singleton => 0x01,
             Self::ParameterShape => 0x02,
             Self::Cardinality => 0x03,
             Self::StatsAdaptive => 0x04,
+            // P09 spec variants — tags frozen at 0x05–0x0C
+            Self::Generic => 0x05,
+            Self::Small => 0x06,
+            Self::Medium => 0x07,
+            Self::Large => 0x08,
+            Self::Skewed => 0x09,
+            Self::StructuredObjectSmall => 0x0A,
+            Self::StructuredObjectLarge => 0x0B,
+            Self::Maintenance => 0x0C,
         }
     }
 }

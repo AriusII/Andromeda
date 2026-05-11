@@ -379,7 +379,7 @@ fn frame_codec_golden_wire_layout() {
 
     // Construct the golden header bytes (52 bytes, with CRC field computed).
     let mut golden_header = [0_u8; FRAME_CODEC_HEADER_LEN];
-    
+
     // Offset 0-1: header_len = 52 (u16, big-endian)
     golden_header[0..2].copy_from_slice(&52_u16.to_be_bytes());
     // Offset 2-3: version = 1 (u16, big-endian)
@@ -435,7 +435,11 @@ fn frame_codec_golden_wire_layout() {
     assert_eq!(&encoded[33..36], &[0, 0, 0], "reserved bytes");
     assert_eq!(&encoded[36..44], &4_u64.to_be_bytes(), "payload_length");
     assert_eq!(&encoded[44..48], &0_u32.to_be_bytes(), "flags");
-    assert_ne!(&encoded[48..52], &0_u32.to_be_bytes(), "header_crc must not be zero");
+    assert_ne!(
+        &encoded[48..52],
+        &0_u32.to_be_bytes(),
+        "header_crc must not be zero"
+    );
     assert_eq!(&encoded[52..56], &[0xAA, 0xBB, 0xCC, 0xDD], "payload");
 
     // Round-trip: decode the golden bytes back.
@@ -443,15 +447,27 @@ fn frame_codec_golden_wire_layout() {
 
     // Verify decoded frame matches the original (except header_crc which is set during encode).
     assert_eq!(decoded.header.frame_type, FrameType::RpcExecuteRequest);
-    assert_eq!(decoded.header.request_id, RequestId::new(0x0102_0304_0506_0708));
-    assert_eq!(decoded.header.session_id, SessionId::new(0x1112_1314_1516_1718));
+    assert_eq!(
+        decoded.header.request_id,
+        RequestId::new(0x0102_0304_0506_0708)
+    );
+    assert_eq!(
+        decoded.header.session_id,
+        SessionId::new(0x1112_1314_1516_1718)
+    );
     assert_eq!(decoded.header.tx_id, None);
     assert_eq!(decoded.header.payload_length, 4);
     assert_eq!(decoded.header.flags, 0);
-    assert_ne!(decoded.header.header_crc, 0, "decoded header_crc must be non-zero");
+    assert_ne!(
+        decoded.header.header_crc, 0,
+        "decoded header_crc must be non-zero"
+    );
     assert_eq!(decoded.payload, vec![0xAA, 0xBB, 0xCC, 0xDD]);
 
     // Deep equality check: re-encode the decoded frame and verify it matches.
     let re_encoded = FrameCodec::encode(&decoded).expect("decoded frame must re-encode");
-    assert_eq!(re_encoded, encoded, "re-encoded frame must match golden layout");
+    assert_eq!(
+        re_encoded, encoded,
+        "re-encoded frame must match golden layout"
+    );
 }

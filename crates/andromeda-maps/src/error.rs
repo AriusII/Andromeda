@@ -32,6 +32,7 @@ pub enum MapDescriptorError {
     SnapshotRefreshSnapshotMismatch,
     RefreshPathNotCpuFirst,
     WalPriorityExceeded,
+    InvertedDeltaLsnWindow,
 }
 
 impl fmt::Display for MapDescriptorError {
@@ -105,6 +106,10 @@ impl fmt::Display for MapDescriptorError {
             Self::WalPriorityExceeded => {
                 f.write_str("map refresh admission would exceed WAL priority budget")
             },
+            Self::InvertedDeltaLsnWindow => f.write_str(
+                "map delta log window is inverted: delta_lsn must be strictly greater than \
+                     base_snapshot_lsn",
+            ),
         }
     }
 }

@@ -21,6 +21,16 @@ pub enum RejectionReason {
     InvalidCostEvidence,
 }
 
+impl RejectionReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::HigherCost => "higher-cost",
+            Self::TiedCostLowerPriority => "tied-cost-lower-priority",
+            Self::InvalidCostEvidence => "invalid-cost-evidence",
+        }
+    }
+}
+
 /// The result of `PlanChoice::choose`.
 #[derive(Debug)]
 pub struct PlanChoiceResult {

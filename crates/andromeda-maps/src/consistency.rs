@@ -149,20 +149,29 @@ pub struct MapDeltaLog {
 }
 
 impl MapDeltaLog {
-    pub const fn new(
+    /// Constructs a `MapDeltaLog`.
+    ///
+    /// # Ordering invariant
+    /// `delta_lsn` MUST be strictly greater than `base_snapshot_lsn`.  A delta window
+    /// where `delta_lsn <= base_snapshot_lsn` is temporally inverted and is rejected
+    /// with [`MapDescriptorError::InvertedDeltaLsnWindow`].
+    pub fn new(
         descriptor: MapDescriptor,
         base_snapshot_lsn: NonZeroU64,
         delta_lsn: NonZeroU64,
         table_wal_records: NonZeroU64,
         map_wal_records: NonZeroU64,
-    ) -> Self {
-        Self {
+    ) -> crate::MapDescriptorResult<Self> {
+        if delta_lsn.get() <= base_snapshot_lsn.get() {
+            return Err(crate::MapDescriptorError::InvertedDeltaLsnWindow);
+        }
+        Ok(Self {
             descriptor,
             base_snapshot_lsn,
             delta_lsn,
             table_wal_records,
             map_wal_records,
-        }
+        })
     }
 
     pub const fn total_wal_records(self) -> u64 {
@@ -259,4 +268,91 @@ fn is_cpu_first_plan(plan: &MapRefreshPlan) -> bool {
 
 fn cpu_only_segment(segment: &ColumnarSegmentDescriptor) -> bool {
     segment.acceleration_policy() == andromeda_columnar::ColumnarAccelerationPolicy::CpuOnly
+}
+
+// ─── Idempotency guard ────────────────────────────────────────────────────────
+
+/// Outcome of a [`MapDeltaApplyState::try_apply`] call.
+///
+/// - `Applied` — the delta advanced the apply cursor; `new_applied_up_to_lsn` is the new frontier.
+/// - `AlreadyApplied` — the delta window was already covered by a prior apply; this is the
+///   idempotent-ack path used during WAL replay and crash recovery.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MapDeltaApplyOutcome {
+    /// Delta was freshly applied; the apply cursor advanced to `new_applied_up_to_lsn`.
+    Applied { new_applied_up_to_lsn: NonZeroU64 },
+    /// Delta window was already applied — this call is a no-op replay-safe ack.
+    AlreadyApplied,
+}
+
+/// Tracks the applied-up-to LSN for a single Map's incremental delta application.
+///
+/// Enforces the idempotency invariant: re-applying a delta whose `delta_lsn` is already
+/// covered by `applied_up_to_lsn` returns [`MapDeltaApplyOutcome::AlreadyApplied`] rather
+/// than advancing the cursor a second time.
+///
+/// # Crash recovery
+///
+/// `MapDeltaApplyState` is **in-memory only** and is never the source of truth.  After a
+/// crash, the caller reconstructs apply state from the last durable
+/// [`crate::MapPublicationRecoveryEvidence`] and may safely re-apply any delta whose
+/// `delta_lsn > publication_lsn` of the recovered evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MapDeltaApplyState {
+    pub descriptor: MapDescriptor,
+    /// The highest `delta_lsn` that has been successfully applied.  `None` means the
+    /// Map has never had an incremental delta applied in this session.
+    pub applied_up_to_lsn: Option<NonZeroU64>,
+}
+
+impl MapDeltaApplyState {
+    /// Creates a fresh apply state for `descriptor` with no prior applications.
+    pub const fn new(descriptor: MapDescriptor) -> Self {
+        Self {
+            descriptor,
+            applied_up_to_lsn: None,
+        }
+    }
+
+    /// Creates an apply state pre-seeded from a recovered durable publication LSN.
+    ///
+    /// Use this after crash recovery to avoid re-applying deltas that were already
+    /// committed.  `recovered_lsn` should be the `publication_lsn` (or equivalent
+    /// durable frontier) from the recovery evidence.
+    pub const fn recovered(descriptor: MapDescriptor, recovered_lsn: NonZeroU64) -> Self {
+        Self {
+            descriptor,
+            applied_up_to_lsn: Some(recovered_lsn),
+        }
+    }
+
+    /// Attempt to apply `delta_log` to this state.
+    ///
+    /// Returns:
+    /// - `Ok(Applied { .. })` — delta was freshly applied and the cursor advanced.
+    /// - `Ok(AlreadyApplied)` — delta window is entirely covered by the current frontier;
+    ///   this is an idempotent no-op (safe to replay).
+    /// - `Err(IncrementalDeltaLogMapMismatch)` — `delta_log.descriptor` does not match
+    ///   `self.descriptor`.
+    pub fn try_apply(
+        &mut self,
+        delta_log: MapDeltaLog,
+    ) -> crate::MapDescriptorResult<MapDeltaApplyOutcome> {
+        if delta_log.descriptor != self.descriptor {
+            return Err(crate::MapDescriptorError::IncrementalDeltaLogMapMismatch);
+        }
+
+        // Idempotency: if the delta_lsn is already covered by the applied frontier,
+        // treat this as a replay-safe no-op rather than a duplicate apply.
+        if let Some(applied) = self.applied_up_to_lsn
+            && delta_log.delta_lsn.get() <= applied.get()
+        {
+            return Ok(MapDeltaApplyOutcome::AlreadyApplied);
+        }
+
+        self.applied_up_to_lsn = Some(delta_log.delta_lsn);
+        Ok(MapDeltaApplyOutcome::Applied {
+            new_applied_up_to_lsn: delta_log.delta_lsn,
+        })
+    }
 }

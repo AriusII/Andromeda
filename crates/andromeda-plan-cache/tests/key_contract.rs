@@ -9,12 +9,21 @@ use support::{binding, shaped_fingerprint};
 
 #[test]
 fn plan_class_variant_count_is_bounded() {
-    assert_eq!(PlanClass::VARIANT_COUNT, 4);
+    // 4 legacy + 8 P09 spec variants (GAP-3 reconciliation).
+    assert_eq!(PlanClass::VARIANT_COUNT, 12);
     let tags = [
         PlanClass::Singleton.as_tag(),
         PlanClass::ParameterShape.as_tag(),
         PlanClass::Cardinality.as_tag(),
         PlanClass::StatsAdaptive.as_tag(),
+        PlanClass::Generic.as_tag(),
+        PlanClass::Small.as_tag(),
+        PlanClass::Medium.as_tag(),
+        PlanClass::Large.as_tag(),
+        PlanClass::Skewed.as_tag(),
+        PlanClass::StructuredObjectSmall.as_tag(),
+        PlanClass::StructuredObjectLarge.as_tag(),
+        PlanClass::Maintenance.as_tag(),
     ];
     let mut sorted = tags;
     sorted.sort_unstable();

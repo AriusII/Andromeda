@@ -15,11 +15,16 @@
 //! - Trace contracts must stay runtime-free and redaction-safe.
 
 mod control;
+mod cost_breakdown;
 mod error;
 mod trace;
 mod version;
 
 pub use control::{AdaptiveControl, AdaptiveFeature};
+pub use cost_breakdown::{
+    COST_BREAKDOWN_ALTERNATIVE_LIMIT, ColumnarPruningEvidence, PLAN_KIND_LABEL_MAX_BYTES,
+    PlanAlternativeCost, PlanAlternativeEvidence, PlanRejectionReason,
+};
 pub use error::DecisionTraceError;
 pub use trace::{
     DECISION_EXPLANATION_MAX_BYTES, DECISION_REASON_CODE_MAX_BYTES, DecisionFamily,

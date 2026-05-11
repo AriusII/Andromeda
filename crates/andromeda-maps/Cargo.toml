@@ -8,3 +8,6 @@ publish = false
 [dependencies]
 andromeda-analytics.workspace = true
 andromeda-columnar.workspace = true
+
+[dev-dependencies]
+andromeda-wal.workspace = true

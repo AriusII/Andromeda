@@ -77,7 +77,9 @@ impl PlanCacheReuseReason {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+// Note: `Eq` is intentionally absent — `DecisionTrace` contains
+// `PlanAlternativeCost` with `f64` fields, which satisfy only `PartialEq`.
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlanCacheReuseDecision {
     key: PlanCacheKey,
     may_reuse: bool,

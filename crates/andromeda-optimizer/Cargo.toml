@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-columnar.workspace = true
 andromeda-decision-trace.workspace = true
 andromeda-error.workspace = true
 andromeda-plan-cache.workspace = true

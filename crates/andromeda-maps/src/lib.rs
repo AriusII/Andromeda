@@ -16,7 +16,8 @@ mod refresh;
 mod summarizability;
 
 pub use consistency::{
-    MapConsistencyPolicy, MapDeltaLog, MapRefreshAdmissionDecision, MapRefreshAdmissionRequest,
+    MapConsistencyPolicy, MapDeltaApplyOutcome, MapDeltaApplyState, MapDeltaLog,
+    MapRefreshAdmissionDecision, MapRefreshAdmissionRequest,
 };
 pub use dependency::{MapDependency, MapDependencyGraph};
 pub use descriptor::{MapDescriptor, MapGrain, MapId, MapRefreshMode, MapStalenessPolicy};

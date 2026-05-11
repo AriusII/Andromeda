@@ -1,3 +1,4 @@
+use andromeda_decision_trace::{PlanAlternativeCost, PlanAlternativeEvidence, PlanRejectionReason};
 use andromeda_error::AndromedaResult;
 use andromeda_srpl_ir::{SrplBusinessOperationKindIr, SrplProcedureBodyIr, SrplProcedureIr};
 
@@ -76,6 +77,12 @@ pub struct OptimizerPipelineResult {
     pub chosen_kind: OptimizerPlanKind,
     /// Stable optimizer alternatives evidence, including the chosen plan.
     pub alternatives: Vec<AlternativePlanRecord>,
+    /// Per-alternative cost breakdown in `DecisionTrace`-compatible form.
+    ///
+    /// Each entry mirrors the corresponding entry in `alternatives` but uses
+    /// types from `andromeda-decision-trace` so callers can attach this
+    /// breakdown to any `DecisionTrace` without depending on optimizer internals.
+    pub alternative_cost_breakdown: Vec<PlanAlternativeEvidence>,
     /// Pipeline phases actually executed, in order.
     pub phases: Vec<OptimizerPhase>,
     /// Structured optimizer decisions and provenance emitted by the pipeline.
@@ -159,6 +166,9 @@ pub fn optimize_procedure_ir_with_config(
         format!("selected {:?} plan from {} alternative(s)", kind, 1),
     ));
 
+    // Convert alternatives to DecisionTrace-compatible evidence at the boundary.
+    let alternative_cost_breakdown = build_cost_breakdown(&choice.all_alternatives);
+
     Ok(OptimizerPipelineResult {
         original_ir,
         optimized_ir: choice.chosen_ir,
@@ -166,6 +176,7 @@ pub fn optimize_procedure_ir_with_config(
         chosen_cost: choice.chosen_cost,
         chosen_kind: choice.chosen_kind,
         alternatives: choice.all_alternatives,
+        alternative_cost_breakdown,
         phases,
         diagnostics,
     })
@@ -192,4 +203,44 @@ fn fold_constants_in_ir(mut ir: SrplProcedureIr) -> AndromedaResult<SrplProcedur
     ir.body = SrplProcedureBodyIr { operations };
     ir.body.validate_bounded()?;
     Ok(ir)
+}
+
+/// Convert optimizer-internal `AlternativePlanRecord`s into
+/// `PlanAlternativeEvidence` records suitable for a `DecisionTrace`.
+///
+/// This conversion happens at the optimizer boundary so that
+/// `andromeda-decision-trace` remains free of any dependency on
+/// `andromeda-optimizer`.  Invalid cost evidence is preserved as-is
+/// (field values may be NaN / infinite) but the rejection reason is
+/// mapped explicitly.
+fn build_cost_breakdown(
+    alternatives: &[plan_choice::AlternativePlanRecord],
+) -> Vec<PlanAlternativeEvidence> {
+    alternatives
+        .iter()
+        .filter_map(|alt| {
+            let rejection = alt.rejection.map(|r| match r {
+                plan_choice::RejectionReason::HigherCost => PlanRejectionReason::HigherCost,
+                plan_choice::RejectionReason::TiedCostLowerPriority => {
+                    PlanRejectionReason::TiedCostLowerPriority
+                },
+                plan_choice::RejectionReason::InvalidCostEvidence => {
+                    PlanRejectionReason::InvalidCostEvidence
+                },
+            });
+            let cost = PlanAlternativeCost {
+                cpu_cost: alt.cost_estimate.cpu_cost,
+                logical_io_cost: alt.cost_estimate.logical_io_cost,
+                physical_io_cost: alt.cost_estimate.physical_io_cost,
+                wal_cost: alt.cost_estimate.wal_cost,
+                temp_cost: alt.cost_estimate.temp_cost,
+                network_cost: alt.cost_estimate.network_cost,
+                risk_penalty_cost: alt.cost_estimate.risk_penalty_cost,
+                total_cost: alt.cost_estimate.total_cost,
+            };
+            // plan_kind labels are static strings; construction can only fail if the
+            // label is empty or too long, neither of which applies to our static strs.
+            PlanAlternativeEvidence::new(alt.plan_kind.as_str(), cost, alt.chosen, rejection).ok()
+        })
+        .collect()
 }

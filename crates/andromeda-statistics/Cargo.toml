@@ -15,4 +15,5 @@ andromeda-scenario-evidence.workspace = true
 andromeda-types.workspace = true
 
 [dev-dependencies]
+andromeda-decision-trace.workspace = true
 andromeda-time.workspace = true
