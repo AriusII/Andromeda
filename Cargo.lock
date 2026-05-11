@@ -676,6 +676,7 @@ dependencies = [
  "andromeda-transaction",
  "andromeda-types",
  "andromeda-wal",
+ "tempfile",
  "tokio",
 ]
 

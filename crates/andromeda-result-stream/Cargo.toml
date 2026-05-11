@@ -21,4 +21,6 @@ tokio = { workspace = true, features = ["sync"] }
 andromeda-srpl-cardinality.workspace = true
 andromeda-structured-object.workspace = true
 andromeda-types.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+andromeda-wal.workspace = true
+tempfile = "3.8"
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "time"] }

@@ -352,3 +352,106 @@ fn crc32(bytes: &[u8]) -> u32 {
 
     !crc
 }
+
+#[test]
+fn frame_codec_golden_wire_layout() {
+    // Deterministic frame with simple values and no transaction ID.
+    // This test locks the wire format to prevent accidental changes to:
+    // - header layout and field offsets
+    // - endianness (network big-endian)
+    // - CRC calculation
+    // - field widths
+    let golden_frame = FrameBytes {
+        header: FrameHeader {
+            frame_type: FrameType::RpcExecuteRequest,
+            request_id: RequestId::new(0x0102_0304_0506_0708),
+            session_id: SessionId::new(0x1112_1314_1516_1718),
+            tx_id: None,
+            payload_length: 4,
+            flags: 0,
+            header_crc: 0,
+        },
+        payload: vec![0xAA, 0xBB, 0xCC, 0xDD],
+    };
+
+    // Encode the frame.
+    let encoded = FrameCodec::encode(&golden_frame).expect("frame must encode");
+
+    // Construct the golden header bytes (52 bytes, with CRC field computed).
+    let mut golden_header = [0_u8; FRAME_CODEC_HEADER_LEN];
+    
+    // Offset 0-1: header_len = 52 (u16, big-endian)
+    golden_header[0..2].copy_from_slice(&52_u16.to_be_bytes());
+    // Offset 2-3: version = 1 (u16, big-endian)
+    golden_header[2..4].copy_from_slice(&1_u16.to_be_bytes());
+    // Offset 4-7: frame_type = RpcExecuteRequest (5, u32, big-endian)
+    golden_header[4..8].copy_from_slice(&5_u32.to_be_bytes());
+    // Offset 8-15: request_id = 0x0102030405060708 (u64, big-endian)
+    golden_header[8..16].copy_from_slice(&0x0102_0304_0506_0708_u64.to_be_bytes());
+    // Offset 16-23: session_id = 0x1112131415161718 (u64, big-endian)
+    golden_header[16..24].copy_from_slice(&0x1112_1314_1516_1718_u64.to_be_bytes());
+    // Offset 24-31: tx_id = 0 (u64, big-endian, zero because tx_id is None)
+    golden_header[24..32].copy_from_slice(&0_u64.to_be_bytes());
+    // Offset 32: tx_id_present = 0 (no transaction ID)
+    golden_header[32] = 0;
+    // Offset 33-35: reserved bytes (must be zero)
+    golden_header[33..36].copy_from_slice(&[0, 0, 0]);
+    // Offset 36-43: payload_length = 4 (u64, big-endian)
+    golden_header[36..44].copy_from_slice(&4_u64.to_be_bytes());
+    // Offset 44-47: flags = 0 (u32, big-endian)
+    golden_header[44..48].copy_from_slice(&0_u32.to_be_bytes());
+    // Offset 48-51: header_crc (u32, big-endian, computed with CRC field zeroed)
+    let expected_crc = crc32(&golden_header);
+    golden_header[48..52].copy_from_slice(&expected_crc.to_be_bytes());
+
+    // Build complete golden bytes: header + payload.
+    let mut complete_golden = Vec::with_capacity(56);
+    complete_golden.extend_from_slice(&golden_header);
+    complete_golden.extend_from_slice(&golden_frame.payload);
+
+    // Verify encoded frame matches the golden bytes exactly.
+    assert_eq!(
+        encoded, complete_golden,
+        "encoded frame must match golden wire layout byte-for-byte"
+    );
+    assert_eq!(encoded.len(), 56, "frame must be exactly 56 bytes");
+
+    // Verify header structure.
+    assert_eq!(&encoded[0..2], &52_u16.to_be_bytes(), "header length");
+    assert_eq!(&encoded[2..4], &1_u16.to_be_bytes(), "version");
+    assert_eq!(&encoded[4..8], &5_u32.to_be_bytes(), "frame type");
+    assert_eq!(
+        &encoded[8..16],
+        &0x0102_0304_0506_0708_u64.to_be_bytes(),
+        "request_id"
+    );
+    assert_eq!(
+        &encoded[16..24],
+        &0x1112_1314_1516_1718_u64.to_be_bytes(),
+        "session_id"
+    );
+    assert_eq!(&encoded[24..32], &0_u64.to_be_bytes(), "tx_id (none)");
+    assert_eq!(encoded[32], 0, "tx_id_present marker");
+    assert_eq!(&encoded[33..36], &[0, 0, 0], "reserved bytes");
+    assert_eq!(&encoded[36..44], &4_u64.to_be_bytes(), "payload_length");
+    assert_eq!(&encoded[44..48], &0_u32.to_be_bytes(), "flags");
+    assert_ne!(&encoded[48..52], &0_u32.to_be_bytes(), "header_crc must not be zero");
+    assert_eq!(&encoded[52..56], &[0xAA, 0xBB, 0xCC, 0xDD], "payload");
+
+    // Round-trip: decode the golden bytes back.
+    let decoded = FrameCodec::decode(&encoded).expect("frame must decode");
+
+    // Verify decoded frame matches the original (except header_crc which is set during encode).
+    assert_eq!(decoded.header.frame_type, FrameType::RpcExecuteRequest);
+    assert_eq!(decoded.header.request_id, RequestId::new(0x0102_0304_0506_0708));
+    assert_eq!(decoded.header.session_id, SessionId::new(0x1112_1314_1516_1718));
+    assert_eq!(decoded.header.tx_id, None);
+    assert_eq!(decoded.header.payload_length, 4);
+    assert_eq!(decoded.header.flags, 0);
+    assert_ne!(decoded.header.header_crc, 0, "decoded header_crc must be non-zero");
+    assert_eq!(decoded.payload, vec![0xAA, 0xBB, 0xCC, 0xDD]);
+
+    // Deep equality check: re-encode the decoded frame and verify it matches.
+    let re_encoded = FrameCodec::encode(&decoded).expect("decoded frame must re-encode");
+    assert_eq!(re_encoded, encoded, "re-encoded frame must match golden layout");
+}
