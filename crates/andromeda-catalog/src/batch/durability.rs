@@ -11,7 +11,10 @@ use super::mutation::{
     CatalogPublicationSemantics,
 };
 
-pub use andromeda_catalog_store::{CatalogDurabilityMarker, CatalogMutationDurability};
+pub use andromeda_catalog_store::{
+    CatalogDurabilityMarker, CatalogMutationDurability, CatalogPublicationRecoveryDecision,
+    SecurityAuditTraceId,
+};
 
 pub type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
     DefinitionBatchId,
@@ -140,6 +143,17 @@ impl
     fn is_monotonic(&self) -> bool {
         self.mutation().is_monotonic()
     }
+
+    fn first_operation_index(&self) -> u32 {
+        // Well-formed plans always start at operation index 0 (enforced by
+        // `CatalogMutationPlan::new` which validates dense delta ordering).
+        0
+    }
+
+    fn last_operation_index(&self) -> u32 {
+        // `deltas.len() >= 1` is guaranteed by `CatalogMutationPlan::new`.
+        (self.deltas.len() - 1) as u32
+    }
 }
 
 impl CatalogPublicationCommitEvidence<CatalogMutationPlan> for CatalogMutationCommitEvidence {
@@ -157,5 +171,18 @@ impl CatalogPublicationCommitEvidence<CatalogMutationPlan> for CatalogMutationCo
 
     fn record_count(&self) -> usize {
         self.record_count
+    }
+
+    fn recovery_decision(&self) -> CatalogPublicationRecoveryDecision {
+        // Normal active-commit path: this receipt was NOT produced by WAL recovery.
+        // The recovery path (P05/P06 scope) will use a dedicated constructor to
+        // return `RecoveredFromDurableWal { source_lsn }`.
+        CatalogPublicationRecoveryDecision::NotRecovered
+    }
+
+    fn security_audit_trace_id(&self) -> Option<SecurityAuditTraceId> {
+        // P05/P06 admission-integration will generate non-zero identifiers for
+        // batches affecting security-sensitive state. Until then, always None.
+        None
     }
 }

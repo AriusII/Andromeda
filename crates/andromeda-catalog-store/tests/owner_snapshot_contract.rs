@@ -3,10 +3,11 @@
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogDurabilityMarker, CatalogMutationDelta, CatalogMutationDurability,
     CatalogObjectRef, CatalogPublicationCommitEvidence, CatalogPublicationPlan,
-    CatalogPublicationReceipt, CatalogPublicationSemantics, CatalogSnapshot,
-    CatalogSnapshotMutationPlan, CatalogSnapshotPublication, CatalogStoreMutationKind,
-    CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError, ObjectKind, QualifiedName,
-    StructuredObjectDefinition, TableDefinition, validate_catalog_store_wal_append_sequence,
+    CatalogPublicationReceipt, CatalogPublicationRecoveryDecision, CatalogPublicationSemantics,
+    CatalogSnapshot, CatalogSnapshotMutationPlan, CatalogSnapshotPublication,
+    CatalogStoreMutationKind, CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
+    ObjectKind, QualifiedName, SecurityAuditTraceId, StructuredObjectDefinition, TableDefinition,
+    validate_catalog_store_wal_append_sequence,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_procedure_contract::{
@@ -105,6 +106,18 @@ impl CatalogPublicationPlan<u64, [u8; 32], [u8; 32]> for TestPlan {
     fn is_monotonic(&self) -> bool {
         self.next_version.get() > self.previous_version.get()
     }
+
+    fn first_operation_index(&self) -> u32 {
+        0
+    }
+
+    fn last_operation_index(&self) -> u32 {
+        if self.deltas.is_empty() {
+            0
+        } else {
+            (self.deltas.len() - 1) as u32
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -135,6 +148,14 @@ impl CatalogPublicationCommitEvidence<TestPlan> for TestCommitEvidence {
 
     fn record_count(&self) -> usize {
         self.record_count
+    }
+
+    fn recovery_decision(&self) -> CatalogPublicationRecoveryDecision {
+        CatalogPublicationRecoveryDecision::NotRecovered
+    }
+
+    fn security_audit_trace_id(&self) -> Option<SecurityAuditTraceId> {
+        None
     }
 }
 

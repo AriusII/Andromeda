@@ -8,6 +8,13 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CatalogDependencyKind {
+    /// A namespace contains a catalog object (object namespace membership).
+    /// The dependent is a `Namespace`; the dependency can be any catalog
+    /// object kind (`Table`, `Procedure`, `StructuredObject`, `Enum`, `Map`,
+    /// or `Database`).
+    ///
+    /// Defined by `SPEC_CATALOG_OBJECT_MODEL_V0.md` §Dependency edge kinds.
+    NamespaceContainsObject,
     /// A procedure consumes a structured object as one of its structured
     /// inputs. Derived directly from `ProcedureContract::structured_inputs`.
     ProcedureStructuredInput,
@@ -26,6 +33,7 @@ pub enum CatalogDependencyKind {
 impl CatalogDependencyKind {
     pub fn dependent_kind(self) -> ObjectKind {
         match self {
+            Self::NamespaceContainsObject => ObjectKind::Namespace,
             Self::ProcedureStructuredInput
             | Self::ProcedureReadsTable
             | Self::ProcedureWritesTable
@@ -33,12 +41,16 @@ impl CatalogDependencyKind {
         }
     }
 
-    pub fn dependency_kind(self) -> ObjectKind {
+    /// Returns the expected dependency object kind for kinds where the
+    /// dependency kind is fixed. Returns `None` for `NamespaceContainsObject`,
+    /// where any catalog object kind is valid.
+    pub fn fixed_dependency_kind(self) -> Option<ObjectKind> {
         match self {
+            Self::NamespaceContainsObject => None,
             Self::ProcedureStructuredInput | Self::ProcedureEmitsStructuredObject => {
-                ObjectKind::StructuredObject
+                Some(ObjectKind::StructuredObject)
             },
-            Self::ProcedureReadsTable | Self::ProcedureWritesTable => ObjectKind::Table,
+            Self::ProcedureReadsTable | Self::ProcedureWritesTable => Some(ObjectKind::Table),
         }
     }
 }
@@ -97,17 +109,43 @@ impl CatalogDependency {
         )
     }
 
+    /// Construct a `NamespaceContainsObject` edge.
+    ///
+    /// `namespace_name` is the containing namespace (dependent).
+    /// `object_name` is the contained catalog object (dependency).
+    /// `object_kind` is the object kind of the contained object; it can be
+    /// any valid `ObjectKind` other than `Namespace`.
+    ///
+    /// This constructor is used instead of [`Self::with_kind`] because the
+    /// dependency kind is variable across instances of this edge kind.
+    pub fn namespace_contains_object(
+        namespace_name: QualifiedName,
+        object_name: QualifiedName,
+        object_kind: ObjectKind,
+    ) -> Self {
+        Self {
+            kind: CatalogDependencyKind::NamespaceContainsObject,
+            dependent_name: namespace_name,
+            dependent_kind: ObjectKind::Namespace,
+            dependency_name: object_name,
+            dependency_kind: object_kind,
+        }
+    }
+
     fn with_kind(
         kind: CatalogDependencyKind,
         dependent_name: QualifiedName,
         dependency_name: QualifiedName,
     ) -> Self {
+        let dependency_kind = kind
+            .fixed_dependency_kind()
+            .expect("with_kind requires a kind with a fixed dependency kind");
         Self {
             kind,
             dependent_name,
             dependent_kind: kind.dependent_kind(),
             dependency_name,
-            dependency_kind: kind.dependency_kind(),
+            dependency_kind,
         }
     }
 
@@ -139,7 +177,13 @@ impl CatalogDependency {
             ));
         }
 
-        if self.dependency_kind != self.kind.dependency_kind() {
+        // For edge kinds with a fixed dependency kind, validate that the
+        // stored dependency kind matches the expected kind. For
+        // `NamespaceContainsObject`, the dependency kind is variable (any
+        // catalog object kind is valid), so no fixed-kind check is performed.
+        if let Some(expected_dependency_kind) = self.kind.fixed_dependency_kind()
+            && self.dependency_kind != expected_dependency_kind
+        {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Catalog,
                 "catalog dependency dependency kind must match dependency kind",

@@ -5,8 +5,8 @@ use andromeda_catalog_recovery::{
     validate_subscription_acknowledgement_for_publication,
 };
 use andromeda_catalog_store::{
-    CatalogDurabilityMarker, CatalogObjectRef, CatalogPublicationSemantics, ObjectKind,
-    QualifiedName,
+    CatalogDurabilityMarker, CatalogObjectRef, CatalogPublicationRecoveryDecision,
+    CatalogPublicationSemantics, ObjectKind, QualifiedName,
 };
 use andromeda_definition_batch::{
     DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
@@ -47,6 +47,12 @@ fn receipt() -> CatalogPublicationReceipt {
         durable_evidence_marker: None,
         record_count: 3,
         publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
+        // GAP-2: record_count=3 → 1 apply record → dense coverage [0, 0]
+        first_operation_index: 0,
+        last_operation_index: 0,
+        // GAP-1: normal active-commit path
+        recovery_decision: CatalogPublicationRecoveryDecision::NotRecovered,
+        security_audit_trace_id: None,
     }
 }
 

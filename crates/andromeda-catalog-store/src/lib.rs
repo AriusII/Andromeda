@@ -51,7 +51,8 @@ pub use objects::{
 };
 pub use publication_receipt::{
     CatalogDurabilityMarker, CatalogMutationDurability, CatalogPublicationCommitEvidence,
-    CatalogPublicationPlan, CatalogPublicationReceipt,
+    CatalogPublicationPlan, CatalogPublicationReceipt, CatalogPublicationRecoveryDecision,
+    SecurityAuditTraceId,
 };
 pub use runtime_boundary::{
     CatalogManifestStoreBoundary, CatalogRuntimeEvidence, CatalogRuntimeReopenEvidence,

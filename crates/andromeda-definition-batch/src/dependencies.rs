@@ -290,6 +290,9 @@ fn dependency_kind_tag(kind: CatalogDependencyKind) -> u8 {
         CatalogDependencyKind::ProcedureReadsTable => 1,
         CatalogDependencyKind::ProcedureWritesTable => 2,
         CatalogDependencyKind::ProcedureEmitsStructuredObject => 3,
+        // Tag 4: added in P03 GAP-4 to cover SPEC_CATALOG_OBJECT_MODEL_V0 §Dependency edge kinds.
+        // Tags 0–3 are occupied by Procedure-family edges above. Tag 4 is the next free value.
+        CatalogDependencyKind::NamespaceContainsObject => 4,
     }
 }
 

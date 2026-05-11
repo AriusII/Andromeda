@@ -639,3 +639,149 @@ fn definition_batch_version_advancement_is_monotonic() {
     assert_eq!(plan.next_version.get() - plan.previous_version.get(), 1);
     assert!(plan.next_version.get() > plan.previous_version.get());
 }
+
+/// Audit-evidence gap closure (P03 A3): end-to-end breaking-change publication
+/// denial.  This test shows that:
+///
+/// 1. `dry_run` can plan a breaking change batch (no compat gate at batch level).
+/// 2. `ProcedureContract::compatibility_with` IS the intended publication gate;
+///    it returns `compatible = false` for the breaking change.
+/// 3. When the advisory gate is respected (deny → no apply), the snapshot
+///    version is unchanged and no `CatalogPublicationReceipt` is produced.
+/// 4. Defense-in-depth: if the advisory gate is bypassed and the same
+///    `object_id` is re-created via `apply_mutation_plan`, the snapshot
+///    structural guard rejects the apply with a `Catalog` error, leaving the
+///    snapshot unchanged.
+///
+/// FOLLOWUP: Step 4 rejection comes from "already contains object id" (snapshot
+/// duplicate guard), not a dedicated compat-policy violation error. A future
+/// compat-aware publication gate that calls `compatibility_with()` before
+/// `apply_mutation_plan` would emit a `CompatibilityViolation` error and
+/// stronger, purpose-built audit evidence.
+#[test]
+fn breaking_change_batch_denies_publication_and_records_audit_evidence() {
+    let v1 = CatalogVersion::new(1);
+    let v2 = CatalogVersion::new(2);
+    let v3 = CatalogVersion::new(3);
+
+    // ── Phase 1: establish v1 procedure in an in-memory snapshot ─────────────
+    let v1_contract = procedure_contract_with_shape(
+        121,
+        "test.BreakingE2E",
+        v2,
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            ResultStreamCardinality::Many,
+            vec![column("id", 0), column("quantity", 1)],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    let v1_batch = definition_batch(
+        v1,
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            v1_contract.clone(),
+        ))],
+    );
+    let v1_plan = apply_plan_from_batch(&v1_batch);
+
+    let mut snapshot: CatalogSnapshot<TestReceipt> =
+        CatalogSnapshot::empty(TEST_DB_ID, TEST_NS_ID, v1);
+    snapshot
+        .apply_mutation_plan(&v1_plan)
+        .expect("v1 procedure must apply cleanly to an empty snapshot");
+    assert_eq!(
+        snapshot.version, v2,
+        "snapshot internal version advances to v2 after v1 apply"
+    );
+
+    // ── Phase 2: build a breaking v2 contract under AdditiveOnly policy ──────
+    let breaking_contract = procedure_contract_with_shape(
+        121,
+        "test.BreakingE2E",
+        v3,
+        Vec::new(),
+        vec![result_stream(
+            1,
+            "Rows",
+            // Cardinality change (Many → One) is breaking under AdditiveOnly.
+            ResultStreamCardinality::One,
+            // Column type change (I64 → Bool) is also breaking.
+            vec![
+                typed_column("id", 0, ScalarType::Bool),
+                column("quantity", 1),
+            ],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    // ── Phase 3: dry_run can plan the breaking batch (no compat gate here) ───
+    let breaking_batch = definition_batch(
+        v2,
+        vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            breaking_contract.clone(),
+        ))],
+    );
+    let dry_run_plan = dry_run(&breaking_batch);
+    assert_eq!(
+        dry_run_plan.next_version, v3,
+        "dry_run succeeds for a breaking batch; compat is not enforced at batch-plan level"
+    );
+
+    // ── Phase 4: advisory gate – compat diagnostic confirms BREAKING ─────────
+    let diagnostic = breaking_contract.compatibility_with(&v1_contract);
+    assert!(
+        !diagnostic.compatible,
+        "breaking change must be detected as incompatible; messages: {:?}",
+        diagnostic.messages
+    );
+    assert_has_compat_message(
+        &breaking_contract,
+        &v1_contract,
+        "changing cardinality contract",
+    );
+    // The advisory result IS the publication-denial gate. Callers must check
+    // compatibility_with() before proceeding to apply_mutation_plan / publish.
+
+    // ── Phase 5: defense-in-depth – structural snapshot guard rejects re-create
+    // If the advisory gate is bypassed, the snapshot still refuses to apply a
+    // Create for an object_id that already exists (object_id 121 was committed
+    // in Phase 1). This provides a hard rejection that leaves snapshot unchanged.
+    let breaking_plan = apply_plan_from_batch(&breaking_batch);
+    let apply_err = snapshot.apply_mutation_plan(&breaking_plan).expect_err(
+        "applying a breaking change over an existing object_id must fail at snapshot level",
+    );
+    assert_eq!(
+        apply_err.kind(),
+        AndromedaErrorKind::Catalog,
+        "snapshot rejection must carry AndromedaErrorKind::Catalog"
+    );
+    assert!(
+        apply_err.message().contains("already contains object id"),
+        "snapshot structural guard must report duplicate object_id; got: {}",
+        apply_err.message()
+    );
+
+    // ── Phase 6: no publication receipt; snapshot version unchanged ───────────
+    // snapshot.version is the internal applied version; the failed apply must not
+    // advance it.
+    assert_eq!(
+        snapshot.version, v2,
+        "snapshot internal version must be unchanged after rejected breaking-change apply"
+    );
+    // No durable publication receipt was ever constructed (InMemoryOnly throughout).
+    assert!(
+        snapshot.visible_publication_receipt().is_none(),
+        "no CatalogPublicationReceipt must be present after a denied breaking-change batch"
+    );
+    // Structural guard also left the object count at 1 (only v1 procedure).
+    assert_eq!(
+        snapshot.applied_object_count(),
+        1,
+        "snapshot must contain only the v1 procedure after the breaking apply was rejected"
+    );
+}

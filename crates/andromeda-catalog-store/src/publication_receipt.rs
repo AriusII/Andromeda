@@ -8,6 +8,43 @@ use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::CatalogPublicationSemantics;
 
+/// Opaque security audit trace identifier carried by receipts that affect
+/// permissions, policies, invocable procedures, or administrative catalog state.
+///
+/// Backed by a fixed-size byte array so the receipt remains `Copy`.
+/// The admission integration layer (P05/P06 scope) is responsible for
+/// generating non-zero values; all normal-path constructions default to `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SecurityAuditTraceId([u8; 32]);
+
+impl SecurityAuditTraceId {
+    /// Constructs a `SecurityAuditTraceId` from a raw 32-byte trace token.
+    pub const fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Returns the underlying byte representation.
+    pub const fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
+/// Decision context for the provenance of a publication receipt.
+///
+/// `NotRecovered` is the normal active-commit value.  `RecoveredFromDurableWal`
+/// is set by the WAL-replay recovery path when it reconstructs receipts during
+/// startup (populated in the P05/P06 admission-integration window).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogPublicationRecoveryDecision {
+    /// Normal path: receipt was produced during an active durable commit, not recovery.
+    NotRecovered,
+    /// Recovery path: receipt was reconstructed from WAL replay at startup.
+    RecoveredFromDurableWal {
+        /// The durable LSN at which the commit record was observed during replay.
+        source_lsn: u64,
+    },
+}
+
 /// An opaque monotonic marker from an external durable store.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CatalogDurabilityMarker(u64);
@@ -103,6 +140,18 @@ pub trait CatalogPublicationPlan<
     fn publication_semantics(&self) -> CatalogPublicationSemantics;
 
     fn is_monotonic(&self) -> bool;
+
+    /// Index of the first apply operation in this batch (always `0` for
+    /// well-formed batches produced by `CatalogMutationPlan::new`).
+    fn first_operation_index(&self) -> u32;
+
+    /// Index of the last apply operation in this batch.
+    ///
+    /// For a plan with `N` deltas: `last = N − 1`.
+    /// Combined with `first_operation_index`, this proves dense coverage:
+    /// `record_count == (last − first + 1) + 2` (the `+2` accounts for the
+    /// Begin and Commit boundary records).
+    fn last_operation_index(&self) -> u32;
 }
 
 /// Store-facing validation hook for committed catalog mutation evidence.
@@ -114,6 +163,19 @@ pub trait CatalogPublicationCommitEvidence<Plan> {
     fn durable_evidence_marker(&self) -> Option<CatalogDurabilityMarker>;
 
     fn record_count(&self) -> usize;
+
+    /// The provenance decision for this receipt.
+    ///
+    /// Normal active-commit path returns `NotRecovered`.  The WAL-replay
+    /// recovery path returns `RecoveredFromDurableWal { source_lsn }`.
+    fn recovery_decision(&self) -> CatalogPublicationRecoveryDecision;
+
+    /// The security audit trace identifier, if the batch affected permissions,
+    /// policies, invocable procedures, or administrative catalog state.
+    ///
+    /// Returns `None` on the normal path until the P05/P06 admission
+    /// integration layer generates trace identifiers.
+    fn security_audit_trace_id(&self) -> Option<SecurityAuditTraceId>;
 }
 
 /// Immutable confirmation that a catalog mutation was applied and durably persisted.
@@ -134,6 +196,27 @@ pub struct CatalogPublicationReceipt<
     pub durable_evidence_marker: Option<CatalogDurabilityMarker>,
     pub record_count: usize,
     pub publication_semantics: CatalogPublicationSemantics,
+    /// Index of the first apply operation in this batch (SPEC §226).
+    ///
+    /// Always `0` for well-formed batches. Proves the lower bound of dense
+    /// operation coverage together with `last_operation_index`.
+    pub first_operation_index: u32,
+    /// Index of the last apply operation in this batch (SPEC §226).
+    ///
+    /// For a plan with `N` deltas: `last = N − 1`.  Together with
+    /// `first_operation_index` this satisfies:
+    /// `record_count == (last − first + 1) + 2`.
+    pub last_operation_index: u32,
+    /// Recovery provenance for this receipt (SPEC §230).
+    ///
+    /// `NotRecovered` on the normal durable-commit path.
+    /// `RecoveredFromDurableWal` when reconstructed during WAL replay.
+    pub recovery_decision: CatalogPublicationRecoveryDecision,
+    /// Security audit trace identifier (SPEC §229).
+    ///
+    /// `None` until the P05/P06 admission-integration layer generates
+    /// non-zero identifiers for batches that affect security-sensitive state.
+    pub security_audit_trace_id: Option<SecurityAuditTraceId>,
 }
 
 impl<DefinitionBatchId, DefinitionBatchSourceHash, DefinitionBatchDependencyGraphHash>
@@ -161,6 +244,27 @@ where
     {
         evidence.validate_for_publication_plan(plan)?;
 
+        let first_operation_index = plan.first_operation_index();
+        let last_operation_index = plan.last_operation_index();
+
+        // GAP-2 (SPEC §226): prove dense operation coverage.
+        if last_operation_index < first_operation_index {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication receipt last operation index must not precede first operation index",
+            ));
+        }
+
+        // `op_span` is safe from overflow: last >= first guaranteed above.
+        let op_span = (last_operation_index - first_operation_index + 1) as usize;
+        let evidence_record_count = evidence.record_count();
+        if evidence_record_count != op_span + 2 {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Catalog,
+                "catalog publication receipt record count must equal operation span plus two boundary records",
+            ));
+        }
+
         Ok(Self {
             batch_id: plan.batch_id(),
             database_id: plan.database_id(),
@@ -173,6 +277,10 @@ where
             durable_evidence_marker: evidence.durable_evidence_marker(),
             record_count: evidence.record_count(),
             publication_semantics: plan.publication_semantics(),
+            first_operation_index,
+            last_operation_index,
+            recovery_decision: evidence.recovery_decision(),
+            security_audit_trace_id: evidence.security_audit_trace_id(),
         })
     }
 }
@@ -191,6 +299,8 @@ mod tests {
         record_count: usize,
         publication_semantics: CatalogPublicationSemantics,
         monotonic: bool,
+        first_operation_index: u32,
+        last_operation_index: u32,
     }
 
     impl CatalogPublicationPlan<u64, [u8; 32], [u8; 32]> for TestPublicationPlan {
@@ -233,6 +343,14 @@ mod tests {
         fn is_monotonic(&self) -> bool {
             self.monotonic
         }
+
+        fn first_operation_index(&self) -> u32 {
+            self.first_operation_index
+        }
+
+        fn last_operation_index(&self) -> u32 {
+            self.last_operation_index
+        }
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -271,6 +389,14 @@ mod tests {
         fn record_count(&self) -> usize {
             self.record_count
         }
+
+        fn recovery_decision(&self) -> CatalogPublicationRecoveryDecision {
+            CatalogPublicationRecoveryDecision::NotRecovered
+        }
+
+        fn security_audit_trace_id(&self) -> Option<SecurityAuditTraceId> {
+            None
+        }
     }
 
     fn plan() -> TestPublicationPlan {
@@ -278,6 +404,9 @@ mod tests {
             record_count: 3,
             publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
             monotonic: true,
+            // record_count = 3 → 1 apply record → first=0, last=0
+            first_operation_index: 0,
+            last_operation_index: 0,
         }
     }
 
@@ -351,6 +480,125 @@ mod tests {
             receipt.publication_semantics,
             CatalogPublicationSemantics::DurablePublicationExternal
         );
+        // GAP-2 fields
+        assert_eq!(receipt.first_operation_index, 0);
+        assert_eq!(receipt.last_operation_index, 0);
+        // GAP-1 fields
+        assert_eq!(
+            receipt.recovery_decision,
+            CatalogPublicationRecoveryDecision::NotRecovered
+        );
+        assert_eq!(receipt.security_audit_trace_id, None);
+    }
+
+    // --- GAP-1 tests ---
+
+    #[test]
+    fn receipt_carries_security_audit_trace_id_field_with_none_default() {
+        let receipt = CatalogPublicationReceipt::from_plan_and_evidence(
+            &plan(),
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 10,
+                    durable_lsn: 10,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap();
+
+        // P05/P06 admission integration has not run: field must exist and be None.
+        assert_eq!(receipt.security_audit_trace_id, None);
+    }
+
+    #[test]
+    fn receipt_recovery_decision_distinguishes_normal_commit_from_replay() {
+        let receipt = CatalogPublicationReceipt::from_plan_and_evidence(
+            &plan(),
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 10,
+                    durable_lsn: 10,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap();
+
+        // Normal active-commit path must yield NotRecovered.
+        assert_eq!(
+            receipt.recovery_decision,
+            CatalogPublicationRecoveryDecision::NotRecovered
+        );
+
+        // The RecoveredFromDurableWal variant round-trips its source_lsn.
+        let recovered =
+            CatalogPublicationRecoveryDecision::RecoveredFromDurableWal { source_lsn: 42 };
+        assert_ne!(recovered, CatalogPublicationRecoveryDecision::NotRecovered);
+        match recovered {
+            CatalogPublicationRecoveryDecision::RecoveredFromDurableWal { source_lsn } => {
+                assert_eq!(source_lsn, 42);
+            },
+            CatalogPublicationRecoveryDecision::NotRecovered => {
+                panic!("expected RecoveredFromDurableWal");
+            },
+        }
+    }
+
+    // --- GAP-2 tests ---
+
+    #[test]
+    fn receipt_rejects_inconsistent_first_last_operation_index() {
+        // last_operation_index < first_operation_index → structural violation.
+        let bad_plan = TestPublicationPlan {
+            record_count: 3,
+            publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
+            monotonic: true,
+            first_operation_index: 2,
+            last_operation_index: 1, // last < first
+        };
+
+        let error = CatalogPublicationReceipt::from_plan_and_evidence(
+            &bad_plan,
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 10,
+                    durable_lsn: 10,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("last operation index"));
+    }
+
+    #[test]
+    fn receipt_rejects_record_count_not_matching_first_last_index_span() {
+        // first=0, last=5 → op_span=6 → record_count must be 8, but evidence says 3.
+        let bad_plan = TestPublicationPlan {
+            record_count: 3,
+            publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
+            monotonic: true,
+            first_operation_index: 0,
+            last_operation_index: 5,
+        };
+
+        let error = CatalogPublicationReceipt::from_plan_and_evidence(
+            &bad_plan,
+            TestCommitEvidence {
+                durability: CatalogMutationDurability::StorageWal {
+                    commit_lsn: 10,
+                    durable_lsn: 10,
+                },
+                record_count: 3,
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+        assert!(error.message().contains("record count"));
     }
 
     #[test]

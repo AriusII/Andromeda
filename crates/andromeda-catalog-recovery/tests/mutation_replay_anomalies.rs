@@ -575,6 +575,75 @@ fn durable_payload_boundary_rejects_missing_definition_batch_hash() {
     assert!(dependency_error.message().contains("dependency graph hash"));
 }
 
+/// Audit-evidence gap closure: replaying a committed batch whose
+/// `previous_version` equals the target's current version minus one (i.e. the
+/// batch was already applied before the replay window) must be silently
+/// skipped rather than double-applied.
+///
+/// Concretely: target is ALREADY at version 11; WAL contains a batch with
+/// `previous_version=10 / next_version=11`. The replay engine cannot confirm
+/// the batch was applied (it has no applied-batch registry), so it classifies
+/// the situation as `VersionGap` and places the batch in
+/// `skipped_anomalous_batches`.
+///
+/// FOLLOWUP: The `VersionGap` classification correctly prevents double-apply
+/// but does not distinguish "already applied" from "skipped a version". A
+/// dedicated `DuplicateApply` anomaly kind would improve audit observability and
+/// allow operators to disambiguate the two scenarios.
+#[test]
+fn recovery_skips_already_applied_batch_when_target_already_at_next_version() {
+    // Batch: previous_version=10, next_version=11.
+    let batch = table_batch(10, &[(1, "Inventory.Product")]);
+    let records = records_for_batch(&batch);
+
+    // Target is ALREADY at version 11 (the batch's next_version).
+    // The replay engine sees: boundary.previous_version(10) ≠ target.visible(11).
+    let outcome = replay_catalog_mutation_records_into_target(target_at(11), records);
+
+    // The batch must NOT be re-applied.
+    assert!(
+        outcome.report.replayed_batches.is_empty(),
+        "already-at-next-version batch must not be re-replayed into the target"
+    );
+
+    // Classified as VersionGap and placed in skipped_anomalous_batches (not incomplete).
+    assert_skipped_anomalous(
+        &outcome.report,
+        batch.batch_id,
+        10, // previous_version from the boundary record
+        11, // next_version from the boundary record
+        1,  // observed_apply_count: one Apply record was decoded before the check
+        CatalogSkippedBatchReason::VersionGap,
+    );
+    assert!(
+        outcome.report.skipped_incomplete_batches.is_empty(),
+        "a fully-formed batch must not appear in the incomplete list"
+    );
+
+    // Anomaly list must contain a VersionGap record for this batch.
+    assert_has_anomaly_for_batch(
+        &outcome.report,
+        CatalogRecoveryAnomalyKind::VersionGap,
+        batch.batch_id,
+    );
+
+    // Target version must remain at 11 (unchanged).
+    assert_eq!(
+        outcome.report.final_visible_catalog_version,
+        version(11),
+        "replay of an already-applied batch must leave the target version unchanged"
+    );
+    assert_eq!(
+        outcome.target.visible_version,
+        version(11),
+        "target visible_version must not regress or advance after skipping an already-applied batch"
+    );
+    assert!(
+        outcome.target.applied_batches.is_empty(),
+        "no batch must be applied to the target when it is already at the batch next_version"
+    );
+}
+
 fn records_for_batch(batch: &DefinitionBatch) -> Vec<CatalogMutationRecord> {
     let next_version = CatalogVersion::new(batch.base_version.get() + 1);
     let boundary = CatalogMutationBoundary {

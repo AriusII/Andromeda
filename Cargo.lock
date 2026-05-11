@@ -512,6 +512,7 @@ dependencies = [
 name = "andromeda-procedure-contract"
 version = "0.1.0"
 dependencies = [
+ "andromeda-contract-compat",
  "andromeda-digest",
  "andromeda-error",
  "andromeda-security-contract",

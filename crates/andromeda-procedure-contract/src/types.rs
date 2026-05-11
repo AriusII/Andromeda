@@ -2,6 +2,11 @@
 
 use std::collections::BTreeSet;
 
+use andromeda_contract_compat::{
+    CONTRACT_COMPAT_COMPATIBLE_ADDITIVE, CONTRACT_COMPAT_COMPATIBLE_METADATA_ONLY,
+    CONTRACT_COMPAT_INCOMPATIBLE_PERMISSION, CONTRACT_COMPAT_INCOMPATIBLE_SHAPE,
+    CONTRACT_COMPAT_REVIEW_REQUIRED,
+};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId,
@@ -153,24 +158,127 @@ pub enum CompatibilityPolicy {
     ExactHash,
 }
 
+/// Typed compatibility decision produced by the contract compatibility checker.
+///
+/// Every operation in a `DefinitionBatch` carries exactly one
+/// `CompatibilityDecision` (per `SPEC_DEFINITION_BATCH_V0.md` §Invariants).
+/// Use [`CompatibilityDecision::taxonomy_id`] to obtain the stable
+/// `andromeda.contract.compat.v0` identifier for audit and trace evidence.
+///
+/// # Decision priority (when multiple signals are detected)
+///
+/// `Rejected` > `SecurityImpact` > `Breaking` > `Additive`
+///
+/// # Note on `Deprecated`
+///
+/// `Deprecated` is a lifecycle-driven decision that is **not** produced by
+/// [`crate::diagnose_procedure_contract_compatibility`].  It is reserved for
+/// `DefinitionOperation::Deprecate` — a DefinitionBatch operation not yet
+/// implemented.
+///
+/// TODO: wire `Deprecated` when `DefinitionOperation::Deprecate` is added
+/// (`SPEC_DEFINITION_BATCH_V0.md` §Invariants — "lifecycle-driven, attach to
+/// receipt only when DefinitionOperation::Deprecate").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CompatibilityDecision {
+    /// The contract change is strictly additive (or identical under
+    /// `ExactHash` policy).  This is the only non-advisory acceptable
+    /// decision.
+    Additive,
+    /// The contract change is breaking — callers or downstream systems that
+    /// bound the previous contract version will fail.
+    Breaking { reasons: Vec<String> },
+    /// The contract change crosses a security boundary (e.g. a required
+    /// permission was removed or the transaction access mode widens from
+    /// `ReadOnly` to `ReadWrite`).
+    SecurityImpact { reasons: Vec<String> },
+    /// Lifecycle-driven deprecation.  Acceptable but advisory: the procedure
+    /// remains callable but its removal is signalled.  Not produced by
+    /// `diagnose_procedure_contract_compatibility` — reserved for
+    /// `DefinitionOperation::Deprecate`.
+    Deprecated,
+    /// The operation was rejected outright (invalid identity, non-canonical
+    /// hash, non-advancing `CatalogVersion`, etc.).
+    Rejected { reasons: Vec<String> },
+}
+
+impl CompatibilityDecision {
+    /// Returns `true` when the decision allows the operation to proceed
+    /// without a policy override.
+    ///
+    /// - `Additive` — unconditionally acceptable.
+    /// - `Deprecated` — acceptable but advisory (lifecycle signal only).
+    /// - `Breaking`, `SecurityImpact`, `Rejected` — not acceptable; require
+    ///   an explicit policy override or must be rejected.
+    pub fn is_acceptable(&self) -> bool {
+        matches!(self, Self::Additive | Self::Deprecated)
+    }
+
+    /// Returns the stable taxonomy identifier from
+    /// `andromeda.contract.compat.v0` that corresponds to this decision.
+    ///
+    /// The returned string is one of the `CONTRACT_COMPAT_*` constants owned
+    /// by `andromeda-contract-compat`.  It is suitable for audit records,
+    /// decision traces, and operator-facing evidence.
+    pub fn taxonomy_id(&self) -> &'static str {
+        match self {
+            Self::Additive => CONTRACT_COMPAT_COMPATIBLE_ADDITIVE,
+            Self::Breaking { .. } => CONTRACT_COMPAT_INCOMPATIBLE_SHAPE,
+            Self::SecurityImpact { .. } => CONTRACT_COMPAT_INCOMPATIBLE_PERMISSION,
+            Self::Deprecated => CONTRACT_COMPAT_COMPATIBLE_METADATA_ONLY,
+            Self::Rejected { .. } => CONTRACT_COMPAT_REVIEW_REQUIRED,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContractCompatibilityDiagnostic {
+    /// `true` when `decision.is_acceptable()`.
+    ///
+    /// Kept for backward compatibility with existing callers.  New code
+    /// should pattern-match on [`Self::decision`] directly.
     pub compatible: bool,
+    /// Mirrors the `reasons` carried by the decision variant; empty for
+    /// `Additive` and `Deprecated`.
+    ///
+    /// Kept for backward compatibility.  Prefer inspecting
+    /// `decision` in new code to avoid interpreting the free-form strings.
     pub messages: Vec<String>,
+    /// The typed compatibility decision.
+    pub decision: CompatibilityDecision,
 }
 
 impl ContractCompatibilityDiagnostic {
+    /// Construct an `Additive` diagnostic (backward-compatible alias).
     pub fn compatible() -> Self {
-        Self {
-            compatible: true,
-            messages: Vec::new(),
-        }
+        Self::with_decision(CompatibilityDecision::Additive)
     }
 
+    /// Construct a `Breaking` diagnostic from a free-form message list
+    /// (backward-compatible alias).
+    ///
+    /// Prefer [`Self::with_decision`] in new code.
     pub fn incompatible(messages: Vec<String>) -> Self {
+        Self::with_decision(CompatibilityDecision::Breaking { reasons: messages })
+    }
+
+    /// Construct a diagnostic from a fully-typed [`CompatibilityDecision`].
+    ///
+    /// The `compatible` and `messages` fields are derived from the decision
+    /// so that existing callers that read those fields continue to work
+    /// without modification.
+    pub fn with_decision(decision: CompatibilityDecision) -> Self {
+        let compatible = decision.is_acceptable();
+        let messages = match &decision {
+            CompatibilityDecision::Additive | CompatibilityDecision::Deprecated => Vec::new(),
+            CompatibilityDecision::Breaking { reasons }
+            | CompatibilityDecision::SecurityImpact { reasons }
+            | CompatibilityDecision::Rejected { reasons } => reasons.clone(),
+        };
         Self {
-            compatible: false,
+            compatible,
             messages,
+            decision,
         }
     }
 }

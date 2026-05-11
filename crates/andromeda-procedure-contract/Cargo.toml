@@ -6,6 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+andromeda-contract-compat.workspace = true
 andromeda-digest.workspace = true
 andromeda-error.workspace = true
 andromeda-security-contract.workspace = true

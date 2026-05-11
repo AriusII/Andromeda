@@ -1,10 +1,10 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_procedure_contract::{
-    AccessMode, CatalogObjectRef, CompatibilityPolicy, ContractCompatibilityDiagnostic,
-    IsolationPolicy, MultiResultPolicy, ObjectKind, PolicyVersion, ProcedureContract,
-    ProcedureContractBinding, ProcedureContractCandidate, ProcedureErrorPolicy, ProtocolLayoutRef,
-    QualifiedName, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
-    StatsVersion, TransactionPolicy,
+    AccessMode, CatalogObjectRef, CompatibilityDecision, CompatibilityPolicy,
+    ContractCompatibilityDiagnostic, IsolationPolicy, MultiResultPolicy, ObjectKind, PolicyVersion,
+    ProcedureContract, ProcedureContractBinding, ProcedureContractCandidate, ProcedureErrorPolicy,
+    ProtocolLayoutRef, QualifiedName, ResultMetadataPolicy, ResultStreamCardinality,
+    ResultStreamContract, StatsVersion, TransactionPolicy,
 };
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, ProcedureId, ScalarType,
@@ -663,4 +663,318 @@ fn procedure_validate_binding_rejects_catalog_version_or_procedure_id_drift() {
         .validate_binding(&drifted_procedure)
         .expect_err("drifted ProcedureId must be rejected before invocation");
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+}
+
+// ── Helper: build a contract with configurable permissions and access mode ──
+
+fn procedure_contract_with_perms_and_access(
+    id: u64,
+    name: &str,
+    version: CatalogVersion,
+    permissions: Vec<String>,
+    compatibility_policy: CompatibilityPolicy,
+    access_mode: AccessMode,
+) -> ProcedureContract {
+    ProcedureContractCandidate {
+        object: object(id, name, ObjectKind::Procedure, version),
+        procedure_id: ProcedureId::new(id),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        },
+        inputs: vec![column("ProductId", 0)],
+        structured_inputs: Vec::new(),
+        result_streams: Vec::new(),
+        required_permissions: permissions,
+        transaction_policy: TransactionPolicy {
+            access_mode,
+            isolation: IsolationPolicy::Serializable,
+            retryable: false,
+        },
+        compatibility_policy,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+    .materialize()
+    .unwrap()
+}
+
+// ── CompatibilityDecision tests ─────────────────────────────────────────────
+
+#[test]
+fn compatibility_decision_additive_taxonomy_matches_compatible_additive() {
+    // An AdditiveOnly contract that grows a new result stream column and adds
+    // a new result stream is `Additive`.  The taxonomy id must be the stable
+    // "compatible.additive" identifier.
+    let previous = procedure_contract(
+        40,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+    let next = procedure_contract(
+        40,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::AdditiveOnly,
+        MultiResultPolicy::MultipleResultStreamsAllowed,
+    );
+
+    let diagnostic = next.compatibility_with(&previous);
+
+    assert!(
+        diagnostic.compatible,
+        "additive result growth must be compatible"
+    );
+    assert!(diagnostic.messages.is_empty());
+    assert_eq!(diagnostic.decision, CompatibilityDecision::Additive);
+    assert!(diagnostic.decision.is_acceptable());
+    assert_eq!(diagnostic.decision.taxonomy_id(), "compatible.additive");
+}
+
+#[test]
+fn compatibility_decision_breaking_under_exact_hash_carries_reason() {
+    // A contract with ExactHash policy where the hash drifts (because the
+    // result stream grew) must produce a `Breaking` decision.
+    let previous = procedure_contract(
+        41,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+    let next = procedure_contract(
+        41,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        vec![],
+        vec![result_stream(
+            1,
+            "Reservations",
+            ResultStreamCardinality::One,
+            vec![column("ProductId", 0), column("ReservedQuantity", 1)],
+        )],
+        CompatibilityPolicy::ExactHash,
+        MultiResultPolicy::SingleResultOnly,
+    );
+
+    assert_ne!(
+        previous.contract_hash, next.contract_hash,
+        "hash must differ for the Breaking test to be meaningful"
+    );
+
+    let diagnostic = next.compatibility_with(&previous);
+
+    assert!(!diagnostic.compatible);
+    assert!(
+        matches!(&diagnostic.decision, CompatibilityDecision::Breaking { reasons } if !reasons.is_empty()),
+        "expected Breaking decision; got {:?}",
+        diagnostic.decision
+    );
+    assert!(!diagnostic.decision.is_acceptable());
+    assert_eq!(diagnostic.decision.taxonomy_id(), "incompatible.shape");
+    assert!(
+        diagnostic.messages.iter().any(|m| m.contains("exact-hash")),
+        "Breaking reason must mention exact-hash; got {:?}",
+        diagnostic.messages
+    );
+}
+
+#[test]
+fn compatibility_decision_security_impact_when_required_permission_removed() {
+    // An AdditiveOnly upgrade that removes a required permission lowers the
+    // security boundary and must produce a `SecurityImpact` decision.
+    let previous = procedure_contract_with_perms_and_access(
+        42,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![
+            "Inventory.ReserveStock.Execute".to_string(),
+            "Audit.Read.Execute".to_string(),
+        ],
+        CompatibilityPolicy::AdditiveOnly,
+        AccessMode::ReadWrite,
+    );
+    let next = procedure_contract_with_perms_and_access(
+        42,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(2),
+        // "Audit.Read.Execute" is removed — this is a security impact.
+        vec!["Inventory.ReserveStock.Execute".to_string()],
+        CompatibilityPolicy::AdditiveOnly,
+        AccessMode::ReadWrite,
+    );
+
+    let diagnostic = next.compatibility_with(&previous);
+
+    assert!(!diagnostic.compatible);
+    assert!(
+        matches!(&diagnostic.decision, CompatibilityDecision::SecurityImpact { reasons } if !reasons.is_empty()),
+        "expected SecurityImpact decision; got {:?}",
+        diagnostic.decision
+    );
+    assert!(!diagnostic.decision.is_acceptable());
+    assert_eq!(diagnostic.decision.taxonomy_id(), "incompatible.permission");
+    assert!(
+        diagnostic
+            .messages
+            .iter()
+            .any(|m| m.contains("Audit.Read.Execute")),
+        "SecurityImpact reason must name the removed permission; got {:?}",
+        diagnostic.messages
+    );
+}
+
+#[test]
+fn compatibility_decision_breaking_when_input_shape_breaks_under_additive_policy() {
+    // An AdditiveOnly upgrade that changes an existing input column type must
+    // produce a `Breaking` decision — callers bound to the old input shape
+    // will fail.
+    let previous = procedure_contract_with_input_columns(
+        43,
+        "Inventory.ReserveStock",
+        CatalogVersion::new(1),
+        vec![typed_column("ProductId", 0, ScalarType::I64)],
+        Vec::new(),
+    );
+    // Reuse the helper but override the compatibility policy via
+    // ProcedureContractCandidate to avoid creating a candidate with
+    // ExactHash (which is the default in procedure_contract_with_input_columns).
+    let next = ProcedureContractCandidate {
+        object: object(
+            43,
+            "Inventory.ReserveStock",
+            ObjectKind::Procedure,
+            CatalogVersion::new(2),
+        ),
+        procedure_id: ProcedureId::new(43),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: ProtocolLayoutRef {
+            descriptor_set_hash: ContractHash::test_vector(0xA1),
+            frame_envelope_hash: ContractHash::test_vector(0xA2),
+        },
+        // Input type changed I64 → Bool: breaking under AdditiveOnly.
+        inputs: vec![typed_column("ProductId", 0, ScalarType::Bool)],
+        structured_inputs: Vec::new(),
+        result_streams: Vec::new(),
+        required_permissions: vec!["Inventory.ReserveStock.Execute".to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadWrite,
+            isolation: IsolationPolicy::Serializable,
+            retryable: false,
+        },
+        compatibility_policy: CompatibilityPolicy::AdditiveOnly,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: true,
+            allowed_error_codes: vec!["InsufficientStock".to_string()],
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+    .materialize()
+    .unwrap();
+
+    let diagnostic = next.compatibility_with(&previous);
+
+    assert!(!diagnostic.compatible);
+    assert!(
+        matches!(&diagnostic.decision, CompatibilityDecision::Breaking { reasons } if !reasons.is_empty()),
+        "expected Breaking decision for input type change; got {:?}",
+        diagnostic.decision
+    );
+    assert!(!diagnostic.decision.is_acceptable());
+    assert_eq!(diagnostic.decision.taxonomy_id(), "incompatible.shape");
+    assert!(
+        diagnostic.messages.iter().any(|m| m.contains("input")),
+        "Breaking reason must mention inputs; got {:?}",
+        diagnostic.messages
+    );
+}
+
+#[test]
+fn compatibility_decision_taxonomy_id_is_stable() {
+    // All five `CompatibilityDecision` variants must map to the corresponding
+    // stable `andromeda.contract.compat.v0` taxonomy identifier.
+    let cases: &[(&CompatibilityDecision, &str)] = &[
+        (&CompatibilityDecision::Additive, "compatible.additive"),
+        (
+            &CompatibilityDecision::Breaking {
+                reasons: vec!["r".to_string()],
+            },
+            "incompatible.shape",
+        ),
+        (
+            &CompatibilityDecision::SecurityImpact {
+                reasons: vec!["r".to_string()],
+            },
+            "incompatible.permission",
+        ),
+        (
+            &CompatibilityDecision::Deprecated,
+            "compatible.metadata_only",
+        ),
+        (
+            &CompatibilityDecision::Rejected {
+                reasons: vec!["r".to_string()],
+            },
+            "review.required",
+        ),
+    ];
+
+    for (decision, expected_id) in cases {
+        assert_eq!(
+            decision.taxonomy_id(),
+            *expected_id,
+            "taxonomy_id mismatch for {decision:?}"
+        );
+    }
+
+    // Acceptable decisions: Additive and Deprecated only.
+    assert!(CompatibilityDecision::Additive.is_acceptable());
+    assert!(CompatibilityDecision::Deprecated.is_acceptable());
+    assert!(
+        !CompatibilityDecision::Breaking {
+            reasons: Vec::new()
+        }
+        .is_acceptable()
+    );
+    assert!(
+        !CompatibilityDecision::SecurityImpact {
+            reasons: Vec::new()
+        }
+        .is_acceptable()
+    );
+    assert!(
+        !CompatibilityDecision::Rejected {
+            reasons: Vec::new()
+        }
+        .is_acceptable()
+    );
 }
