@@ -21,6 +21,7 @@ mod locking_protocol;
 mod manager;
 mod state;
 mod trace;
+pub mod transition_sink;
 mod wal_adapter;
 
 pub use allocator::TransactionIdAllocator;
@@ -31,4 +32,5 @@ pub use state::{TransactionEvent, TransactionState, TransactionStateMachine};
 pub use trace::{
     LockReleaseAllTrace, TransactionTrace, TransactionTransitionCorrelation, transaction_phase_code,
 };
+pub use transition_sink::{InMemoryTransitionSink, NullTransitionSink, TransactionTransitionSink};
 pub use wal_adapter::{TxWalAdapterTrait, WalManager, append_commit_and_flush};

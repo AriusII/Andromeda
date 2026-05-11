@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 
@@ -8,6 +8,7 @@ use andromeda_locking::{
     LockReleaseAllSummary, LockReleaseEvidence, LockResource,
 };
 use andromeda_mvcc::{TransactionStatus, TransactionStatusTable};
+use andromeda_observability::{TraceId, TransitionReasonCode};
 use andromeda_savepoint::{
     Savepoint, SavepointReleaseEvidence, SavepointRollbackEvidence, SavepointStack,
 };
@@ -16,6 +17,8 @@ use andromeda_types::TransactionId;
 use crate::allocator::TransactionIdAllocator;
 use crate::locking_protocol::{TwoPhaseLocksValidator, TwoPhaseOperation};
 use crate::state::{TransactionState, TransactionStateMachine};
+use crate::trace::TransactionTransitionCorrelation;
+use crate::transition_sink::{NullTransitionSink, TransactionTransitionSink};
 use andromeda_transaction_log::Lsn;
 
 use super::lock_coordinator::TransactionLockCoordinator;
@@ -23,10 +26,28 @@ use super::record::TransactionRecord;
 
 /// Owner of the live transaction state machines, the status table, and the
 /// id allocator.
-#[derive(Debug)]
+///
+/// Trace emission is observability-only and never authoritative for commit
+/// visibility or durable WAL gating; those invariants remain owned by
+/// [`TransactionStateMachine`].
 pub struct TransactionManager {
     allocator: TransactionIdAllocator,
     inner: Mutex<TransactionManagerInner>,
+    /// Pluggable sink that receives a [`andromeda_observability::TransactionTransitionTrace`]
+    /// after every successful state-machine transition.
+    ///
+    /// Defaults to [`NullTransitionSink`] (no-op). Swap with
+    /// [`with_transition_sink`][Self::with_transition_sink].
+    transition_sink: Arc<dyn TransactionTransitionSink>,
+}
+
+impl std::fmt::Debug for TransactionManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("TransactionManager")
+            .field("allocator", &self.allocator)
+            .field("inner", &self.inner)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Default)]
@@ -34,6 +55,10 @@ struct TransactionManagerInner {
     live: HashMap<TransactionId, TransactionStateMachine>,
     savepoints: HashMap<TransactionId, SavepointStack>,
     status: TransactionStatusTable,
+    /// Per-transaction correlation envelope and trace root id, stored at
+    /// [`begin`][TransactionManager::begin] and removed at
+    /// [`dispose`][TransactionManager::dispose].
+    correlations: HashMap<TransactionId, (TransactionTransitionCorrelation, TraceId)>,
 }
 
 impl TransactionManager {
@@ -42,6 +67,7 @@ impl TransactionManager {
         Self {
             allocator: TransactionIdAllocator::new(),
             inner: Mutex::new(TransactionManagerInner::default()),
+            transition_sink: Arc::new(NullTransitionSink),
         }
     }
 
@@ -52,7 +78,22 @@ impl TransactionManager {
         Self {
             allocator: TransactionIdAllocator::with_floor(floor),
             inner: Mutex::new(TransactionManagerInner::default()),
+            transition_sink: Arc::new(NullTransitionSink),
         }
+    }
+
+    /// Attach a transition-trace sink to this manager.
+    ///
+    /// Returns `self` for use in a builder chain. Replaces any previously
+    /// configured sink.
+    ///
+    /// ```rust,ignore
+    /// let mgr = TransactionManager::new()
+    ///     .with_transition_sink(Arc::new(my_sink));
+    /// ```
+    pub fn with_transition_sink(mut self, sink: Arc<dyn TransactionTransitionSink>) -> Self {
+        self.transition_sink = sink;
+        self
     }
 
     /// Raise the allocator floor during recovery without losing live state.
@@ -60,10 +101,51 @@ impl TransactionManager {
         self.allocator.seed(floor)
     }
 
-    /// Begin a fresh transaction. Returns the freshly allocated id and
-    /// records `InFlight` status atomically with state-machine creation.
+    /// Begin a fresh transaction using an empty correlation envelope and a
+    /// derived trace id.
+    ///
+    /// Returns the freshly allocated transaction id. The `Created → Active`
+    /// transition trace is emitted to the configured sink.
+    ///
+    /// See also [`begin_with_correlation`][Self::begin_with_correlation] for
+    /// supplying an explicit invocation/request/session context.
     pub fn begin(&self) -> AndromedaResult<TransactionId> {
         let id = self.allocator.allocate()?;
+        // Default trace_id derived from the transaction id — unique and
+        // deterministic without requiring a separate counter.
+        let trace_id = TraceId::new(id.get() as u128);
+        self.begin_inner(id, TransactionTransitionCorrelation::empty(), trace_id)
+    }
+
+    /// Begin a fresh transaction, associating it with an explicit correlation
+    /// envelope and trace root id.
+    ///
+    /// Emits a `Created → Active` transition trace to the configured sink,
+    /// carrying the provided `correlation` and `trace_id` on every subsequent
+    /// trace for this transaction's lifetime.
+    ///
+    /// # Arguments
+    ///
+    /// * `correlation` – Optional invocation, request, and session ids to
+    ///   carry through every trace emitted for this transaction.
+    /// * `trace_id` – Non-zero root trace identifier.  Must not be zero; zero
+    ///   values will fail [`TransactionTransitionTrace::validate`] if the sink
+    ///   runs validation.
+    pub fn begin_with_correlation(
+        &self,
+        correlation: TransactionTransitionCorrelation,
+        trace_id: TraceId,
+    ) -> AndromedaResult<TransactionId> {
+        let id = self.allocator.allocate()?;
+        self.begin_inner(id, correlation, trace_id)
+    }
+
+    fn begin_inner(
+        &self,
+        id: TransactionId,
+        correlation: TransactionTransitionCorrelation,
+        trace_id: TraceId,
+    ) -> AndromedaResult<TransactionId> {
         let mut inner = self.lock()?;
         if inner.live.contains_key(&id) {
             return Err(AndromedaError::new(
@@ -72,10 +154,24 @@ impl TransactionManager {
             ));
         }
         let mut machine = TransactionStateMachine::new(id);
+        let prev_state = machine.state(); // Created
         machine.begin()?;
+        // Transition succeeded — snapshot before releasing the lock.
+        let machine_snapshot = machine;
         inner.live.insert(id, machine);
         inner.savepoints.insert(id, SavepointStack::new());
         inner.status.record(id, TransactionStatus::InFlight)?;
+        inner.correlations.insert(id, (correlation, trace_id));
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::NORMAL_PROGRESS,
+            "transaction began",
+        );
+        self.transition_sink.record(trace);
         Ok(id)
     }
 
@@ -84,10 +180,23 @@ impl TransactionManager {
     pub fn request_commit(&self, id: TransactionId) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
         machine.request_commit()?;
+        let machine_snapshot = *machine;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
         if let Some(stack) = inner.savepoints.get_mut(&id) {
             stack.clear();
         }
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::NORMAL_PROGRESS,
+            "commit requested",
+        );
+        self.transition_sink.record(trace);
         Ok(())
     }
 
@@ -103,6 +212,10 @@ impl TransactionManager {
     /// `commit_record_lsn` is the TxCommit record position and `durable_lsn`
     /// is the durable WAL prefix reported by storage. Visibility is mirrored
     /// only when `durable_lsn >= commit_record_lsn`.
+    ///
+    /// Emits a `Committing → Committed` transition trace with
+    /// [`TransitionReasonCode::DURABLE_WAL_FLUSH`] and the resulting
+    /// durable LSN populated in the trace.
     pub fn commit_durable_after_wal_record(
         &self,
         id: TransactionId,
@@ -111,25 +224,64 @@ impl TransactionManager {
     ) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
         machine.publish_visible_commit_with_durable_evidence(commit_record_lsn, durable_lsn)?;
         // State machine guarantees: state == Committed && durable_commit_lsn = Some(_).
+        let machine_snapshot = *machine;
         inner.status.record_committed_after_durable_wal(
             id,
             Lsn::new(commit_record_lsn),
             Lsn::new(durable_lsn),
         )?;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::DURABLE_WAL_FLUSH,
+            "commit durable after WAL flush",
+        );
+        self.transition_sink.record(trace);
         Ok(())
     }
 
     /// Move an active or failed transaction into `RollingBack`. Status stays
     /// `InFlight` until the rollback is durable.
+    ///
+    /// Reason code is [`TransitionReasonCode::CALLER_ROLLBACK`] for
+    /// `Active` and `Poisoned` predecessors, and
+    /// [`TransitionReasonCode::EXECUTOR_FAILURE`] when the predecessor was
+    /// `Failed`.
     pub fn request_rollback(&self, id: TransactionId) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
         machine.request_rollback()?;
+        let machine_snapshot = *machine;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
         if let Some(stack) = inner.savepoints.get_mut(&id) {
             stack.clear();
         }
+        drop(inner);
+
+        // Executor-failure predecessor gets a distinct reason code so
+        // downstream consumers can distinguish programmer-requested rollbacks
+        // from error-driven ones without inspecting the reason string.
+        let reason_code = if prev_state == TransactionState::Failed {
+            TransitionReasonCode::EXECUTOR_FAILURE
+        } else {
+            TransitionReasonCode::CALLER_ROLLBACK
+        };
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            reason_code,
+            "rollback requested",
+        );
+        self.transition_sink.record(trace);
         Ok(())
     }
 
@@ -144,6 +296,18 @@ impl TransactionManager {
     /// `durable_lsn` is the durable WAL prefix reported by storage. The
     /// rollback status is mirrored only when the durable prefix covers the
     /// terminal record.
+    ///
+    /// Emits a `RollingBack → RolledBack` transition trace.
+    ///
+    /// # Reason code choice
+    ///
+    /// [`TransitionReasonCode::DURABLE_WAL_FLUSH`] is used for the
+    /// `RollingBack → RolledBack` trace, consistent with how
+    /// `commit_durable` codes the analogous commit terminal boundary.
+    /// The prior `request_rollback` trace already carried the originating
+    /// reason (CALLER_ROLLBACK or EXECUTOR_FAILURE); the durable completion
+    /// trace records *what made the terminal state durable*, not why the
+    /// rollback was initiated.
     pub fn rollback_durable_after_wal_record(
         &self,
         id: TransactionId,
@@ -152,12 +316,25 @@ impl TransactionManager {
     ) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
         machine.complete_rollback_with_durable_evidence(rollback_record_lsn, durable_lsn)?;
+        let machine_snapshot = *machine;
         inner.status.record_rolled_back_after_durable_wal(
             id,
             Lsn::new(rollback_record_lsn),
             Lsn::new(durable_lsn),
         )?;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::DURABLE_WAL_FLUSH,
+            "rollback durable after WAL flush",
+        );
+        self.transition_sink.record(trace);
         Ok(())
     }
 
@@ -165,16 +342,44 @@ impl TransactionManager {
     /// back to reach a terminal state; the status table remains `InFlight`
     /// because no durable terminal evidence exists yet.
     pub fn poison(&self, id: TransactionId) -> AndromedaResult<()> {
-        self.with_machine(id, |machine| {
-            machine.apply(crate::state::TransactionEvent::Poison)
-        })
+        let mut inner = self.lock()?;
+        let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
+        machine.apply(crate::state::TransactionEvent::Poison)?;
+        let machine_snapshot = *machine;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::POISON,
+            "transaction poisoned",
+        );
+        self.transition_sink.record(trace);
+        Ok(())
     }
 
     /// Mark a transaction as failed (non-poison failure path).
     pub fn fail(&self, id: TransactionId) -> AndromedaResult<()> {
-        self.with_machine(id, |machine| {
-            machine.apply(crate::state::TransactionEvent::Fail)
-        })
+        let mut inner = self.lock()?;
+        let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
+        machine.apply(crate::state::TransactionEvent::Fail)?;
+        let machine_snapshot = *machine;
+        let (correlation, trace_id) = Self::get_correlation(&inner.correlations, id);
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::EXECUTOR_FAILURE,
+            "transaction failed",
+        );
+        self.transition_sink.record(trace);
+        Ok(())
     }
 
     /// Dispose of a terminal transaction, removing its live state-machine
@@ -183,6 +388,7 @@ impl TransactionManager {
     pub fn dispose(&self, id: TransactionId) -> AndromedaResult<()> {
         let mut inner = self.lock()?;
         let machine = Self::machine_mut(&mut inner.live, id)?;
+        let prev_state = machine.state();
         machine.apply(crate::state::TransactionEvent::Dispose)?;
         if machine.state() != TransactionState::Disposed {
             return Err(AndromedaError::new(
@@ -190,8 +396,27 @@ impl TransactionManager {
                 "transaction dispose did not reach Disposed state",
             ));
         }
+        let machine_snapshot = *machine;
+        // Remove correlation before dropping the lock; the trace is built
+        // outside the lock with the captured values.
+        let (correlation, trace_id) = inner.correlations.remove(&id).unwrap_or_else(|| {
+            (
+                TransactionTransitionCorrelation::empty(),
+                TraceId::new(id.get() as u128),
+            )
+        });
         inner.live.remove(&id);
         inner.savepoints.remove(&id);
+        drop(inner);
+
+        let trace = machine_snapshot.project_transition(
+            trace_id,
+            prev_state,
+            correlation,
+            TransitionReasonCode::NORMAL_PROGRESS,
+            "transaction disposed",
+        );
+        self.transition_sink.record(trace);
         Ok(())
     }
 
@@ -353,15 +578,6 @@ impl TransactionManager {
         Ok(self.lock()?.live.len())
     }
 
-    fn with_machine<F>(&self, id: TransactionId, f: F) -> AndromedaResult<()>
-    where
-        F: FnOnce(&mut TransactionStateMachine) -> AndromedaResult<()>,
-    {
-        let mut inner = self.lock()?;
-        let machine = Self::machine_mut(&mut inner.live, id)?;
-        f(machine)
-    }
-
     fn machine_mut(
         live: &mut HashMap<TransactionId, TransactionStateMachine>,
         id: TransactionId,
@@ -370,6 +586,22 @@ impl TransactionManager {
             AndromedaError::new(
                 AndromedaErrorKind::Transaction,
                 "transaction id is not registered with the manager",
+            )
+        })
+    }
+
+    /// Look up the stored correlation envelope and trace id for `id`.
+    ///
+    /// Falls back to empty defaults if no entry is found (defensive; should
+    /// not occur for valid live transactions).
+    fn get_correlation(
+        correlations: &HashMap<TransactionId, (TransactionTransitionCorrelation, TraceId)>,
+        id: TransactionId,
+    ) -> (TransactionTransitionCorrelation, TraceId) {
+        correlations.get(&id).copied().unwrap_or_else(|| {
+            (
+                TransactionTransitionCorrelation::empty(),
+                TraceId::new(id.get() as u128),
             )
         })
     }

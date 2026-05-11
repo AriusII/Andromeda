@@ -1192,7 +1192,9 @@ const OBSERVE_FACADE_REEXPORT_ALLOWLIST: &[&str] = &[
 
 const TRANSACTION_FACADE_REEXPORT_ALLOWLIST: &[&str] = &[
     "CommitProtocol",
+    "InMemoryTransitionSink",
     "LockReleaseAllTrace",
+    "NullTransitionSink",
     "TransactionEvent",
     "TransactionIdAllocator",
     "TransactionLockCoordinator",
@@ -1202,6 +1204,7 @@ const TRANSACTION_FACADE_REEXPORT_ALLOWLIST: &[&str] = &[
     "TransactionStateMachine",
     "TransactionTrace",
     "TransactionTransitionCorrelation",
+    "TransactionTransitionSink",
     "TwoPhaseLocksValidator",
     "TwoPhaseOperation",
     "TxWalAdapterTrait",
