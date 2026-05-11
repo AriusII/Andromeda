@@ -161,6 +161,10 @@ fn gate_exec_02_invalid_request_rejected_before_dispatch() {
             ),
             authorization_trace: None,
         },
+        payload: ProcedureDispatchPayload::empty(),
+        principal: PrincipalId::new(1),
+        deadline: ProcedureDeadline::new(std::time::Duration::from_secs(30)),
+        idempotency_key: None,
     };
 
     let result = adapter.dispatch_procedure(request);
@@ -224,6 +228,10 @@ fn gate_exec_02_unknown_cataloged_procedure_maps_to_catalog_error() {
             ),
             authorization_trace: None,
         },
+        payload: ProcedureDispatchPayload::empty(),
+        principal: PrincipalId::new(1),
+        deadline: ProcedureDeadline::new(std::time::Duration::from_secs(30)),
+        idempotency_key: None,
     };
 
     let err = adapter

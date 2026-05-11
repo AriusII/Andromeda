@@ -220,7 +220,7 @@ where
         local_procedure.mutation_payload = product_stock_redo_template.encode_template()?;
         let vertical = match self
             .local
-            .execute_authorized(request, &local_procedure, context)
+            .execute_internal_authorized(request, &local_procedure, context)
         {
             Ok(vertical) => vertical,
             Err(error) => {

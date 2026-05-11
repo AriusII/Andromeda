@@ -84,7 +84,7 @@ pub fn run_cli_inventory_demo() -> AndromedaResult<CliInventoryDemoReport> {
     let procedure = effect.to_local_procedure(&contract)?;
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let context = InvocationContext::new(TraceId::new(1), contract.required_permissions.clone());
-    let outcome = runtime.execute_authorized(request, &procedure, &context)?;
+    let outcome = runtime.execute_internal_authorized(request, &procedure, &context)?;
     let durable_lsn = outcome
         .completion
         .durable_lsn()

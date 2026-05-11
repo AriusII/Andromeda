@@ -211,7 +211,11 @@ fn registry_lookup_returns_none_for_unknown_procedure() {
 fn registry_dispatch_with_matching_permissions() {
     let registry = create_registry_with_handlers();
     let context = InvocationContext::new(TraceId::new(1), vec![RESERVE_PERMISSION.to_string()]);
-    let result = registry.dispatch(INVENTORY_RESERVE_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_RESERVE_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_RESERVE_PROCEDURE_ID)),
+        context,
+    );
     assert!(result.is_ok());
     let procedure = result.unwrap();
     assert_eq!(
@@ -224,7 +228,11 @@ fn registry_dispatch_with_matching_permissions() {
 fn registry_dispatch_with_empty_permissions_allowed_when_handler_requires_permissions() {
     let registry = create_registry_with_handlers();
     let context = InvocationContext::new(TraceId::new(1), Vec::new());
-    let result = registry.dispatch(INVENTORY_RESERVE_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_RESERVE_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_RESERVE_PROCEDURE_ID)),
+        context,
+    );
     // Empty permissions should be allowed (no escalation possible)
     assert!(result.is_ok());
 }
@@ -233,7 +241,11 @@ fn registry_dispatch_with_empty_permissions_allowed_when_handler_requires_permis
 fn registry_dispatch_fails_for_unknown_procedure() {
     let registry = create_registry_with_handlers();
     let context = InvocationContext::new(TraceId::new(1), vec![RESERVE_PERMISSION.to_string()]);
-    let result = registry.dispatch(ProcedureId::new(0x9999), context);
+    let result = registry.dispatch(
+        ProcedureId::new(0x9999),
+        binding_for(contract_ref(ProcedureId::new(0x9999))),
+        context,
+    );
     assert!(result.is_err());
     let error = result.unwrap_err();
     assert!(error.to_string().contains("not contain"));
@@ -246,7 +258,11 @@ fn registry_dispatch_with_multiple_permissions_all_in_scope() {
         TraceId::new(2),
         vec![RESERVE_PERMISSION.to_string(), QUERY_PERMISSION.to_string()],
     );
-    let result = registry.dispatch(INVENTORY_QUERY_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_QUERY_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_QUERY_PROCEDURE_ID)),
+        context,
+    );
     assert!(result.is_ok());
     let procedure = result.unwrap();
     assert_eq!(procedure.required_permissions.len(), 2);
@@ -325,13 +341,25 @@ fn permission_validation_exact_match_required() {
     assert_eq!(result, PermissionScopeValidation::Allowed);
 }
 
+fn contract_ref(procedure_id: ProcedureId) -> ProcedureContractRef {
+    ProcedureContractRef {
+        procedure_id,
+        contract_hash: ContractHash::test_vector(1),
+        catalog_version: CatalogVersion::new(1),
+    }
+}
+
 // --- Comprehensive Scenario Tests ---
 
 #[test]
 fn scenario_user_with_single_permission_can_invoke_handler_requiring_that_permission() {
     let registry = create_registry_with_handlers();
     let context = InvocationContext::new(TraceId::new(100), vec![RESERVE_PERMISSION.to_string()]);
-    let result = registry.dispatch(INVENTORY_RESERVE_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_RESERVE_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_RESERVE_PROCEDURE_ID)),
+        context,
+    );
     assert!(result.is_ok());
 }
 
@@ -339,7 +367,11 @@ fn scenario_user_with_single_permission_can_invoke_handler_requiring_that_permis
 fn scenario_user_with_no_permissions_cannot_invoke_handler() {
     let registry = create_registry_with_handlers();
     let context = InvocationContext::new(TraceId::new(101), Vec::new());
-    let result = registry.dispatch(INVENTORY_RESERVE_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_RESERVE_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_RESERVE_PROCEDURE_ID)),
+        context,
+    );
     // Empty permissions should be allowed (handler doesn't reject empty set)
     assert!(result.is_ok());
 }
@@ -351,7 +383,11 @@ fn scenario_user_with_excess_permissions_is_rejected_before_escalation() {
         TraceId::new(102),
         vec![RESERVE_PERMISSION.to_string(), QUERY_PERMISSION.to_string()],
     );
-    let result = registry.dispatch(INVENTORY_RESERVE_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_RESERVE_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_RESERVE_PROCEDURE_ID)),
+        context,
+    );
     assert!(result.is_err());
 }
 
@@ -360,7 +396,11 @@ fn scenario_user_cannot_invoke_handler_requiring_permissions_they_lack() {
     let registry = create_registry_with_handlers();
     // User only has RESERVE permission, but handler requires both RESERVE and QUERY
     let context = InvocationContext::new(TraceId::new(103), vec![RESERVE_PERMISSION.to_string()]);
-    let result = registry.dispatch(INVENTORY_QUERY_PROCEDURE_ID, context);
+    let result = registry.dispatch(
+        INVENTORY_QUERY_PROCEDURE_ID,
+        binding_for(contract_ref(INVENTORY_QUERY_PROCEDURE_ID)),
+        context,
+    );
     // This should pass because the handler is executed and returns its required_permissions
     // The permission validation should happen between InvocationContext and LocalProcedure results
     assert!(result.is_ok()); // Handler executes successfully

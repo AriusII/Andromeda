@@ -26,6 +26,34 @@ impl TransactionPhaseCode {
     pub const POISONED: Self = Self(8);
     pub const DISPOSED: Self = Self(9);
 
+    // Pre-transaction execution lifecycle phases (codes 10-15).
+    // These represent the ordered stages an invocation passes through before
+    // any transaction is allocated; they are emitted as `ExecutionTransitionTrace`
+    // events by `andromeda-exec` during the dispatch pipeline.
+    //
+    // Codes are stable wire values — never re-number or delete.
+
+    /// Invocation has been admitted to the local execution runtime and is
+    /// pending contract binding.
+    pub const ADMITTED: Self = Self(10);
+
+    /// Contract hash and binding have been verified against the catalog
+    /// snapshot.
+    pub const CONTRACT_BOUND: Self = Self(11);
+
+    /// IAM / permission evaluation passed; invocation is authorized.
+    pub const PERMISSION_CHECKED: Self = Self(12);
+
+    /// IO budget has been reserved; the invocation holds a resource grant.
+    pub const BUDGET_RESERVED: Self = Self(13);
+
+    /// A transaction id has been allocated and the transaction state-machine
+    /// is in the `Active` state.
+    pub const TRANSACTION_OPENED: Self = Self(14);
+
+    /// The mutation payload is being dispatched to the executor.
+    pub const EXECUTING: Self = Self(15);
+
     pub const fn new(code: u16) -> Self {
         Self(code)
     }
@@ -43,7 +71,7 @@ impl TransactionPhaseCode {
     }
 
     pub const fn is_known(self) -> bool {
-        matches!(self.0, 1..=9)
+        matches!(self.0, 1..=15)
     }
 }
 
@@ -411,7 +439,11 @@ mod tests {
     fn stable_phase_codes_cover_current_contract() {
         assert_eq!(TransactionPhaseCode::CREATED.get(), 1);
         assert_eq!(TransactionPhaseCode::DISPOSED.get(), 9);
+        assert_eq!(TransactionPhaseCode::ADMITTED.get(), 10);
+        assert_eq!(TransactionPhaseCode::EXECUTING.get(), 15);
         assert!(TransactionPhaseCode::new(9).is_known());
-        assert!(!TransactionPhaseCode::new(10).is_known());
+        assert!(TransactionPhaseCode::new(10).is_known());
+        assert!(TransactionPhaseCode::new(15).is_known());
+        assert!(!TransactionPhaseCode::new(16).is_known());
     }
 }

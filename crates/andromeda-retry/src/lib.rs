@@ -43,6 +43,64 @@ pub enum ErrorRetryability {
     Persistent,
 }
 
+/// Transaction-layer retryability for errors that arise within an active
+/// transaction.
+///
+/// This type resolves the G3 apparent contradiction:
+/// `ErrorRetryability::classify(Transaction) == Persistent` is the **external**
+/// view — once a transaction error surfaces to the invocation caller, no outer
+/// retry is scheduled. `ExecutionErrorRetryability::Retryable` is the
+/// **internal** view — within the transaction-error routing layer, a deadlock
+/// victim triggers a bounded inner retry of the same transaction body before
+/// surfacing any error.
+///
+/// ## Reconciliation
+///
+/// | Condition            | `ErrorRetryability`     | `ExecutionErrorRetryability` |
+/// |----------------------|-------------------------|------------------------------|
+/// | Deadlock victim      | `Persistent` (external) | `Retryable` (internal)       |
+/// | Transaction timeout  | `Persistent` (external) | `NonRetryable` (internal)    |
+/// | Generic Transaction  | `Persistent` (external) | `NonRetryable` (internal)    |
+///
+/// The two systems are complementary, not contradictory:
+/// - `ErrorRetryability` gates the outer invocation-level retry loop.
+/// - `ExecutionErrorRetryability` gates the inner transaction-level retry loop.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionErrorRetryability {
+    /// The error may be resolved by re-attempting the same transaction body.
+    ///
+    /// Applies to deadlock victims: the deadlock is a transient conflict that
+    /// the retry budget allows re-attempting within the same invocation.
+    Retryable,
+    /// The error is terminal at the transaction layer; no inner retry will help.
+    ///
+    /// Applies to transaction timeouts (invocation budget exhausted) and to
+    /// deadlock victims that have exhausted their retry budget.
+    NonRetryable,
+}
+
+impl ExecutionErrorRetryability {
+    /// Classify whether a transaction-layer error warrants an inner-loop retry.
+    ///
+    /// Only deadlock victims are inner-retryable. Everything else (timeouts,
+    /// generic transaction failures) is terminal at this layer.
+    pub const fn for_transaction_error(is_deadlock: bool) -> Self {
+        if is_deadlock {
+            Self::Retryable
+        } else {
+            Self::NonRetryable
+        }
+    }
+
+    pub const fn is_retryable(self) -> bool {
+        matches!(self, Self::Retryable)
+    }
+
+    pub const fn is_non_retryable(self) -> bool {
+        matches!(self, Self::NonRetryable)
+    }
+}
+
 impl ErrorRetryability {
     /// Classify an error based on its kind.
     pub const fn classify(kind: AndromedaErrorKind) -> Self {
@@ -326,5 +384,30 @@ mod tests {
         let decision = RetryDecision::GiveUp;
         assert!(!decision.is_retry());
         assert!(decision.is_give_up());
+    }
+
+    #[test]
+    fn execution_error_retryability_deadlock_is_retryable() {
+        let r = ExecutionErrorRetryability::for_transaction_error(true);
+        assert_eq!(r, ExecutionErrorRetryability::Retryable);
+        assert!(r.is_retryable());
+        assert!(!r.is_non_retryable());
+    }
+
+    #[test]
+    fn execution_error_retryability_timeout_is_non_retryable() {
+        let r = ExecutionErrorRetryability::for_transaction_error(false);
+        assert_eq!(r, ExecutionErrorRetryability::NonRetryable);
+        assert!(r.is_non_retryable());
+        assert!(!r.is_retryable());
+    }
+
+    /// Property: deadlock is Retryable; all other transaction errors are
+    /// NonRetryable — the two sets are mutually exclusive.
+    #[test]
+    fn execution_retryability_deadlock_and_non_deadlock_are_mutually_exclusive() {
+        let deadlock = ExecutionErrorRetryability::for_transaction_error(true);
+        let non_deadlock = ExecutionErrorRetryability::for_transaction_error(false);
+        assert_ne!(deadlock, non_deadlock);
     }
 }

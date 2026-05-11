@@ -26,6 +26,8 @@ fn valid_manifest() -> ProcedureManifest {
         }],
         is_mutable: false,
         min_compatible_version: CatalogVersion::new(1),
+        srpl_source: None,
+        compiled_ir_handle: None,
     }
 }
 

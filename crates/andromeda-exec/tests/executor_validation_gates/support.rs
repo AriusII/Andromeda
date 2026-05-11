@@ -6,10 +6,12 @@ pub(crate) use andromeda_exec::dispatch::{
 };
 pub(crate) use andromeda_exec::{InvocationContext, InvocationRequest, SrplProcedureDispatcher};
 pub(crate) use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
+pub(crate) use andromeda_principal::PrincipalId;
 pub(crate) use andromeda_procedure_contract::{
     AccessMode, IsolationPolicy, MultiResultPolicy, PolicyVersion, ProcedureContractBinding,
-    ProcedureContractRef, ProcedureErrorPolicy, ProtocolLayoutRef, ResultMetadataPolicy,
-    ResultStreamCardinality, ResultStreamContract, StatsVersion, TransactionPolicy,
+    ProcedureContractRef, ProcedureDeadline, ProcedureDispatchPayload, ProcedureErrorPolicy,
+    ProtocolLayoutRef, ResultMetadataPolicy, ResultStreamCardinality, ResultStreamContract,
+    StatsVersion, TransactionPolicy,
 };
 pub(crate) use andromeda_procedure_runtime::procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
@@ -200,6 +202,10 @@ pub(crate) fn valid_dispatch_request(trace_id: TraceId) -> ProcedureDispatchRequ
             contract_trace: decision_trace(trace_id, CriticalDecisionKind::ContractValidation),
             authorization_trace: None,
         },
+        payload: ProcedureDispatchPayload::empty(),
+        principal: PrincipalId::new(1),
+        deadline: ProcedureDeadline::new(std::time::Duration::from_secs(30)),
+        idempotency_key: None,
     }
 }
 

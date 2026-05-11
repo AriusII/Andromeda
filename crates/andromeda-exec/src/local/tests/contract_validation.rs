@@ -6,7 +6,7 @@ fn local_vertical_runtime_rejects_contract_before_begin() {
     let procedure = simple_local_procedure();
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(8)),
             &procedure,
             TraceId::new(99),
@@ -28,7 +28,7 @@ fn local_vertical_runtime_rejects_executable_contract_mismatch_before_begin() {
     procedure.contract_binding = test_binding(procedure.contract);
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(99),

@@ -44,6 +44,7 @@ tokio.workspace = true
 [features]
 default = []
 runtime-quinn = ["andromeda-quic/runtime-quinn"]
+test-fixtures = ["andromeda-execution-trace/test-fixtures"]
 
 [dev-dependencies]
 andromeda-business-fixtures.workspace = true
@@ -55,7 +56,7 @@ andromeda-srpl-binder.workspace = true
 andromeda-srpl-definition-batch.workspace = true
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(andromeda_remote_network_e2e)', 'cfg(feature, values("runtime-quinn", "test-fixtures"))'] }
 
 [[test]]
 name = "remote_invoke_network_e2e"
@@ -85,3 +86,68 @@ path = "tests/executor_validation_gates.rs"
 [[test]]
 name = "runtime_contract"
 path = "tests/runtime_contract.rs"
+
+[[test]]
+name = "dscope"
+path = "tests/dscope.rs"
+
+[[test]]
+name = "exec_audit_completion_validation"
+path = "tests/exec_audit_completion_validation.rs"
+
+[[test]]
+name = "executor_bridge_gate"
+path = "tests/executor_bridge_gate.rs"
+
+[[test]]
+name = "iam_hardening"
+path = "tests/iam_hardening.rs"
+
+[[test]]
+name = "iam_pipeline_e2e"
+path = "tests/iam_pipeline_e2e.rs"
+
+[[test]]
+name = "integration_execution_path"
+path = "tests/integration_execution_path.rs"
+
+[[test]]
+name = "multi_procedure_handlers"
+path = "tests/multi_procedure_handlers.rs"
+
+[[test]]
+name = "permission_scope_contract"
+path = "tests/permission_scope_contract.rs"
+
+[[test]]
+name = "recovery_visibility_gates"
+path = "tests/recovery_visibility_gates.rs"
+
+[[test]]
+name = "remote_invoke_network_e2e_cfg_contract"
+path = "tests/remote_invoke_network_e2e_cfg_contract.rs"
+
+[[test]]
+name = "surface_gate_contract"
+path = "tests/surface_gate_contract.rs"
+
+[[test]]
+name = "v0_transition_lifecycle"
+path = "tests/v0_transition_lifecycle.rs"
+
+[[test]]
+name = "p04_generic_procedure_routing"
+path = "tests/p04_two_procedures_generic_dispatch.rs"
+
+[[test]]
+name = "p04_w4_invocation_trace"
+path = "tests/p04_w4_invocation_trace.rs"
+required-features = ["test-fixtures"]
+
+[[test]]
+name = "terminal_completion_validation"
+path = "tests/terminal_completion_validation.rs"
+
+[[test]]
+name = "surface_gate_bypass_closed"
+path = "tests/surface_gate_bypass_closed.rs"

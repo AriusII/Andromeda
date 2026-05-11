@@ -89,7 +89,14 @@ where
         &self.transactions
     }
 
-    pub fn execute(
+    /// Execute a locally resolved procedure without an authorization context.
+    ///
+    /// ⚠ **System-plane / internal use only.**
+    /// Application-plane callers MUST use [`execute_surface_authorized()`] with
+    /// a valid [`AuthorizedProcedureDispatch`] token. This method bypasses the
+    /// surface gate and is intentionally left accessible only for test
+    /// infrastructure, WAL replay, and engine-internal system procedures.
+    pub fn execute_internal(
         &mut self,
         request: InvocationRequest,
         procedure: &LocalProcedure,
@@ -98,7 +105,15 @@ where
         self.execute_after_admission(request, procedure, trace_id, None, None)
     }
 
-    pub fn execute_authorized(
+    /// Execute a locally resolved procedure with an authorization context but
+    /// without a surface-gate dispatch token.
+    ///
+    /// ⚠ **System-plane / internal use only.**
+    /// Application-plane callers MUST use [`execute_surface_authorized()`] with
+    /// a valid [`AuthorizedProcedureDispatch`] token. This method bypasses the
+    /// surface gate and is intentionally left accessible only for test
+    /// infrastructure, WAL replay, and engine-internal system procedures.
+    pub fn execute_internal_authorized(
         &mut self,
         request: InvocationRequest,
         procedure: &LocalProcedure,
@@ -132,10 +147,18 @@ where
         }
         validate_surface_dispatch_token(context, dispatch)?;
 
-        self.execute_authorized(request, procedure, context)
+        self.execute_internal_authorized(request, procedure, context)
     }
 
-    pub fn execute_catalog_resolved(
+    /// Execute a locally resolved procedure with catalog snapshot validation
+    /// but without a surface-gate dispatch token.
+    ///
+    /// ⚠ **System-plane / internal use only.**
+    /// Application-plane callers MUST use [`execute_surface_authorized()`] with
+    /// a valid [`AuthorizedProcedureDispatch`] token. This method bypasses the
+    /// surface gate and is intentionally left accessible only for test
+    /// infrastructure, WAL replay, and engine-internal system procedures.
+    pub fn execute_internal_catalog_resolved(
         &mut self,
         request: InvocationRequest,
         procedure: &LocalProcedure,
@@ -194,7 +217,7 @@ where
         emitter: &mut EventEmitter<S>,
         correlation: EventCorrelation,
     ) -> AndromedaResult<VerticalInvocationOutcome> {
-        let outcome = self.execute_authorized(request, procedure, context)?;
+        let outcome = self.execute_internal_authorized(request, procedure, context)?;
 
         // Emit CommitVisible event after successful commit with durable LSN
         if let Some(durable_lsn) = outcome.completion.durable_lsn {
@@ -387,6 +410,47 @@ where
                 rows_affected: procedure.rows_affected,
             })?;
 
+        // GAP-03: Validate that the handler's declared result metadata agrees
+        // with the dispatcher's actual WAL and transaction evidence BEFORE we
+        // publish the commit as MVCC-visible.
+        //
+        // This calls `validate_terminal_evidence` — NOT `validate_terminal_completion`
+        // — because `dispatch_receipt.rows_affected` is the count of DB rows
+        // mutated (e.g. 2 for ReserveStock: 1 stock row + 1 reservation row),
+        // which is intentionally independent of `result_metadata.row_count_exact`
+        // (the number of rows returned in the result stream, e.g. 1).
+        // Cross-comparing them would produce spurious Contract errors on any
+        // procedure that writes more DB rows than it returns.
+        //
+        // Checks enforced here:
+        //   1. transaction_state is Committed or RolledBack.
+        //   2. durable_lsn is non-zero (WAL is flushed).
+        //   3. A RolledBack transaction reports zero DB mutations.
+        //
+        // NOTE: The WAL commit record is already durable at this point.
+        // Failing here prevents MVCC visibility without undoing the WAL write
+        // (WAL-before-commit doctrine). The transaction remains InFlight inside
+        // the TransactionManager — not visible to MVCC readers.
+        if let Err(validation_err) = procedure.result_metadata.validate_terminal_evidence(
+            dispatch_receipt.transaction_state,
+            dispatch_receipt.durable_lsn,
+            dispatch_receipt.rows_affected,
+        ) {
+            // Attempt best-effort transaction cleanup to bound InFlight leak.
+            let _ = route_rollback_cause(
+                &mut self.transactions,
+                transaction_id,
+                RollbackCause::Poison,
+            );
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                format!(
+                    "terminal evidence validation failed after durable WAL commit: {}",
+                    validation_err.message()
+                ),
+            ));
+        }
+
         // Mirror the durable commit into the manager only after the
         // dispatcher returns evidence that the WAL flush succeeded. The
         // status table publishes Committed strictly after that durable LSN
@@ -542,5 +606,120 @@ where
             durable_lsn,
             correlation,
         )
+    }
+
+    /// Execute a locally resolved procedure with full P04 invocation trace
+    /// emission.
+    ///
+    /// Runs the complete commit pipeline (identical to
+    /// [`execute_authorized_observable`][Self::execute_authorized_observable])
+    /// and additionally:
+    ///
+    /// 1. Emits 8 `ExecutionTransitionTrace` events covering the ordered
+    ///    lifecycle phases (ADMITTED → CONTRACT_BOUND → PERMISSION_CHECKED →
+    ///    BUDGET_RESERVED → TRANSACTION_OPENED → EXECUTING → COMMITTING →
+    ///    COMMITTED).
+    /// 2. Appends one [`andromeda_execution_trace::ProcedureInvocationTrace`]
+    ///    record to `ledger` with the terminal [`CompletionStatus`].
+    ///
+    /// Event and ledger failures propagate to the caller (never silently
+    /// dropped).
+    pub fn execute_authorized_with_invocation_trace<S: EventSink>(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        emitter: &mut EventEmitter<S>,
+        correlation: EventCorrelation,
+        ledger: &dyn andromeda_execution_trace::AuditLedger,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let invocation_id = request.invocation_id;
+        let trace_id = context.trace_id;
+
+        let inv_trace =
+            andromeda_execution_trace::ProcedureInvocationTrace::started(trace_id, invocation_id);
+
+        let outcome = self.execute_internal_authorized(request, procedure, context)?;
+
+        let transaction_id = outcome.transaction_id;
+        // Committed completions carry a durable_lsn; unwrap it for the
+        // terminal COMMITTED transition.
+        let durable_lsn = outcome.completion.durable_lsn.map(|l| l.get()).unwrap_or(0);
+
+        events::emit_invocation_commit_transition_sequence(
+            emitter,
+            trace_id,
+            invocation_id,
+            transaction_id,
+            durable_lsn,
+            correlation,
+        )?;
+
+        let completion_status = outcome.completion.status;
+        let inv_trace = inv_trace.complete(completion_status);
+        inv_trace.validate()?;
+        ledger.append_procedure_trace(inv_trace)?;
+
+        Ok(outcome)
+    }
+
+    /// Roll back a business-failure invocation with full P04 invocation trace
+    /// emission.
+    ///
+    /// Runs the business-failure rollback pipeline (identical to
+    /// [`rollback_authorized_business_validation_failure_after_begin_observable`][Self::rollback_authorized_business_validation_failure_after_begin_observable])
+    /// and additionally:
+    ///
+    /// 1. Emits 8 `ExecutionTransitionTrace` events covering the ordered
+    ///    lifecycle phases ending in ROLLED_BACK.
+    /// 2. Appends one [`andromeda_execution_trace::ProcedureInvocationTrace`]
+    ///    record to `ledger` with the terminal [`CompletionStatus`].
+    ///
+    /// Event and ledger failures propagate to the caller (never silently
+    /// dropped).
+    #[allow(clippy::too_many_arguments)]
+    pub fn rollback_authorized_business_validation_failure_after_begin_with_invocation_trace<
+        S: EventSink,
+    >(
+        &mut self,
+        request: InvocationRequest,
+        procedure: &LocalProcedure,
+        context: &InvocationContext,
+        failure_reason: impl Into<String>,
+        emitter: &mut EventEmitter<S>,
+        correlation: EventCorrelation,
+        ledger: &dyn andromeda_execution_trace::AuditLedger,
+    ) -> AndromedaResult<VerticalInvocationOutcome> {
+        let invocation_id = request.invocation_id;
+        let trace_id = context.trace_id;
+
+        let inv_trace =
+            andromeda_execution_trace::ProcedureInvocationTrace::started(trace_id, invocation_id);
+
+        let outcome = self.rollback_authorized_business_validation_failure_after_begin(
+            request,
+            procedure,
+            context,
+            failure_reason,
+        )?;
+
+        let transaction_id = outcome.transaction_id;
+        let durable_lsn = outcome.completion.durable_lsn.map(|l| l.get()).unwrap_or(0);
+
+        events::emit_invocation_rollback_transition_sequence(
+            emitter,
+            trace_id,
+            invocation_id,
+            transaction_id,
+            durable_lsn,
+            correlation,
+        )?;
+
+        let completion_status = outcome.completion.status;
+        let inv_trace = inv_trace.complete(completion_status);
+        inv_trace.validate()?;
+        ledger.append_procedure_trace(inv_trace)?;
+
+        Ok(outcome)
     }
 }

@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use andromeda_admission::InvocationContext;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_procedure_contract::ProcedureContractRef;
+use andromeda_procedure_contract::{ProcedureContractBinding, ProcedureContractRef};
 use andromeda_procedure_runtime::{ProcedureDispatchRequest, ProcedureDispatcher};
 use andromeda_result_stream::ResultStreamMetadata;
 use andromeda_types::ProcedureId;
@@ -110,18 +110,33 @@ impl ProcedureRegistry {
 
     /// Dispatch an already-admitted local Procedure invocation.
     ///
+    /// **GAP-02 fix:** Callers MUST present a [`ProcedureContractBinding`] that
+    /// was established pre-dispatch (before handler execution). The binding is
+    /// cross-checked against the handler's result binding after execution; if
+    /// they do not match the dispatch is aborted with a [`Contract`] error.
+    ///
     /// This method accepts only a canonical [`ProcedureId`]. It does not
     /// perform remote dispatch, transaction allocation, WAL emission, or
     /// terminal completion mapping.
     pub fn dispatch(
         &self,
         procedure_id: ProcedureId,
+        binding: ProcedureContractBinding,
         context: InvocationContext,
     ) -> AndromedaResult<LocalProcedure> {
         let handler = self
             .lookup(procedure_id)
             .ok_or_else(|| unknown_procedure_error(procedure_id))?;
         let procedure = handler.execute(context.clone())?;
+        // GAP-02: Require the caller-supplied pre-dispatch binding to match the
+        // binding embedded in the handler result. This closes the path where a
+        // caller could invoke a handler without ever presenting a checked binding.
+        if procedure.contract_binding != binding {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "pre-dispatch ProcedureContractBinding does not match the dispatched handler result binding; execution aborted",
+            ));
+        }
         validate_dispatch_result(procedure_id, handler.as_ref(), &procedure, &context)?;
         Ok(procedure)
     }
@@ -291,10 +306,11 @@ mod tests {
     use andromeda_error::{AndromedaErrorKind, AndromedaResult};
     use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
     use andromeda_procedure_contract::{
-        PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+        PolicyVersion, ProcedureContractBinding, ProcedureContractRef, ProcedureDeadline,
+        ProcedureDispatchPayload, StatsVersion,
     };
     use andromeda_procedure_runtime::{
-        PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
+        PreTransactionDispatchEvidence, PrincipalId, ProcedureDispatchRequest, ProcedureDispatcher,
         RemoteProcedureDispatcherUnavailable,
     };
     use andromeda_result_stream::ResultStreamMetadata;
@@ -376,7 +392,9 @@ mod tests {
         assert_eq!(registry.len(), 1);
         assert!(registry.contains(ProcedureId::new(42)));
 
-        let procedure = registry.dispatch(ProcedureId::new(42), context()).unwrap();
+        let procedure = registry
+            .dispatch(ProcedureId::new(42), binding_for(contract(42)), context())
+            .unwrap();
         assert_eq!(procedure.contract.procedure_id, ProcedureId::new(42));
         assert_eq!(procedure.rows_affected, 1);
     }
@@ -442,7 +460,7 @@ mod tests {
         let registry = ProcedureRegistry::new();
 
         let error = registry
-            .dispatch(ProcedureId::new(404), context())
+            .dispatch(ProcedureId::new(404), binding_for(contract(404)), context())
             .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Execution);
@@ -471,7 +489,7 @@ mod tests {
         registry.register(handler).unwrap();
 
         let error = registry
-            .dispatch(ProcedureId::new(42), context())
+            .dispatch(ProcedureId::new(42), binding_for(contract(42)), context())
             .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -485,7 +503,7 @@ mod tests {
         registry.register(handler).unwrap();
 
         let error = registry
-            .dispatch(ProcedureId::new(42), context())
+            .dispatch(ProcedureId::new(42), binding_for(contract(42)), context())
             .unwrap_err();
 
         assert_eq!(error.kind(), AndromedaErrorKind::Execution);
@@ -552,6 +570,10 @@ mod tests {
             procedure_binding: Some(binding_for(procedure)),
             pre_transaction: pre_transaction_evidence(context.trace_id),
             context,
+            payload: ProcedureDispatchPayload::empty(),
+            principal: PrincipalId::new(1),
+            deadline: ProcedureDeadline::new(std::time::Duration::from_secs(30)),
+            idempotency_key: None,
         }
     }
 }

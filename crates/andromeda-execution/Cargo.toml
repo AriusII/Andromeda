@@ -7,6 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-admission.workspace = true
+andromeda-catalog-store.workspace = true
 andromeda-error.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-procedure-runtime.workspace = true
@@ -17,3 +18,7 @@ andromeda-types.workspace = true
 
 [dev-dependencies]
 andromeda-observability.workspace = true
+
+[[test]]
+name = "registry_binding_contract"
+path = "tests/dispatch_binding_contract.rs"

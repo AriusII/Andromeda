@@ -31,7 +31,7 @@ pub use change_subscription::{
     CatalogChangeNotification, CatalogChangeSubscription, CatalogChangeSubscriptionCursor,
     CatalogSubscriptionRegistry,
 };
-pub use manifest::{ColumnSchema, ProcedureManifest};
+pub use manifest::{ColumnSchema, CompiledIrHandle, ProcedureManifest, SrplSource};
 pub use manifest_resolution::{
     CatalogManifestResolution, CatalogManifestResolutionFailure, CatalogManifestResolutionRequest,
     CatalogManifestSelector,

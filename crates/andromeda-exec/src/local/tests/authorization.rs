@@ -7,7 +7,7 @@ fn local_vertical_runtime_rejects_missing_permission_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let err = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             inventory_request_with_id(&contract, 701),
             &procedure,
             &InvocationContext::new(TraceId::new(7001), Vec::new()),
@@ -25,7 +25,7 @@ fn local_vertical_runtime_rejects_permissioned_execute_without_context_before_be
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let err = runtime
-        .execute(inventory_request(&contract), &procedure, TraceId::new(7005))
+        .execute_internal(inventory_request(&contract), &procedure, TraceId::new(7005))
         .unwrap_err();
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);

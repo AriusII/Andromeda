@@ -686,6 +686,88 @@ impl ProcedureContract {
     }
 }
 
+/// Opaque binary payload carrying the encoded input parameters for a procedure
+/// dispatch request.
+///
+/// An empty payload is valid for procedures that accept no inputs. Callers are
+/// responsible for encoding parameters according to the procedure contract.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcedureDispatchPayload(Vec<u8>);
+
+impl ProcedureDispatchPayload {
+    /// Wraps raw bytes as a dispatch payload.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        Self(bytes)
+    }
+
+    /// Creates an empty payload (valid for zero-input procedures).
+    pub fn empty() -> Self {
+        Self(Vec::new())
+    }
+
+    /// Returns `true` if the payload contains no bytes.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// Returns the payload as a byte slice.
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+
+    /// Consumes the payload and returns the underlying bytes.
+    pub fn into_vec(self) -> Vec<u8> {
+        self.0
+    }
+}
+
+/// Maximum wall-clock duration allowed for a procedure dispatch to complete.
+///
+/// The dispatch boundary validates that the deadline is non-zero before
+/// forwarding the request to the execution layer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ProcedureDeadline(std::time::Duration);
+
+impl ProcedureDeadline {
+    /// Wraps a `Duration` as the dispatch deadline.
+    ///
+    /// The value is not validated here; callers must ensure the deadline is
+    /// non-zero or invoke `ProcedureDispatchRequest::validate()`.
+    pub fn new(duration: std::time::Duration) -> Self {
+        Self(duration)
+    }
+
+    /// Returns the underlying duration.
+    pub fn as_duration(self) -> std::time::Duration {
+        self.0
+    }
+
+    /// Returns `true` if the deadline is zero (invalid for dispatch).
+    pub fn is_zero(self) -> bool {
+        self.0.is_zero()
+    }
+}
+
+/// A 32-byte idempotency key that identifies a specific dispatch attempt.
+///
+/// When provided, the execution layer uses the key to detect and suppress
+/// duplicate invocations caused by client retries. Identical keys for the
+/// same `ProcedureId` are treated as the same logical request.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct IdempotencyKey([u8; 32]);
+
+impl IdempotencyKey {
+    /// Wraps 32 raw bytes as an idempotency key.
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Returns the underlying 32-byte key.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

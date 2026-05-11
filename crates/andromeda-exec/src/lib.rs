@@ -16,7 +16,9 @@ pub use andromeda_execution::{
     FieldValue, LocalProcedure, ProcedureHandler, ProcedureRegistry, SrplExecutionAdapter,
     SrplStreamBackpressure, SrplTransactionContext, SrplTypedEnvironment, StructuredObject,
 };
-pub use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
+#[cfg(feature = "test-fixtures")]
+pub use andromeda_execution_trace::InMemoryAuditLedger;
+pub use andromeda_execution_trace::{AuditLedger, InvocationTraceEvent};
 pub use andromeda_procedure_runtime::{DefaultResultMetadataExtractor, ResultMetadataExtractor};
 pub use andromeda_result_stream::{
     BackpressuredResultStream, COMPLETION_ENVELOPE_VERSION, CompletionStatus,

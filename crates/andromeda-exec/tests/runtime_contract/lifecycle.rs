@@ -90,7 +90,7 @@ fn contract_or_procedure_mismatch_is_rejected_before_tx_begin() {
     });
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &mismatched_procedure,
             TraceId::new(101),
@@ -108,7 +108,7 @@ fn executable_binding_stats_drift_is_rejected_before_tx_begin() {
     drifted_procedure.contract_binding.stats_version = StatsVersion::new(2);
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &drifted_procedure,
             TraceId::new(109),

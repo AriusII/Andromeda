@@ -8,8 +8,10 @@ use andromeda_exec::{
     ResultStreamMetadata, validate_dispatch_permissions, validate_dispatch_permissions_or_error,
 };
 use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
+use andromeda_principal::PrincipalId;
 use andromeda_procedure_contract::{
-    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, StatsVersion,
+    PolicyVersion, ProcedureContractBinding, ProcedureContractRef, ProcedureDeadline,
+    ProcedureDispatchPayload, StatsVersion,
 };
 use andromeda_srpl_ir::Cardinality;
 use andromeda_types::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
@@ -104,6 +106,10 @@ fn dispatch_request_for(
                 CriticalDecisionKind::SecurityAuthorization,
             )),
         },
+        payload: ProcedureDispatchPayload::empty(),
+        principal: PrincipalId::new(1),
+        deadline: ProcedureDeadline::new(std::time::Duration::from_secs(30)),
+        idempotency_key: None,
     }
 }
 
@@ -112,6 +118,14 @@ fn permission_vec(permissions: &[&str]) -> Vec<String> {
         .iter()
         .map(|permission| permission.to_string())
         .collect()
+}
+
+fn handler_contract_ref() -> ProcedureContractRef {
+    ProcedureContractRef {
+        procedure_id: RESERVE_PROCEDURE_ID,
+        contract_hash: ContractHash::test_vector(1),
+        catalog_version: CatalogVersion::new(1),
+    }
 }
 
 fn registry_with_reserve_handler() -> ProcedureRegistry {
@@ -247,7 +261,11 @@ fn registry_dispatch_allows_permissions_within_procedure_scope() {
     );
 
     let procedure = registry
-        .dispatch(RESERVE_PROCEDURE_ID, context)
+        .dispatch(
+            RESERVE_PROCEDURE_ID,
+            binding_for(handler_contract_ref()),
+            context,
+        )
         .expect("in-scope permissions should dispatch");
 
     assert_eq!(
@@ -264,6 +282,7 @@ fn registry_dispatch_allows_empty_and_subset_context_permissions() {
         registry
             .dispatch(
                 RESERVE_PROCEDURE_ID,
+                binding_for(handler_contract_ref()),
                 InvocationContext::new(TraceId::new(14), permissions),
             )
             .expect("subset caller permissions should dispatch");
@@ -279,7 +298,11 @@ fn registry_dispatch_rejects_context_permission_escalation() {
     );
 
     let err = registry
-        .dispatch(RESERVE_PROCEDURE_ID, context)
+        .dispatch(
+            RESERVE_PROCEDURE_ID,
+            binding_for(handler_contract_ref()),
+            context,
+        )
         .expect_err("out-of-scope caller permission must be rejected");
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);
@@ -293,7 +316,11 @@ fn registry_dispatch_unknown_procedure_fails_closed() {
     let context = InvocationContext::new(TraceId::new(13), permission_vec(&[RESERVE_PERMISSION]));
 
     let err = registry
-        .dispatch(ProcedureId::new(0x9999), context)
+        .dispatch(
+            ProcedureId::new(0x9999),
+            binding_for(handler_contract_ref()),
+            context,
+        )
         .expect_err("unknown procedure ids must not dispatch");
 
     assert_eq!(err.kind(), AndromedaErrorKind::Execution);

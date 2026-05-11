@@ -376,8 +376,13 @@ fn procedure_registry_dispatches_query_stock_as_read_only_procedure() {
     let registry = inventory_registry_with_all_handlers();
     let ctx = test_invocation_context(vec!["Inventory.QueryStock.Execute".to_string()]);
 
+    let query_contract = inventory_query_stock_contract().expect("fixture must be valid");
     let procedure = registry
-        .dispatch(INVENTORY_QUERY_STOCK_PROCEDURE_ID, ctx)
+        .dispatch(
+            INVENTORY_QUERY_STOCK_PROCEDURE_ID,
+            query_contract.binding(),
+            ctx,
+        )
         .expect("cataloged QueryStock handler must dispatch");
 
     procedure
@@ -405,8 +410,13 @@ fn procedure_registry_dispatch_denies_permission_outside_handler_contract() {
         "Inventory.ReleaseStock.Execute".to_string(),
     ]);
 
+    let query_contract = inventory_query_stock_contract().expect("fixture must be valid");
     let err = registry
-        .dispatch(INVENTORY_QUERY_STOCK_PROCEDURE_ID, ctx)
+        .dispatch(
+            INVENTORY_QUERY_STOCK_PROCEDURE_ID,
+            query_contract.binding(),
+            ctx,
+        )
         .expect_err("dispatch permissions must stay within the handler contract");
 
     assert_eq!(err.kind(), AndromedaErrorKind::Security);

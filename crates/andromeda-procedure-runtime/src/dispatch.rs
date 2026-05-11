@@ -3,7 +3,11 @@ use std::{marker::PhantomData, sync::Arc};
 use andromeda_admission::{InvocationContext, InvocationRequest};
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
-use andromeda_procedure_contract::{ProcedureContractBinding, ProcedureContractRef};
+use andromeda_principal::PrincipalId;
+use andromeda_procedure_contract::{
+    IdempotencyKey, ProcedureContractBinding, ProcedureContractRef, ProcedureDeadline,
+    ProcedureDispatchPayload,
+};
 use andromeda_types::{InvocationId, ProcedureId};
 
 use crate::procedure_resolver::{ProcedureResolveRequest, ProcedureResolver};
@@ -50,6 +54,20 @@ pub struct ProcedureDispatchRequest {
     pub procedure_binding: Option<ProcedureContractBinding>,
     pub context: InvocationContext,
     pub pre_transaction: PreTransactionDispatchEvidence,
+    /// Encoded binary payload carrying the procedure's input parameters.
+    ///
+    /// An empty payload is valid for procedures that accept no inputs.
+    pub payload: ProcedureDispatchPayload,
+    /// Identity of the principal on whose behalf the procedure is dispatched.
+    ///
+    /// Must be non-zero; validated by `validate()`.
+    pub principal: PrincipalId,
+    /// Maximum wall-clock duration allowed for this dispatch to complete.
+    ///
+    /// Must be non-zero; validated by `validate()`.
+    pub deadline: ProcedureDeadline,
+    /// Optional idempotency key to suppress duplicate invocations on retry.
+    pub idempotency_key: Option<IdempotencyKey>,
 }
 
 impl ProcedureDispatchRequest {
@@ -58,6 +76,18 @@ impl ProcedureDispatchRequest {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Execution,
                 "Procedure dispatch invocation id must not be zero before handler execution",
+            ));
+        }
+        if self.principal.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Security,
+                "Procedure dispatch principal id must not be zero",
+            ));
+        }
+        if self.deadline.is_zero() {
+            return Err(AndromedaError::new(
+                AndromedaErrorKind::Execution,
+                "Procedure dispatch deadline must not be zero",
             ));
         }
         self.procedure.validate()?;

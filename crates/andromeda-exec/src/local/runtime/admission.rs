@@ -9,7 +9,8 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_observability::{CriticalDecisionTrace as DecisionTrace, TraceId};
 
 use crate::{
-    AuthorizedProcedureDispatch, InvocationContext, InvocationRequest, local::types::LocalProcedure,
+    AuthorizedProcedureDispatch, CompletionStatus, InvocationContext, InvocationRequest,
+    local::types::LocalProcedure,
 };
 
 type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
@@ -25,15 +26,36 @@ pub(super) struct PreTransactionAdmission {
     pub(super) authorization_trace: Option<DecisionTrace>,
 }
 
+/// Map an [`InvocationReject`] status to the appropriate [`AndromedaErrorKind`].
+///
+/// G5 fix: admission rejects must not all map to `Contract`. The cause of
+/// rejection determines the error class:
+/// - Resource/budget denials → `Resource` (AE0006)
+/// - Permission/security denials → `Security` (AE0007)
+/// - Schema/contract violations → `Contract` (AE0002)
+fn admission_reject_to_error_kind(status: CompletionStatus) -> AndromedaErrorKind {
+    match status {
+        CompletionStatus::SystemUnavailable => AndromedaErrorKind::Resource,
+        CompletionStatus::PermissionDenied => AndromedaErrorKind::Security,
+        CompletionStatus::ContractRejected
+        | CompletionStatus::FailedBeforeTransaction
+        | CompletionStatus::Committed
+        | CompletionStatus::RolledBack
+        | CompletionStatus::Cancelled
+        | CompletionStatus::Poisoned => AndromedaErrorKind::Contract,
+    }
+}
+
 pub(super) fn validate_pre_transaction_admission(
     request: &InvocationRequest,
     procedure: &LocalProcedure,
     trace_id: TraceId,
     context: Option<&InvocationContext>,
 ) -> AndromedaResult<PreTransactionAdmission> {
-    let admission_trace = request
-        .validate_admission(trace_id)
-        .map_err(|reject| AndromedaError::new(AndromedaErrorKind::Contract, reject.reason))?;
+    let admission_trace = request.validate_admission(trace_id).map_err(|reject| {
+        let kind = admission_reject_to_error_kind(reject.status);
+        AndromedaError::new(kind, reject.reason)
+    })?;
     procedure.validate()?;
     let contract_trace = request
         .validate_before_transaction(procedure.contract_binding, trace_id)
@@ -61,8 +83,12 @@ pub(super) fn validate_catalog_resolved_procedure(
     trace_id: TraceId,
 ) -> AndromedaResult<()> {
     let visible_catalog_version = catalog.visible_version();
-    let has_durable_publication =
-        catalog.is_durably_published() || catalog.visible_publication_receipt().is_some();
+    // G6 fix: require `is_durably_published()` strictly. A visible publication
+    // receipt alone is insufficient — the catalog snapshot MUST be backed by
+    // durable WAL evidence. Removing the `||` prevents a non-durable snapshot
+    // from being admitted even if it carries a receipt object.
+    // See INV-005: no visible commit without durable WAL.
+    let has_durable_publication = catalog.is_durably_published();
     if !has_durable_publication {
         return Err(AndromedaError::new(
             AndromedaErrorKind::Contract,
@@ -163,6 +189,7 @@ fn require_authorization_context_for_permissioned_procedure(
 
 #[cfg(test)]
 mod tests {
+    use andromeda_catalog_store::CatalogSnapshot;
     use andromeda_error::AndromedaErrorKind;
     use andromeda_inventory_demo::inventory_reserve_stock_contract;
     use andromeda_observability::TraceId;
@@ -171,12 +198,17 @@ mod tests {
         StatsVersion,
     };
     use andromeda_srpl_ir::Cardinality;
-    use andromeda_types::{CatalogVersion, ContractHash, InvocationId, ProcedureId};
+    use andromeda_types::{
+        CatalogVersion, ContractHash, DatabaseId, InvocationId, NamespaceId, ProcedureId,
+    };
 
     use crate::local::types::LocalProcedure;
-    use crate::{InvocationContext, InvocationRequest, ResultStreamMetadata};
+    use crate::{CompletionStatus, InvocationContext, InvocationRequest, ResultStreamMetadata};
 
-    use super::validate_pre_transaction_admission;
+    use super::{
+        admission_reject_to_error_kind, validate_catalog_resolved_procedure,
+        validate_pre_transaction_admission,
+    };
 
     fn request(contract: &ProcedureContract) -> InvocationRequest {
         InvocationRequest {
@@ -293,5 +325,59 @@ mod tests {
 
         assert_eq!(error.kind(), AndromedaErrorKind::Contract);
         assert!(error.message().contains("ProcedureContractBinding"));
+    }
+
+    // G5: admission rejection must map to the correct error class.
+    #[test]
+    fn system_unavailable_rejection_maps_to_resource_error_kind() {
+        assert_eq!(
+            admission_reject_to_error_kind(CompletionStatus::SystemUnavailable),
+            AndromedaErrorKind::Resource,
+        );
+    }
+
+    #[test]
+    fn permission_denied_rejection_maps_to_security_error_kind() {
+        assert_eq!(
+            admission_reject_to_error_kind(CompletionStatus::PermissionDenied),
+            AndromedaErrorKind::Security,
+        );
+    }
+
+    #[test]
+    fn contract_rejected_admission_maps_to_contract_error_kind() {
+        assert_eq!(
+            admission_reject_to_error_kind(CompletionStatus::ContractRejected),
+            AndromedaErrorKind::Contract,
+        );
+    }
+
+    // G6: non-durable catalog snapshot must be rejected as a durability gate.
+    #[test]
+    fn in_memory_only_catalog_snapshot_fails_durability_gate() {
+        type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
+            andromeda_definition_batch::DefinitionBatchId,
+            andromeda_definition_batch::DefinitionBatchSourceHash,
+            andromeda_definition_batch::DefinitionBatchDependencyGraphHash,
+        >;
+        let contract = inventory_reserve_stock_contract().unwrap();
+        let req = request(&contract);
+        let proc = local_procedure(&contract);
+        // CatalogSnapshot::empty always creates InMemoryOnly publication.
+        let catalog: CatalogSnapshot<CatalogPublicationReceipt> = CatalogSnapshot::empty(
+            DatabaseId::new(1),
+            NamespaceId::new(1),
+            CatalogVersion::new(1),
+        );
+
+        let err = validate_catalog_resolved_procedure(&req, &proc, &catalog, TraceId::new(9200))
+            .unwrap_err();
+
+        assert_eq!(err.kind(), AndromedaErrorKind::Contract);
+        assert!(
+            err.message().contains("durably published"),
+            "error should mention durably published, got: {}",
+            err.message()
+        );
     }
 }

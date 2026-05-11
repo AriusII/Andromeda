@@ -7,7 +7,7 @@ fn authorization_denial_is_rejected_before_tx_begin() {
     procedure.required_permissions = vec!["Inventory.ReserveStock.Execute".to_string()];
 
     let err = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             request(ContractHash::test_vector(7)),
             &procedure,
             &InvocationContext::new(TraceId::new(102), Vec::new()),

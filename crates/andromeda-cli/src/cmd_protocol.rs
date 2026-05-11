@@ -310,7 +310,7 @@ fn validate_completion_error_structured_contract() -> AndromedaResult<String> {
 
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let context = InvocationContext::new(TraceId::new(19), contract.required_permissions.clone());
-    let outcome = runtime.execute_authorized(request, &procedure, &context)?;
+    let outcome = runtime.execute_internal_authorized(request, &procedure, &context)?;
 
     if outcome.completion.status() != CompletionStatus::Committed {
         return Err(protocol_error(format!(

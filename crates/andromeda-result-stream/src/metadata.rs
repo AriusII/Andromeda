@@ -74,4 +74,34 @@ impl ResultStreamMetadata {
             actual_row_count,
         )
     }
+
+    /// Validate that the transaction evidence (state + durable LSN + DB
+    /// mutation rows) is consistent with a terminal commitment **without**
+    /// cross-comparing DB mutation rows against the result-stream row count.
+    ///
+    /// Use this on the hot commit path in `execute_after_admission()` where
+    /// `db_rows_affected` is the number of database rows mutated by the handler
+    /// (e.g. 2 for ReserveStock: 1 stock row + 1 reservation row), which is
+    /// intentionally independent of `result_metadata.row_count_exact` (the
+    /// number of rows in the result stream returned to the caller).
+    ///
+    /// Checks enforced:
+    /// 1. `transaction_state` is `Committed` or `RolledBack`.
+    /// 2. `durable_lsn` is non-zero (WAL is flushed).
+    /// 3. A `RolledBack` transaction must report `db_rows_affected == 0`.
+    ///
+    /// For full result-stream row count cross-checking use
+    /// [`validate_terminal_completion`] with the actual stream row count.
+    pub fn validate_terminal_evidence(
+        self,
+        transaction_state: TransactionState,
+        durable_lsn: Lsn,
+        db_rows_affected: u64,
+    ) -> AndromedaResult<()> {
+        crate::validation::validate_terminal_evidence(
+            transaction_state,
+            durable_lsn,
+            db_rows_affected,
+        )
+    }
 }

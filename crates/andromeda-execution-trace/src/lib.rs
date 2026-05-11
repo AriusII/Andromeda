@@ -30,9 +30,9 @@
 use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
 use andromeda_types::InvocationId;
-use std::sync::Arc;
 
 pub mod completion;
+pub mod procedure_invocation_trace;
 pub mod transaction_error_routing;
 
 pub use completion::{
@@ -42,6 +42,7 @@ pub use completion::{
     InvocationCompletionEmitter, InvocationCompletionJournal,
     reconcile_completion_recovery_from_wal,
 };
+pub use procedure_invocation_trace::ProcedureInvocationTrace;
 pub use transaction_error_routing::{
     ErrorKind, RetryRouting, RoutedTransactionError, TerminalTxEvidence, TerminalTxJournal,
     TerminalTxState, route_transaction_error,
@@ -160,24 +161,50 @@ pub trait AuditLedger: Send + Sync {
 
     /// Count of append attempts rejected (ledger unavailable, validation error, etc.).
     fn total_rejected(&self) -> u64;
+
+    /// Append a complete procedure invocation trace record to the durable
+    /// ledger.  Never silently drops records.
+    fn append_procedure_trace(&self, trace: ProcedureInvocationTrace) -> AndromedaResult<()>;
+
+    /// Query procedure invocation traces by `invocation_id` (for forensic /
+    /// debugging use only).
+    fn query_procedure_traces_by_invocation_id(
+        &self,
+        id: InvocationId,
+    ) -> AndromedaResult<Vec<ProcedureInvocationTrace>>;
 }
 
 /// In-memory audit ledger for testing and development.
-/// Production deployments must wire a persistent ledger (WAL-backed or external).
+///
+/// # Production Warning
+///
+/// Production deployments MUST NOT use this implementation. It is an
+/// in-memory `Mutex<Vec<_>>` with no durability guarantees: all audit traces
+/// are lost on restart. Production code must wire a WAL-backed or external
+/// ledger implementation that satisfies Doctrine INV-012 ("every critical
+/// decision is observable and explainable after the fact").
+///
+/// This type is only available under `#[cfg(any(test, feature = "test-fixtures"))]`.
+/// Attempting to reference it outside those contexts will produce a compile
+/// error, preventing accidental production wiring.
+#[cfg(any(test, feature = "test-fixtures"))]
 #[derive(Debug, Clone)]
 pub struct InMemoryAuditLedger {
-    events: Arc<std::sync::Mutex<Vec<InvocationTraceEvent>>>,
-    appended_count: Arc<std::sync::atomic::AtomicU64>,
-    rejected_count: Arc<std::sync::atomic::AtomicU64>,
+    events: std::sync::Arc<std::sync::Mutex<Vec<InvocationTraceEvent>>>,
+    procedure_traces: std::sync::Arc<std::sync::Mutex<Vec<ProcedureInvocationTrace>>>,
+    appended_count: std::sync::Arc<std::sync::atomic::AtomicU64>,
+    rejected_count: std::sync::Arc<std::sync::atomic::AtomicU64>,
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 impl InMemoryAuditLedger {
     /// Create a new in-memory audit ledger.
     pub fn new() -> Self {
         Self {
-            events: Arc::new(std::sync::Mutex::new(Vec::new())),
-            appended_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
-            rejected_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            events: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+            procedure_traces: std::sync::Arc::new(std::sync::Mutex::new(Vec::new())),
+            appended_count: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            rejected_count: std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -191,14 +218,28 @@ impl InMemoryAuditLedger {
         })?;
         Ok(events.clone())
     }
+
+    /// Snapshot of all recorded [`ProcedureInvocationTrace`] records
+    /// (read-only, test/debug use only).
+    pub fn snapshot_procedure_traces(&self) -> AndromedaResult<Vec<ProcedureInvocationTrace>> {
+        let traces = self.procedure_traces.lock().map_err(|e| {
+            andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Internal,
+                format!("audit ledger procedure_traces lock poisoned: {}", e),
+            )
+        })?;
+        Ok(traces.clone())
+    }
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 impl Default for InMemoryAuditLedger {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(any(test, feature = "test-fixtures"))]
 impl AuditLedger for InMemoryAuditLedger {
     fn append_trace(&self, event: InvocationTraceEvent) -> AndromedaResult<()> {
         match self.events.lock() {
@@ -272,6 +313,30 @@ impl AuditLedger for InMemoryAuditLedger {
     fn total_rejected(&self) -> u64 {
         self.rejected_count
             .load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn append_procedure_trace(&self, trace: ProcedureInvocationTrace) -> AndromedaResult<()> {
+        match self.procedure_traces.lock() {
+            Ok(mut guard) => {
+                guard.push(trace);
+                Ok(())
+            },
+            Err(e) => Err(andromeda_error::AndromedaError::new(
+                andromeda_error::AndromedaErrorKind::Internal,
+                format!("audit ledger procedure_traces lock poisoned: {}", e),
+            )),
+        }
+    }
+
+    fn query_procedure_traces_by_invocation_id(
+        &self,
+        id: InvocationId,
+    ) -> AndromedaResult<Vec<ProcedureInvocationTrace>> {
+        let traces = self.snapshot_procedure_traces()?;
+        Ok(traces
+            .into_iter()
+            .filter(|t| t.invocation_id == id)
+            .collect())
     }
 }
 

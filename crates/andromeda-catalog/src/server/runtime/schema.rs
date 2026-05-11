@@ -29,6 +29,8 @@ pub(super) fn manifest_from_contract(
             AccessMode::ReadWrite
         ),
         min_compatible_version: CatalogVersion::new(1),
+        srpl_source: None,
+        compiled_ir_handle: None,
     };
     manifest.validate()?;
     Ok(manifest)

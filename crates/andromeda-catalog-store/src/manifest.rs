@@ -6,6 +6,47 @@
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, ContractHash, ProcedureId};
 
+/// Opaque SRPL source text associated with a catalog procedure definition.
+///
+/// Round-trips the source text for tooling and catalog-store consumers.
+/// Physical compilation is deferred; this stub enables W2 SRPL compilation
+/// without placing compiled artifacts in the catalog-store DTO layer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SrplSource(String);
+
+impl SrplSource {
+    /// Wraps a SRPL source text string.
+    pub fn new(source: impl Into<String>) -> Self {
+        Self(source.into())
+    }
+
+    /// Returns the SRPL source text as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+/// Opaque handle identifying a pre-compiled IR artifact stored alongside a
+/// catalog procedure definition.
+///
+/// Physical compilation and artifact retrieval are deferred to W2. This stub
+/// provides a stable 32-byte identity for a cached compilation result without
+/// owning the compiled form.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CompiledIrHandle([u8; 32]);
+
+impl CompiledIrHandle {
+    /// Wraps 32 raw bytes as a compiled IR handle.
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+
+    /// Returns the underlying 32-byte identity.
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+
 /// A procedure manifest providing metadata needed by remote clients.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcedureManifest {
@@ -17,6 +58,16 @@ pub struct ProcedureManifest {
     pub output_schema: Vec<ColumnSchema>,
     pub is_mutable: bool,
     pub min_compatible_version: CatalogVersion,
+    /// SRPL source text stored alongside the catalog definition.
+    ///
+    /// `None` indicates the source was not included in this manifest record
+    /// (e.g. for lightweight resolution responses or pre-W2 catalog entries).
+    pub srpl_source: Option<SrplSource>,
+    /// Pre-compiled IR handle for the procedure, if a cached artifact exists.
+    ///
+    /// `None` indicates no pre-compiled IR is available; callers must compile
+    /// from [`srpl_source`] or defer to W2.
+    pub compiled_ir_handle: Option<CompiledIrHandle>,
 }
 
 impl ProcedureManifest {
@@ -154,6 +205,8 @@ mod tests {
             }],
             is_mutable: false,
             min_compatible_version: CatalogVersion::new(1),
+            srpl_source: None,
+            compiled_ir_handle: None,
         }
     }
 

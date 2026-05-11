@@ -146,7 +146,12 @@ fn catalog_backed_runtime_rejects_absent_procedure_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let error = runtime
-        .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7101))
+        .execute_internal_catalog_resolved(
+            request,
+            &procedure,
+            store.snapshot(),
+            TraceId::new(7101),
+        )
         .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -176,7 +181,12 @@ fn catalog_backed_runtime_rejects_inactive_procedure_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let error = runtime
-        .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7102))
+        .execute_internal_catalog_resolved(
+            request,
+            &procedure,
+            store.snapshot(),
+            TraceId::new(7102),
+        )
         .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -194,7 +204,12 @@ fn catalog_backed_runtime_rejects_stale_catalog_version_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let error = runtime
-        .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7103))
+        .execute_internal_catalog_resolved(
+            request,
+            &procedure,
+            store.snapshot(),
+            TraceId::new(7103),
+        )
         .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);
@@ -212,7 +227,12 @@ fn catalog_backed_runtime_rejects_contract_hash_mismatch_before_begin() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let error = runtime
-        .execute_catalog_resolved(request, &procedure, store.snapshot(), TraceId::new(7104))
+        .execute_internal_catalog_resolved(
+            request,
+            &procedure,
+            store.snapshot(),
+            TraceId::new(7104),
+        )
         .unwrap_err();
 
     assert_eq!(error.kind(), AndromedaErrorKind::Contract);

@@ -143,7 +143,7 @@ fn inventory_reserve_stock_e2e_stitches_catalog_srpl_business_effect_and_authori
     };
 
     let outcome = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             request,
             &procedure,
             &InvocationContext::new(

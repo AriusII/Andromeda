@@ -18,6 +18,7 @@ pub use dispatch::{
     ProcedureDispatcher, ProcedureRequestResolver, RemoteProcedureDispatcherUnavailable,
     SrplDispatcherAdapter,
 };
+pub use andromeda_principal::PrincipalId;
 pub use procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse,
     ProcedureResolveTarget, ProcedureResolver, SrplProcedureManifest,

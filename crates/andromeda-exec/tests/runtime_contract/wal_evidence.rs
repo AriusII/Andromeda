@@ -27,7 +27,7 @@ fn local_vertical_happy_path_commits_only_with_durable_wal_evidence() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let outcome = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             request,
             &procedure,
             &InvocationContext::new(TraceId::new(7000), contract.required_permissions.clone()),
@@ -288,7 +288,7 @@ fn local_vertical_rejects_visibility_when_flush_does_not_cover_commit_lsn() {
     let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(8000),
@@ -307,7 +307,7 @@ fn local_vertical_commit_append_failure_does_not_publish_terminal_status() {
     let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(8001),
@@ -344,7 +344,7 @@ fn local_vertical_flush_error_does_not_publish_terminal_status() {
     let procedure = procedure(request(ContractHash::test_vector(7)).procedure);
 
     let err = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(8002),

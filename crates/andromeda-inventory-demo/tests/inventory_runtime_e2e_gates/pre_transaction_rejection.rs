@@ -25,7 +25,7 @@ fn stale_contract_rejection_stays_pre_transaction_with_no_wal_or_transaction_obs
     };
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
     let error = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             stale_request.clone(),
             &procedure,
             &InvocationContext::new(

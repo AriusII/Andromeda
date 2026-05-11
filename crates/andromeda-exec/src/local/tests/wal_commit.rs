@@ -6,7 +6,7 @@ fn local_vertical_runtime_commits_only_after_durable_wal() {
     let procedure = simple_local_procedure();
 
     let outcome = runtime
-        .execute(
+        .execute_internal(
             request(ContractHash::test_vector(7)),
             &procedure,
             TraceId::new(99),
@@ -30,7 +30,7 @@ fn local_vertical_runtime_uses_inventory_contract_and_in_memory_wal() {
     let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
 
     let outcome = runtime
-        .execute_authorized(
+        .execute_internal_authorized(
             inventory_request(&contract),
             &procedure,
             &inventory_context(&contract, 7000),

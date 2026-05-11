@@ -308,6 +308,7 @@ name = "andromeda-execution"
 version = "0.1.0"
 dependencies = [
  "andromeda-admission",
+ "andromeda-catalog-store",
  "andromeda-error",
  "andromeda-observability",
  "andromeda-procedure-contract",
@@ -325,8 +326,10 @@ dependencies = [
  "andromeda-audit",
  "andromeda-error",
  "andromeda-observability",
+ "andromeda-principal",
  "andromeda-procedure-contract",
  "andromeda-result-stream",
+ "andromeda-retry",
  "andromeda-transaction",
  "andromeda-types",
  "andromeda-wal",
@@ -527,6 +530,7 @@ dependencies = [
  "andromeda-admission",
  "andromeda-error",
  "andromeda-observability",
+ "andromeda-principal",
  "andromeda-procedure-contract",
  "andromeda-result-stream",
  "andromeda-srpl-ir",

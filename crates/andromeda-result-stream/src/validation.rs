@@ -78,6 +78,45 @@ pub(crate) fn validate_terminal_completion(
     metadata.validate_completed_stream(actual_row_count)
 }
 
+/// Validate that the transaction evidence is consistent with a terminal
+/// commitment: the transaction must be in a terminal state, the durable LSN
+/// must be non-zero (WAL is flushed), and a rolled-back transaction must
+/// report zero DB mutations.
+///
+/// This is the correct check to call on the hot commit path in
+/// `execute_after_admission()` because it validates WAL and MVCC evidence
+/// **without** cross-comparing DB mutation rows (`rows_affected`) against
+/// result-stream row count (`row_count_exact`). Those two fields represent
+/// intentionally different quantities:
+///
+/// - `db_rows_affected`: total rows mutated in the database (≥ result rows
+///   for denormalised writes, 0 for read-only procedures).
+/// - `result_metadata.row_count_exact`: the number of rows in the result
+///   stream returned to the caller (varies independently of DB mutations).
+///
+/// Use `validate_terminal_completion` (which calls `validate_completed_stream`)
+/// only when the caller has a genuine result-stream row count to cross-check.
+pub(crate) fn validate_terminal_evidence(
+    transaction_state: TransactionState,
+    durable_lsn: Lsn,
+    db_rows_affected: u64,
+) -> AndromedaResult<()> {
+    if !matches!(
+        transaction_state,
+        TransactionState::Committed | TransactionState::RolledBack
+    ) {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Transaction,
+            "result stream completion requires a terminal transaction state",
+        ));
+    }
+
+    ensure_nonzero_durable_lsn(durable_lsn)?;
+    ensure_rollback_reports_zero_rows(transaction_state, db_rows_affected)?;
+
+    Ok(())
+}
+
 pub(crate) fn validate_invocation_completion(
     completion: InvocationCompletion,
 ) -> AndromedaResult<()> {
