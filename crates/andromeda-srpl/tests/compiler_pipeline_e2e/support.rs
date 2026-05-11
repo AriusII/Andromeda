@@ -4,7 +4,8 @@ pub(crate) use andromeda_business_fixtures::{
     inventory_reserve_stock_contract, inventory_reserve_stock_contract_candidate,
 };
 pub(crate) use andromeda_catalog::{
-    CatalogDefinitionBatchPlanning, CatalogPublicationReceipt, DefinitionBatchPlan,
+    CatalogDefinitionBatchPlanning, CatalogPublicationReceipt, CatalogSystemStore,
+    DefinitionBatchPlan,
 };
 pub(crate) use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, CatalogSnapshot as CatalogStoreSnapshot,
@@ -157,14 +158,103 @@ pub(crate) fn stock_request_structured_object(
 
 pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
     let batch = inventory_domain_definition_batch().unwrap();
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
         batch.base_version,
     );
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
-    snapshot
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+    let published = store.into_snapshot();
+    (*published).clone()
+}
+
+/// Returns an inventory catalog snapshot whose `visible_version` has advanced
+/// past the registered `Inventory.ReserveStock` procedure (registered at
+/// `catalog_version = 1`, snapshot publishes a second synthetic batch so that
+/// `visible_version() == 2`). Used to exercise the binder's stale-version
+/// rejection without mutating private snapshot internals.
+pub(crate) fn inventory_catalog_snapshot_at_advanced_version()
+-> CatalogSnapshot<CatalogPublicationReceipt> {
+    let inventory_batch = inventory_domain_definition_batch().unwrap();
+    let mut store = CatalogSystemStore::empty(
+        INVENTORY_DATABASE_ID,
+        INVENTORY_NAMESPACE_ID,
+        inventory_batch.base_version,
+    );
+    let mut next_lsn: u64 = 0;
+    let mut append = |_kind, _payload: &[u8]| -> AndromedaResult<u64> {
+        next_lsn += 1;
+        Ok(next_lsn)
+    };
+    store
+        .apply_definition_batch_durably(&inventory_batch, &mut append, Ok)
+        .unwrap();
+
+    // Synthetic second batch: a minimal probe procedure that advances
+    // visible_version from 1 to 2 without disturbing Inventory.ReserveStock.
+    let advance_contract = ProcedureContractCandidate {
+        object: CatalogObjectRef {
+            object_id: CatalogObjectId::new(0x7F00),
+            name: QualifiedName::parse("Inventory.AdvanceVersion").unwrap(),
+            kind: ObjectKind::Procedure,
+            catalog_version: CatalogVersion::new(2),
+        },
+        procedure_id: ProcedureId::new(0x7F00),
+        stats_version: StatsVersion::new(1),
+        protocol_layout: inventory_protocol_layout_ref(),
+        inputs: Vec::new(),
+        structured_inputs: Vec::new(),
+        result_streams: vec![ResultStreamContract {
+            stream_id: 1,
+            name: "Ack".to_string(),
+            columns: vec![ColumnDescriptor {
+                name: "Acked".to_string(),
+                data_type: TypeDescriptor::required(ScalarType::Bool),
+                ordinal: 0,
+            }],
+            cardinality: Cardinality::One.into(),
+            row_count_exact_required: Cardinality::One.requires_exact_row_count(),
+        }],
+        required_permissions: vec!["Inventory.AdvanceVersion.Execute".to_string()],
+        transaction_policy: TransactionPolicy {
+            access_mode: AccessMode::ReadOnly,
+            isolation: IsolationPolicy::Serializable,
+            retryable: true,
+        },
+        compatibility_policy: CompatibilityPolicy::ExactHash,
+        result_metadata_policy: ResultMetadataPolicy::RequireBeforePayload,
+        error_policy: ProcedureErrorPolicy {
+            rollback_on_error: false,
+            allowed_error_codes: Vec::new(),
+        },
+        multi_result_policy: MultiResultPolicy::SingleResultOnly,
+    }
+    .materialize()
+    .unwrap();
+    let advance_batch = DefinitionBatch {
+        batch_id: DefinitionBatchId::new(0x7F01),
+        database_id: INVENTORY_DATABASE_ID,
+        namespace_id: INVENTORY_NAMESPACE_ID,
+        base_version: CatalogVersion::new(1),
+        operations: vec![DefinitionOperation::Create(CatalogDefinition::Procedure(
+            advance_contract,
+        ))],
+    };
+    store
+        .apply_definition_batch_durably(&advance_batch, &mut append, Ok)
+        .unwrap();
+    let published = store.into_snapshot();
+    (*published).clone()
 }
 
 pub(crate) fn cardinality_probe_snapshot(
@@ -224,13 +314,24 @@ pub(crate) fn cardinality_probe_snapshot(
             contract,
         ))],
     };
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
         batch.base_version,
     );
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+    let published = store.into_snapshot();
+    let snapshot = (*published).clone();
 
     let operations = if emit_count == 0 {
         vec![SrplBusinessOperationIr {

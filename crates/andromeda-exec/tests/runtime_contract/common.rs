@@ -186,8 +186,11 @@ pub(crate) fn foreground_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
+    // Must match the ProcedureId used in `request()` (ProcedureId::new(22)) so that
+    // helpers::require_local_procedure_execution_io_admission_for_trace passes the
+    // ResourceBudgetScope == for_procedure(procedure_id) check.
     ExecutionIoAdmissionRequest::for_procedure(
-        ProcedureId::new(2),
+        ProcedureId::new(22),
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),

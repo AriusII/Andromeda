@@ -19,15 +19,30 @@ pub(super) fn canonical_procedure_contract_hash(contract: &ProcedureContract) ->
         &contract.inputs,
         &contract.structured_inputs,
         &contract.result_streams,
+        contract.stats_version,
+        &contract.required_permissions,
+        contract.transaction_policy,
+        contract.compatibility_policy,
+        contract.result_metadata_policy,
+        &contract.error_policy,
+        contract.multi_result_policy,
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn canonical_procedure_contract_hash_parts(
     name: &QualifiedName,
     protocol_layout: ProtocolLayoutRef,
     inputs: &[andromeda_types::ColumnDescriptor],
     structured_inputs: &[QualifiedName],
     result_streams: &[ResultStreamContract],
+    stats_version: StatsVersion,
+    required_permissions: &[String],
+    transaction_policy: TransactionPolicy,
+    compatibility_policy: CompatibilityPolicy,
+    result_metadata_policy: ResultMetadataPolicy,
+    error_policy: &ProcedureErrorPolicy,
+    multi_result_policy: MultiResultPolicy,
 ) -> ContractHash {
     let mut sink = StableHashSink::new();
     sink.str("andromeda.catalog.procedure-contract.v4.sha256");
@@ -46,6 +61,39 @@ pub(super) fn canonical_procedure_contract_hash_parts(
         sink.u8(stream.cardinality.stable_tag());
         sink.columns(&stream.columns);
     }
+    // Policy fields — must match canonical_policy_version field set so that any
+    // policy change also changes the contract hash.
+    sink.u64(stats_version.get());
+    sink.u64(required_permissions.len() as u64);
+    for permission in required_permissions {
+        sink.str(permission);
+    }
+    sink.u8(match transaction_policy.access_mode {
+        AccessMode::ReadOnly => 0,
+        AccessMode::ReadWrite => 1,
+    });
+    sink.u8(match transaction_policy.isolation {
+        IsolationPolicy::Snapshot => 0,
+        IsolationPolicy::Serializable => 1,
+    });
+    sink.bool(transaction_policy.retryable);
+    sink.u8(match compatibility_policy {
+        CompatibilityPolicy::AdditiveOnly => 0,
+        CompatibilityPolicy::ExactHash => 1,
+    });
+    sink.u8(match result_metadata_policy {
+        ResultMetadataPolicy::RequireBeforePayload => 0,
+        ResultMetadataPolicy::AllowStreamingUnknown => 1,
+    });
+    sink.bool(error_policy.rollback_on_error);
+    sink.u64(error_policy.allowed_error_codes.len() as u64);
+    for code in &error_policy.allowed_error_codes {
+        sink.str(code);
+    }
+    sink.u8(match multi_result_policy {
+        MultiResultPolicy::SingleResultOnly => 0,
+        MultiResultPolicy::MultipleResultStreamsAllowed => 1,
+    });
     sink.finish()
 }
 

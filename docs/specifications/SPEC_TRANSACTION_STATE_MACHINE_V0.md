@@ -166,7 +166,7 @@ The implementation may expose helper APIs with different internal names, but it 
 
 ## Security model
 
-Security-sensitive operations require admission through identity, principal, permission, policy, and audit checks before durable mutation or transaction creation.
+Security-sensitive operations require admission through identity, principal, permission, policy, and audit checks before durable mutation or transaction creation. GPU and accelerator execution is excluded from the entire transaction kernel, WAL, MVCC visibility, recovery, and security-critical paths (INV-008). The positive policy specifying where GPU MAY be used (advisory analytics outside the commit path) is normative in `docs/specifications/SPEC_GPU_EXECUTION_POLICY_V0.md`.
 
 ## Observability
 

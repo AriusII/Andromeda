@@ -149,6 +149,13 @@ impl ProcedureContractCandidate {
             &self.inputs,
             &self.structured_inputs,
             &self.result_streams,
+            self.stats_version,
+            &self.required_permissions,
+            self.transaction_policy,
+            self.compatibility_policy,
+            self.result_metadata_policy,
+            &self.error_policy,
+            self.multi_result_policy,
         );
         let contract = ProcedureContract {
             object: self.object,

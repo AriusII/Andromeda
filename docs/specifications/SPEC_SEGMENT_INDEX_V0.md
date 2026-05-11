@@ -131,6 +131,8 @@ SegmentIndex files use a 256-byte little-endian header, `entry_count` fixed 160-
 
 `EntryTableCrc64` uses CRC64/ECMA with polynomial `0x42F0E1EBA9EA3693`, initial value `0`, no final xor, and zero normalized to `1`.
 
+`SegmentPayloadCrc64` field in entries uses the CRC64/ECMA polynomial `0x42F0E1EBA9EA3693` (a.k.a. ISO 3309 CRC-64); the canonical reference implementation is `crc::Crc::<u64>::new(&crc::CRC_64_ECMA_182)`.
+
 `EntryTableSha256`, `SegmentIndexFileSha256`, `SegmentIndexRootHash`, and `SegmentSha256` use SHA-256. All-zero digest values are invalid.
 
 The decoder must validate header magic, version, byte order, header length, total length, entry count, entry length, extension bounds, and header CRC before allocating the entry vector. The decoded file must re-encode to the same bytes for golden vector acceptance.

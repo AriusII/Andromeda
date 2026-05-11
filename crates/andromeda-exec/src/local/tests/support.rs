@@ -215,6 +215,9 @@ pub(crate) fn test_binding(procedure: ProcedureContractRef) -> ProcedureContract
 }
 
 pub(crate) fn staged_inventory_catalog_store() -> CatalogSystemStore {
+    // Intentionally uses apply_definition_batch (in-memory, not durable) so that
+    // snapshot().is_durably_published() == false and visible_version() == 0.
+    // Used by tests that verify the runtime rejects staged (non-durable) snapshots.
     let mut store = CatalogSystemStore::empty(
         DatabaseId::new(0x1000),
         NamespaceId::new(0x1001),

@@ -122,6 +122,7 @@ Adding a new code is additive only when existing codes keep their meaning. Reusi
 - Binder output is deterministic for the same source semantics, catalog version, and policy version.
 - Binder output must not contain source SQL text, dynamic object names, unchecked optional dereferences, unbounded multi-row effects, or unresolved permissions.
 - `ReadWriteSet` is hashed into `ProcedureContract` effects and referenced by Semantic IR effect boundaries.
+- The binder MUST independently assert `output_stream_count == 1` for every V0 procedure-contract; mismatch with the grammar-derived count is a binder-level rejection (`ErrKind::BinderOutputStreamCountMismatch` or equivalent), not just a grammar error.
 
 
 ## Serialization

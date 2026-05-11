@@ -3,11 +3,7 @@
 //! Narrow CLI adapter for the inventory vertical demo.
 
 use andromeda_admission::{InvocationContext, InvocationRequest};
-use andromeda_catalog::CatalogDefinitionBatchPlanning;
-use andromeda_catalog_store::CatalogSnapshot;
-use andromeda_definition_batch::{
-    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
-};
+use andromeda_catalog::{CatalogSnapshot, CatalogSystemStore};
 use andromeda_error::AndromedaResult;
 use andromeda_exec::LocalVerticalRuntime;
 use andromeda_inventory_demo_core::{
@@ -19,7 +15,7 @@ use andromeda_inventory_demo_core::{
 };
 use andromeda_observability::TraceId;
 use andromeda_result_stream::CompletionStatus;
-use andromeda_types::{InvocationId, RequestId, SessionId};
+use andromeda_types::{CatalogVersion, InvocationId, RequestId, SessionId};
 use andromeda_wal::{FileWal, InMemoryWal, Lsn};
 use std::path::{Path, PathBuf};
 
@@ -30,12 +26,6 @@ pub use andromeda_business_fixtures::inventory_catalog::{
 pub use andromeda_inventory_demo_core::{
     InventoryReserveStockExecutor, InventoryStock, ReserveStockCommand,
 };
-
-type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
-    DefinitionBatchId,
-    DefinitionBatchSourceHash,
-    DefinitionBatchDependencyGraphHash,
->;
 
 /// Printable trace details returned to the CLI.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -174,14 +164,20 @@ pub fn run_cli_inventory_recoverable(
     })
 }
 
-fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot<CatalogPublicationReceipt>> {
-    let batch = inventory_domain_definition_batch()?;
-    let plan = batch.dry_run()?;
-    let mut snapshot = CatalogSnapshot::empty(
+fn inventory_catalog_snapshot() -> AndromedaResult<CatalogSnapshot> {
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
-        batch.base_version,
+        CatalogVersion::new(0),
     );
-    snapshot.apply_mutation_plan(&plan.mutation_plan)?;
-    Ok(snapshot)
+    let mut next_lsn: u64 = 0;
+    store.apply_definition_batch_durably(
+        &inventory_domain_definition_batch()?,
+        |_kind, _payload| {
+            next_lsn += 1;
+            Ok(next_lsn)
+        },
+        Ok,
+    )?;
+    Ok(store.into_snapshot())
 }

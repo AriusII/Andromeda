@@ -1,8 +1,4 @@
-use andromeda_catalog::CatalogDefinitionBatchPlanning;
-use andromeda_catalog_store::CatalogSnapshot;
-use andromeda_definition_batch::{
-    DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
-};
+use andromeda_catalog::{CatalogSnapshot, CatalogSystemStore};
 use andromeda_error::AndromedaResult;
 use andromeda_exec::{InvocationContext, InvocationRequest};
 use andromeda_inventory_demo::{
@@ -19,24 +15,27 @@ use andromeda_rpc_protocol::{
 };
 use andromeda_storage_heap::LocalHeapRowInsertRedoTemplate;
 use andromeda_storage_page::{PageId, PageSize};
+use andromeda_types::CatalogVersion;
 use andromeda_types::{InvocationId, RequestId, SessionId, TransactionId};
 
-type CatalogPublicationReceipt = andromeda_catalog_store::CatalogPublicationReceipt<
-    DefinitionBatchId,
-    DefinitionBatchSourceHash,
-    DefinitionBatchDependencyGraphHash,
->;
-
-pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
-    let batch = inventory_domain_definition_batch().unwrap();
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(
+pub(crate) fn inventory_catalog_snapshot() -> CatalogSnapshot {
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
-        batch.base_version,
+        CatalogVersion::new(0),
     );
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
-    snapshot
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &inventory_domain_definition_batch().unwrap(),
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+    store.into_snapshot()
 }
 
 pub(crate) fn request(contract: &ProcedureContract, invocation_id: u64) -> InvocationRequest {
@@ -58,7 +57,7 @@ pub(crate) fn context(contract: &ProcedureContract, trace_id: u64) -> Invocation
 }
 
 pub(crate) fn executable_procedure(
-    catalog: &CatalogSnapshot<CatalogPublicationReceipt>,
+    catalog: &CatalogSnapshot,
     contract: &ProcedureContract,
 ) -> V0InventoryReserveStockExecutableProcedure {
     bind_inventory_reserve_stock_v0_pdf_executable_procedure(catalog, contract).unwrap()

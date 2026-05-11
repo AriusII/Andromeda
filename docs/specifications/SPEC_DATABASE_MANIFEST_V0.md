@@ -139,6 +139,8 @@ Manifest publication is a root switch. Recovery must choose the newest valid man
 
 `FileTableCrc64` uses CRC64/ECMA with polynomial `0x42F0E1EBA9EA3693`, initial value `0`, no final xor, and zero normalized to `1`.
 
+`PayloadCrc64` field in file entries uses the CRC64/ECMA polynomial `0x42F0E1EBA9EA3693` (a.k.a. ISO 3309 CRC-64); the canonical reference implementation is `crc::Crc::<u64>::new(&crc::CRC_64_ECMA_182)`.
+
 `ManifestHash` is SHA-256 over the canonical manifest bytes after setting ManifestHash to zero and setting signature bytes to zero. `PreviousManifestHash` must equal the prior accepted ManifestHash except for genesis.
 
 `StorageFormatFingerprintHash` is the deterministic manifest fingerprint hash over `(DatabaseId, ManifestVersion, SnapshotId, ordered format kind/version records)`. V0 kind tags are Page `1`, HeapPage `2`, BTreeKey `3`, BTreeNode `4`, WalRecord `5`, WalPayload `6`, Manifest `7`, Segment `8`, and Checkpoint `9`.

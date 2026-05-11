@@ -92,6 +92,7 @@ Dry-run input must include:
 - Canonical source or import payload hash.
 - Ordered operation descriptors.
 - Requesting `CertificateIdentity`, `UserPrincipal`, surface scope, requested permissions, and `PolicyVersion`.
+- `StatsVersion` of the contract evidence being published, carried in `ProcedureContractBinding`; see `docs/adr/ADR-0014-STATS_VERSION_PUBLICATION.md`.
 - Compatibility policy for each operation that can affect an existing object or contract.
 
 Dry-run output must include:

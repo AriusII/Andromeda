@@ -234,8 +234,7 @@ fn executable_plan_rejects_stale_catalog_version_evidence() {
     )
     .unwrap();
     ir.body = inventory_reserve_stock_body_ir().unwrap();
-    let mut snapshot = inventory_catalog_snapshot();
-    snapshot.version = CatalogVersion::new(2);
+    let snapshot = inventory_catalog_snapshot_at_advanced_version();
 
     let error = bind_executable_procedure_plan(&ir, &snapshot).unwrap_err();
 
@@ -332,13 +331,24 @@ fn binder_supports_a_distinct_read_only_procedure_shape() {
             DefinitionOperation::Create(CatalogDefinition::Procedure(contract)),
         ],
     };
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
         batch.base_version,
     );
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+    let published = store.into_snapshot();
+    let snapshot = (*published).clone();
 
     let ir = SrplProcedureIr {
         name: QualifiedName::parse("Inventory.QueryProductStock").unwrap(),
@@ -432,16 +442,22 @@ fn catalog_snapshot_with_only_procedure_contract(
         base_version: CatalogVersion::new(0),
         operations: vec![DefinitionOperation::Create(definition)],
     };
-    let plan = batch
-        .dry_run()
-        .expect("test Procedure-only batch should dry-run");
-    let mut snapshot = CatalogSnapshot::empty(
+    let mut store = CatalogSystemStore::empty(
         INVENTORY_DATABASE_ID,
         INVENTORY_NAMESPACE_ID,
         batch.base_version,
     );
-    snapshot
-        .apply_mutation_plan(&plan.mutation_plan)
-        .expect("test Procedure contract should apply to snapshot");
-    snapshot
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .expect("test Procedure contract should apply durably to snapshot");
+    let published = store.into_snapshot();
+    (*published).clone()
 }

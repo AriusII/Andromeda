@@ -25,6 +25,7 @@ This specification applies to V0 documentation and implementation planning. It d
 - It does not define a final production implementation.
 - It does not weaken Andromeda's procedure-only surface.
 - It does not authorize hidden dynamic behavior.
+- `PlanClass` is intentionally NOT part of the procedure-contract chain in V0; it is owned by the plan-cache key — see `docs/specifications/SPEC_PLAN_CACHE_KEY_V0.md`.
 
 ## Data structures
 
@@ -277,6 +278,8 @@ publishing an updated Procedure descriptor.
 Any compatibility diagnostic that affects publication must be retained as DefinitionBatch/catalog
 evidence with previous and next `CatalogVersion`, previous and next `ContractHash`, policy class,
 and stable rejection code when rejected.
+
+> **Note — `PolicyVersion` disambiguation:** The `PolicyVersion` field in this contract is the **policy digest** (SHA-256 over policy-relevant fields; see `## Serialization` → `PolicyVersion form`). The monotonic policy snapshot identifier used by the admission layer and the security-loaded policy digest are distinct values that share the same label; see `docs/adr/ADR-0019-POLICY_VERSION_TERMINOLOGY.md` for the canonical disambiguation.
 
 ## Tests
 

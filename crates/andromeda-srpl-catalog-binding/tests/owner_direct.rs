@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use andromeda_catalog::CatalogDefinitionBatchPlanning;
+use andromeda_catalog::CatalogSystemStore;
 use andromeda_catalog_store::{
     CatalogDefinition, CatalogObjectRef, CatalogSnapshot, ObjectKind, TableDefinition,
 };
@@ -122,10 +122,20 @@ fn inventory_snapshot() -> CatalogSnapshot<CatalogPublicationReceipt> {
             DefinitionOperation::Create(CatalogDefinition::Procedure(procedure)),
         ],
     };
-    let plan = batch.dry_run().unwrap();
-    let mut snapshot = CatalogSnapshot::empty(DB_ID, NS_ID, CatalogVersion::new(0));
-    snapshot.apply_mutation_plan(&plan.mutation_plan).unwrap();
-    snapshot
+    let mut store = CatalogSystemStore::empty(DB_ID, NS_ID, CatalogVersion::new(0));
+    let mut next_lsn: u64 = 0;
+    store
+        .apply_definition_batch_durably(
+            &batch,
+            |_kind, _payload| {
+                next_lsn += 1;
+                Ok(next_lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+    let published = store.into_snapshot();
+    (*published).clone()
 }
 
 fn procedure_ir() -> SrplProcedureIr {
