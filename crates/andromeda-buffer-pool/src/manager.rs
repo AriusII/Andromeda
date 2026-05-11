@@ -3,10 +3,11 @@ use std::collections::BTreeMap;
 use andromeda_error::AndromedaResult;
 use andromeda_storage_page::{Lsn, PageId, PageImage, PageLayoutContract, PageStore};
 
+use crate::metrics::BufferPoolMetricsAccumulator;
 use crate::pool_error::map_core_error;
 use crate::{
     BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
-    ClockEvictionPolicy, DirtyTracker, PageGuard, PageGuardMut,
+    BufferPoolMetrics, ClockEvictionPolicy, DirtyTracker, PageGuard, PageGuardMut,
 };
 
 mod flush;
@@ -51,6 +52,7 @@ pub struct BufferPool<S: PageStore> {
     page_table: BTreeMap<PageId, usize>,
     clock: ClockEvictionPolicy,
     dirty_tracker: DirtyTracker,
+    metrics: BufferPoolMetricsAccumulator,
 }
 
 impl<S: PageStore> BufferPool<S> {
@@ -75,6 +77,7 @@ impl<S: PageStore> BufferPool<S> {
             page_table: BTreeMap::new(),
             clock: ClockEvictionPolicy::new(),
             dirty_tracker: DirtyTracker::new(),
+            metrics: BufferPoolMetricsAccumulator::new(),
         })
     }
 
@@ -122,6 +125,14 @@ impl<S: PageStore> BufferPool<S> {
         &self.dirty_tracker
     }
 
+    pub fn metrics(&self) -> BufferPoolMetrics {
+        self.metrics.snapshot(
+            self.config.frame_count(),
+            self.page_table.len(),
+            self.dirty_tracker.len(),
+        )
+    }
+
     pub fn fetch_page(&mut self, page_id: PageId) -> AndromedaResult<PageGuard<'_>> {
         let index = self.ensure_resident(page_id)?;
         self.frames[index].pin_guard()
@@ -151,8 +162,10 @@ impl<S: PageStore> BufferPool<S> {
     fn ensure_resident(&mut self, page_id: PageId) -> AndromedaResult<usize> {
         validate_page_id(page_id)?;
         if let Some(index) = self.page_table.get(&page_id).copied() {
+            self.metrics.record_hit();
             return Ok(index);
         }
+        self.metrics.record_miss();
 
         let image = self.store.read_page(page_id)?.ok_or_else(|| {
             BufferPoolError::PageNotFound {
@@ -216,10 +229,13 @@ impl<S: PageStore> BufferPool<S> {
             return Ok(index);
         }
 
-        let victim = self
-            .clock
-            .select_victim(&mut self.frames)
-            .map_err(map_core_error)?;
+        let victim = match self.clock.select_victim(&mut self.frames) {
+            Ok(victim) => victim,
+            Err(error) => {
+                self.metrics.record_eviction_stall();
+                return Err(map_core_error(error));
+            },
+        };
         let index = victim.frame_index();
         let evicted_page_id = self.frames[index]
             .page_id()

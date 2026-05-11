@@ -67,7 +67,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
                         "unexpected character in SRPL procedure signature",
                     ));
                 }
-            }
+            },
             '-' => (TokenKind::Minus, start + ch.len_utf8()),
             '(' => (TokenKind::LParen, start + ch.len_utf8()),
             ')' => (TokenKind::RParen, start + ch.len_utf8()),
@@ -85,7 +85,7 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
                     }
                 }
                 (keyword_kind(&input[start..end]), end)
-            }
+            },
             _ if ch.is_ascii_digit() => {
                 let mut end = start + ch.len_utf8();
                 while let Some((next_index, next_ch)) = chars.peek().copied() {
@@ -97,14 +97,14 @@ pub fn lex(input: &str) -> Result<Vec<Token>, SrplDiagnostic> {
                     }
                 }
                 (TokenKind::Number, end)
-            }
+            },
             _ => {
                 return Err(SrplDiagnostic::new(
                     DiagnosticPhase::Lexing,
                     Some(SourceSpan::new(start, start + ch.len_utf8())),
                     "unexpected character in SRPL procedure signature",
                 ));
-            }
+            },
         };
 
         tokens.push(Token {

@@ -4,6 +4,7 @@
 use andromeda_error::AndromedaErrorKind;
 use andromeda_error::AndromedaResult;
 use andromeda_types::TransactionId;
+use std::time::Duration;
 
 use super::append_chain;
 use super::transaction::{
@@ -12,6 +13,10 @@ use super::transaction::{
 };
 use super::{WalRecord, WalRecordKind};
 use crate::Lsn;
+use crate::wal_performance::{
+    WalFlushTelemetry, WalQueueDepthMetrics, WalQueueSeparationEvidence,
+    wal_flush_telemetry_from_records, wal_queue_depth_from_records,
+};
 
 /// In-memory WAL accumulator with durable LSN tracking.
 #[derive(Debug, Clone, Default)]
@@ -107,6 +112,30 @@ impl InMemoryWal {
             Some(last_lsn) => self.flush_through(last_lsn),
             None => Ok(self.durable_lsn),
         }
+    }
+
+    pub fn queue_depth_metrics(
+        &self,
+        separation: WalQueueSeparationEvidence,
+    ) -> AndromedaResult<WalQueueDepthMetrics> {
+        wal_queue_depth_from_records(&self.records, self.durable_lsn, separation)
+    }
+
+    pub fn flush_through_with_metrics(
+        &mut self,
+        lsn: Lsn,
+        separation: WalQueueSeparationEvidence,
+        flush_latency: Duration,
+    ) -> AndromedaResult<WalFlushTelemetry> {
+        let telemetry = wal_flush_telemetry_from_records(
+            &self.records,
+            self.durable_lsn,
+            lsn,
+            separation,
+            flush_latency,
+        )?;
+        self.flush_through(lsn)?;
+        Ok(telemetry)
     }
 
     pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {

@@ -1,27 +1,59 @@
 use std::{error::Error, fmt};
 
 use andromeda_hardware::{HardwareProfile, PipelineClass, RamSectionRole};
+use andromeda_types::ProcedureId;
 
-use crate::{ResourceBudget, ResourceLimitField};
+use crate::{ResourceBudget, ResourceBudgetScope, ResourceLimitField, ResourceScopeResult};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResourceAdmissionRequest {
+    pub scope: ResourceBudgetScope,
     pub pipeline_class: PipelineClass,
     pub budget: ResourceBudget,
     pub gpu_requested: bool,
 }
 
 impl ExecutionResourceAdmissionRequest {
-    pub const fn new(
+    pub fn new(
+        scope: ResourceBudgetScope,
         pipeline_class: PipelineClass,
         budget: ResourceBudget,
         gpu_requested: bool,
     ) -> Self {
         Self {
+            scope,
             pipeline_class,
             budget,
             gpu_requested,
         }
+    }
+
+    pub fn for_procedure(
+        procedure_id: ProcedureId,
+        pipeline_class: PipelineClass,
+        budget: ResourceBudget,
+        gpu_requested: bool,
+    ) -> Self {
+        Self::new(
+            ResourceBudgetScope::for_procedure(procedure_id),
+            pipeline_class,
+            budget,
+            gpu_requested,
+        )
+    }
+
+    pub fn for_job(
+        job: impl Into<String>,
+        pipeline_class: PipelineClass,
+        budget: ResourceBudget,
+        gpu_requested: bool,
+    ) -> ResourceScopeResult<Self> {
+        Ok(Self::new(
+            ResourceBudgetScope::for_job(job)?,
+            pipeline_class,
+            budget,
+            gpu_requested,
+        ))
     }
 
     pub fn validate_no_critical_gpu(
@@ -57,11 +89,14 @@ impl ExecutionResourceAdmissionRequest {
     ) -> Result<ExecutionResourceAdmissionDecision, ResourceAdmissionRejection> {
         self.validate_no_critical_gpu(hardware)?;
         let total_budget_bytes = validate_budget(self.budget, &hardware.ram, self.pipeline_class)?;
+        let scope = self.scope.clone();
 
         Ok(ExecutionResourceAdmissionDecision {
+            scope: scope.clone(),
             pipeline_class: self.pipeline_class,
             budget: self.budget,
             evidence: ResourceAdmissionEvidence {
+                scope,
                 memory_bytes: self.budget.max_memory_bytes.bytes(),
                 temp_bytes: self.budget.max_temp_bytes.bytes(),
                 total_budget_bytes,
@@ -77,15 +112,17 @@ impl ExecutionResourceAdmissionRequest {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExecutionResourceAdmissionDecision {
+    pub scope: ResourceBudgetScope,
     pub pipeline_class: PipelineClass,
     pub budget: ResourceBudget,
     pub evidence: ResourceAdmissionEvidence,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceAdmissionEvidence {
+    pub scope: ResourceBudgetScope,
     pub memory_bytes: u64,
     pub temp_bytes: u64,
     pub total_budget_bytes: u64,
@@ -268,6 +305,7 @@ mod tests {
     use andromeda_hardware::{
         CpuProfile, GpuProfile, HardwareArchitecture, RamProfile, RamSectionBudget,
     };
+    use andromeda_types::ProcedureId;
 
     fn hardware(total_bytes: u64) -> HardwareProfile {
         let cpu = CpuProfile::conservative();
@@ -289,7 +327,8 @@ mod tests {
 
     #[test]
     fn resource_admission_returns_typed_evidence() {
-        let request = ExecutionResourceAdmissionRequest::new(
+        let request = ExecutionResourceAdmissionRequest::for_procedure(
+            ProcedureId::new(7),
             PipelineClass::ForegroundExecution,
             ResourceBudget::new(16, 8, 2),
             false,
@@ -297,7 +336,12 @@ mod tests {
 
         let decision = request.admit(&hardware(128)).unwrap();
 
+        assert_eq!(
+            decision.scope,
+            ResourceBudgetScope::for_procedure(ProcedureId::new(7))
+        );
         assert_eq!(decision.pipeline_class, PipelineClass::ForegroundExecution);
+        assert_eq!(decision.evidence.scope, decision.scope);
         assert_eq!(decision.evidence.memory_bytes, 16);
         assert_eq!(decision.evidence.temp_bytes, 8);
         assert_eq!(decision.evidence.total_budget_bytes, 24);
@@ -310,7 +354,8 @@ mod tests {
         let hardware = hardware(128);
 
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(8),
                 PipelineClass::ForegroundExecution,
                 ResourceBudget::new(0, 8, 2),
                 false,
@@ -322,7 +367,8 @@ mod tests {
             }
         );
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(8),
                 PipelineClass::ForegroundExecution,
                 ResourceBudget::new(16, 8, 0),
                 false,
@@ -337,7 +383,8 @@ mod tests {
 
     #[test]
     fn critical_resource_admission_requires_single_stream() {
-        let reject = ExecutionResourceAdmissionRequest::new(
+        let reject = ExecutionResourceAdmissionRequest::for_procedure(
+            ProcedureId::new(9),
             PipelineClass::Commit,
             ResourceBudget::new(16, 8, 2),
             false,
@@ -356,7 +403,8 @@ mod tests {
         let hardware = hardware(128);
 
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(10),
                 PipelineClass::ForegroundExecution,
                 ResourceBudget::new(120, 16, 2),
                 false,
@@ -369,7 +417,8 @@ mod tests {
             }
         );
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(10),
                 PipelineClass::ForegroundExecution,
                 ResourceBudget::new(33, 8, 2),
                 false,
@@ -391,7 +440,8 @@ mod tests {
         hardware.gpu = GpuProfile::batch_analytics_only();
 
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(11),
                 PipelineClass::Commit,
                 ResourceBudget::new(16, 8, 1),
                 false,
@@ -405,7 +455,8 @@ mod tests {
 
         hardware.gpu = GpuProfile::disabled();
         assert_eq!(
-            ExecutionResourceAdmissionRequest::new(
+            ExecutionResourceAdmissionRequest::for_procedure(
+                ProcedureId::new(11),
                 PipelineClass::Commit,
                 ResourceBudget::new(16, 8, 1),
                 true,
@@ -416,5 +467,25 @@ mod tests {
                 pipeline: PipelineClass::Commit
             }
         );
+    }
+
+    #[test]
+    fn resource_admission_accepts_named_job_scope() {
+        let request = ExecutionResourceAdmissionRequest::for_job(
+            "statistics-refresh",
+            PipelineClass::StatisticsRefresh,
+            ResourceBudget::new(16, 8, 2),
+            false,
+        )
+        .unwrap();
+
+        let decision = request.admit(&hardware(128)).unwrap();
+
+        assert_eq!(
+            decision.scope,
+            ResourceBudgetScope::for_job("statistics-refresh").unwrap()
+        );
+        assert_eq!(decision.evidence.scope, decision.scope);
+        assert_eq!(decision.evidence.total_budget_bytes, 24);
     }
 }

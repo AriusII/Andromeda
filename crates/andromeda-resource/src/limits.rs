@@ -157,6 +157,7 @@ impl ResourceLimits {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn resource_limits_reject_zero_required_limits() {
@@ -209,5 +210,18 @@ mod tests {
                 limit: 8
             }
         );
+    }
+
+    proptest! {
+        #[test]
+        fn resource_budget_total_bytes_matches_checked_add(
+            memory in any::<u64>(),
+            temp in any::<u64>(),
+            streams in any::<u32>(),
+        ) {
+            let budget = ResourceBudget::new(memory, temp, streams);
+
+            prop_assert_eq!(budget.total_bytes().ok(), memory.checked_add(temp));
+        }
     }
 }

@@ -53,7 +53,7 @@ impl DecimalType {
                     AndromedaErrorKind::Contract,
                     "decimal precision must be positive and scale must not exceed precision",
                 ))
-            }
+            },
             _ => Ok(()),
         }
     }
@@ -92,7 +92,7 @@ impl FloatType {
                 }
 
                 Ok(())
-            }
+            },
             _ => Ok(()),
         }
     }
@@ -205,7 +205,7 @@ impl TypeDescriptor {
                 }
 
                 Ok(())
-            }
+            },
             ScalarType::Text(text) => text.validate(),
             _ => Ok(()),
         }

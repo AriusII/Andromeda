@@ -1,8 +1,8 @@
 //! Catalog mutation records, plans, and WAL-boundary types.
 
 use andromeda_definition_batch::{
-    CatalogLifecycleTarget, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
-    DefinitionBatchSourceHash,
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatchSourceHash, DefinitionOperation,
 };
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
@@ -211,6 +211,56 @@ impl CatalogMutationPlan {
             publication_semantics: CatalogPublicationSemantics::DurablePublicationExternal,
             deltas,
         })
+    }
+
+    /// Revalidates the current mutable plan fields against the reconstructed
+    /// DefinitionBatch they claim to represent.
+    pub fn validate_definition_batch_integrity(&self) -> AndromedaResult<()> {
+        let _validated = Self::new(
+            self.batch_id,
+            self.database_id,
+            self.namespace_id,
+            self.previous_version,
+            self.next_version,
+            self.source_hash,
+            self.dependency_graph_hash,
+            self.deltas.clone(),
+        )?;
+
+        let definition_batch = DefinitionBatch {
+            batch_id: self.batch_id,
+            database_id: self.database_id,
+            namespace_id: self.namespace_id,
+            base_version: self.previous_version,
+            operations: self
+                .deltas
+                .iter()
+                .map(|delta| match &delta.operation {
+                    CatalogMutationOperation::CreateObject { definition, .. } => {
+                        DefinitionOperation::Create(definition.clone())
+                    },
+                    CatalogMutationOperation::DeprecateObject { target } => {
+                        DefinitionOperation::Deprecate(target.clone())
+                    },
+                })
+                .collect(),
+        };
+
+        definition_batch
+            .validate_integrity_hashes(self.source_hash, self.dependency_graph_hash)
+            .map_err(|error| {
+                let message = match error.message() {
+                    "definition batch source hash must match the current ordered batch source" => {
+                        "catalog mutation plan source hash must match the current definition batch operations"
+                    }
+                    "definition batch dependency graph hash must match the current batch dependency graph" => {
+                        "catalog mutation plan dependency graph hash must match the current definition batch operations"
+                    }
+                    _ => error.message(),
+                };
+
+                AndromedaError::new(AndromedaErrorKind::Catalog, message)
+            })
     }
 
     /// Emits the full ordered sequence of WAL records for this plan.

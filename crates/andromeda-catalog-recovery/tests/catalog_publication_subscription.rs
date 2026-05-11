@@ -12,6 +12,8 @@ use andromeda_definition_batch::{
     DefinitionBatchDependencyGraphHash, DefinitionBatchId, DefinitionBatchSourceHash,
 };
 use andromeda_error::AndromedaErrorKind;
+use andromeda_plan_cache::{PlanCacheKey, PlanClass, PlanShapeFingerprint};
+use andromeda_procedure_contract::{PolicyVersion, ProcedureContractBinding, StatsVersion};
 use andromeda_types::{
     CatalogObjectId, CatalogVersion, ContractHash, DatabaseId, NamespaceId, ProcedureId,
 };
@@ -89,10 +91,13 @@ fn publication_report_validates_admin_ha_contract_and_invalidation_identity() {
     let report = report();
 
     report.validate().unwrap();
+    let durable_evidence = report.durable_evidence();
     assert_eq!(
         report.plan_invalidation.catalog_version,
         CatalogVersion::new(8)
     );
+    assert_eq!(durable_evidence.durable_lsn, Some(80));
+    assert_eq!(durable_evidence.durable_evidence_marker, None);
     assert_eq!(
         report.recovery_replay,
         CatalogRecoveryReplayExpectation {
@@ -102,6 +107,48 @@ fn publication_report_validates_admin_ha_contract_and_invalidation_identity() {
             require_exact_commit_boundary: true,
         }
     );
+
+    let publication_identity = report
+        .plan_invalidation
+        .plan_cache_publication_identities()
+        .next()
+        .expect("published contract identity");
+    assert_eq!(publication_identity.procedure_id().get(), 99);
+    assert_eq!(
+        publication_identity.catalog_version(),
+        CatalogVersion::new(8)
+    );
+    assert_eq!(
+        publication_identity.contract_hash(),
+        ContractHash::test_vector(0xA5)
+    );
+
+    let current_key = PlanCacheKey::build(
+        ProcedureContractBinding {
+            procedure_id: ProcedureId::new(99),
+            catalog_version: CatalogVersion::new(8),
+            contract_hash: ContractHash::test_vector(0xA5),
+            stats_version: StatsVersion::new(1),
+            policy_version: PolicyVersion::new([0x33; PolicyVersion::LEN]),
+        },
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    let stale_key = PlanCacheKey::build(
+        ProcedureContractBinding {
+            procedure_id: ProcedureId::new(99),
+            catalog_version: CatalogVersion::new(7),
+            contract_hash: ContractHash::test_vector(0x77),
+            stats_version: StatsVersion::new(1),
+            policy_version: PolicyVersion::new([0x33; PolicyVersion::LEN]),
+        },
+        PlanClass::Singleton,
+        PlanShapeFingerprint::empty(),
+    )
+    .unwrap();
+    assert!(publication_identity.covers_key(current_key));
+    assert!(publication_identity.invalidates_key(stale_key));
 }
 
 #[test]
@@ -141,6 +188,18 @@ fn publication_report_rejects_non_durable_or_stale_invalidation_evidence() {
     let error = stale_invalidation.validate().unwrap_err();
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
     assert!(error.message().contains("plan invalidation"));
+
+    let mut stale_object_version = report();
+    stale_object_version.plan_invalidation.changed_contracts[0]
+        .object
+        .catalog_version = CatalogVersion::new(7);
+    let error = stale_object_version.validate().unwrap_err();
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(
+        error
+            .message()
+            .contains("published contract object version")
+    );
 }
 
 #[test]

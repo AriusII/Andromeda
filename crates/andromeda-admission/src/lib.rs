@@ -16,6 +16,7 @@ mod permission_evaluator;
 mod pre_transaction;
 mod service;
 
+pub use andromeda_resource::{ResourceBudgetScope, ResourceBudgetScopeKind, ResourceJobName};
 pub use andromeda_result_stream::CompletionStatus;
 pub use context::InvocationContext;
 pub use invocation::{InvocationReject, InvocationRequest};

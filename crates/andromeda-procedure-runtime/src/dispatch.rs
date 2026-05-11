@@ -244,6 +244,18 @@ impl<Resolver, Procedure> SrplDispatcherAdapter<Resolver, Procedure> {
             local_dispatcher: Some(local_dispatcher),
         }
     }
+
+    pub fn with_resolver_dispatcher(resolver: Resolver) -> Self
+    where
+        Resolver: ProcedureDispatcher<Procedure = Procedure> + Clone + Send + Sync + 'static,
+    {
+        let shared_dispatcher: Arc<dyn ProcedureDispatcher<Procedure = Procedure> + Send + Sync> =
+            Arc::new(resolver.clone());
+        Self {
+            resolver,
+            local_dispatcher: Some(shared_dispatcher),
+        }
+    }
 }
 
 impl<Resolver, Procedure> ProcedureDispatcher for SrplDispatcherAdapter<Resolver, Procedure>

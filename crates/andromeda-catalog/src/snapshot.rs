@@ -16,8 +16,8 @@ use andromeda_error::AndromedaResult;
 use andromeda_types::{CatalogVersion, DatabaseId, NamespaceId};
 
 use crate::{
-    CatalogDefinitionBatchPlanning, CatalogMutationDelta, CatalogMutationPlan,
-    CatalogPublicationReceipt, DefinitionBatchPlan,
+    CatalogDefinitionBatchPlanning, CatalogMutationCommitEvidence, CatalogMutationDelta,
+    CatalogMutationPlan, CatalogPublicationReceipt, DefinitionBatchPlan,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,6 +87,23 @@ impl CatalogSnapshot {
 
     pub(crate) fn mark_durable_version_from_recovery(&mut self, version: CatalogVersion) {
         self.0.mark_durable_version_from_recovery(version);
+    }
+
+    pub fn apply_mutation_plan(
+        &mut self,
+        plan: &CatalogMutationPlan,
+    ) -> AndromedaResult<andromeda_catalog_store::CatalogSnapshotApplyReport> {
+        plan.validate_definition_batch_integrity()?;
+        self.0.apply_mutation_plan(plan)
+    }
+
+    pub fn publish_durable_mutation_plan(
+        &mut self,
+        plan: &CatalogMutationPlan,
+        evidence: CatalogMutationCommitEvidence,
+    ) -> AndromedaResult<CatalogPublicationReceipt> {
+        plan.validate_definition_batch_integrity()?;
+        self.0.publish_durable_mutation_plan(plan, evidence)
     }
 }
 

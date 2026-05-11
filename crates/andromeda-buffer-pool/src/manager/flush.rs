@@ -31,6 +31,7 @@ impl<S: PageStore> BufferPool<S> {
                 last_dirty_lsn,
                 observer,
             ) else {
+                self.metrics.record_flush_stall();
                 continue;
             };
             let durable_lsn = observer.max_durable_lsn();
@@ -41,6 +42,7 @@ impl<S: PageStore> BufferPool<S> {
                 .ok_or_else(|| BufferPoolError::InvalidFrameState.into_andromeda_error())?;
 
             if self.frames[index].pin_count() != 0 {
+                self.metrics.record_flush_stall();
                 return Err(BufferPoolError::AllFramesPinned.into_andromeda_error());
             }
 
@@ -100,6 +102,7 @@ impl<S: PageStore> BufferPool<S> {
                 let FlushReadiness::Blocked(blocked) = readiness else {
                     continue;
                 };
+                self.metrics.record_flush_stall();
                 result
                     .blocked_by_wal_durability
                     .push(FlushBlockedFrame::from_core(blocked));
@@ -117,6 +120,7 @@ impl<S: PageStore> BufferPool<S> {
 
             let pin_count = self.frames[index].pin_count();
             if pin_count != 0 {
+                self.metrics.record_flush_stall();
                 result
                     .errors
                     .push(FlushError::FramePinned { page_id, pin_count });

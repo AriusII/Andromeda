@@ -337,6 +337,133 @@ fn recovery_skips_duplicate_apply_tail_and_preserves_last_valid_catalog_version(
     );
 }
 
+#[test]
+fn recovery_skips_out_of_order_apply_tail_and_preserves_last_valid_catalog_version() {
+    let mut planner = store_at(10);
+    let plan_one = plan_product_batch(&planner, 10, 11);
+    planner
+        .apply_mutation_plan(&plan_one.mutation_plan)
+        .unwrap();
+    let plan_two = planner
+        .plan_definition_batch(&batch(
+            version(11),
+            vec![
+                create_table(2, "Inventory.Stock", 12),
+                create_table(3, "Inventory.Audit", 12),
+            ],
+        ))
+        .unwrap();
+
+    let mut anomalous_tail = plan_two.mutation_plan.records();
+    anomalous_tail.swap(1, 2);
+    let records = plan_one
+        .mutation_plan
+        .records()
+        .into_iter()
+        .chain(anomalous_tail)
+        .collect::<Vec<_>>();
+    let roundtripped = roundtrip_catalog_records_through_storage_wal(records, 700);
+    let outcome = recover_payloads_at(
+        10,
+        roundtripped.iter().map(|(payload, storage_wal_kind_tag)| {
+            CatalogDurableMutationPayload::with_storage_wal_kind_tag(payload, *storage_wal_kind_tag)
+        }),
+    );
+
+    assert_eq!(outcome.report.replayed_batches.len(), 1);
+    assert_eq!(
+        outcome.report.replayed_batches[0].previous_version,
+        version(10)
+    );
+    assert_eq!(outcome.report.replayed_batches[0].next_version, version(11));
+    assert!(outcome.report.skipped_incomplete_batches.is_empty());
+    assert_skipped_anomalous(
+        &outcome.report,
+        11,
+        12,
+        2,
+        CatalogSkippedBatchReason::ApplyRecordOrderMismatch,
+    );
+    assert_has_anomaly(
+        &outcome.report,
+        CatalogRecoveryAnomalyKind::ApplyRecordOrderMismatch,
+    );
+    assert_eq!(outcome.report.final_visible_catalog_version, version(11));
+    assert_eq!(outcome.snapshot.version, version(11));
+    assert!(
+        outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Product").unwrap())
+    );
+    assert!(
+        !outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Stock").unwrap())
+    );
+    assert!(
+        !outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Audit").unwrap())
+    );
+}
+
+#[test]
+fn recovery_skips_stale_base_tail_and_preserves_last_valid_catalog_version() {
+    let mut planner = store_at(10);
+    let plan_one = plan_product_batch(&planner, 10, 11);
+    planner
+        .apply_mutation_plan(&plan_one.mutation_plan)
+        .unwrap();
+    let stale_tail = store_at(10)
+        .plan_definition_batch(&batch(
+            version(10),
+            vec![create_table(2, "Inventory.Stock", 11)],
+        ))
+        .unwrap();
+
+    let records = plan_one
+        .mutation_plan
+        .records()
+        .into_iter()
+        .chain(stale_tail.mutation_plan.records())
+        .collect::<Vec<_>>();
+    let roundtripped = roundtrip_catalog_records_through_storage_wal(records, 800);
+    let outcome = recover_payloads_at(
+        10,
+        roundtripped.iter().map(|(payload, storage_wal_kind_tag)| {
+            CatalogDurableMutationPayload::with_storage_wal_kind_tag(payload, *storage_wal_kind_tag)
+        }),
+    );
+
+    assert_eq!(outcome.report.replayed_batches.len(), 1);
+    assert_eq!(
+        outcome.report.replayed_batches[0].previous_version,
+        version(10)
+    );
+    assert_eq!(outcome.report.replayed_batches[0].next_version, version(11));
+    assert!(outcome.report.skipped_incomplete_batches.is_empty());
+    assert_skipped_anomalous(
+        &outcome.report,
+        10,
+        11,
+        1,
+        CatalogSkippedBatchReason::VersionGap,
+    );
+    assert_has_anomaly(&outcome.report, CatalogRecoveryAnomalyKind::VersionGap);
+    assert_eq!(outcome.report.final_visible_catalog_version, version(11));
+    assert_eq!(outcome.snapshot.version, version(11));
+    assert!(
+        outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Product").unwrap())
+    );
+    assert!(
+        !outcome
+            .snapshot
+            .contains_name(&QualifiedName::parse("Inventory.Stock").unwrap())
+    );
+}
+
 fn roundtrip_appended_payloads_through_storage_wal(
     appended: Vec<(CatalogMutationRecordKind, Vec<u8>, u64)>,
 ) -> Vec<(Vec<u8>, u16)> {

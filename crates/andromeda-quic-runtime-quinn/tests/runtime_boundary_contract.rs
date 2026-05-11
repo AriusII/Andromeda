@@ -6,6 +6,7 @@ use std::{
 };
 
 const INSECURE_TEST_TLS_FEATURE: &str = "insecure-test-tls";
+const FORBIDDEN_SERVICE_SURFACE_DEPS: &[&str] = &["tonic", "grpc", "hyper", "h2"];
 const RUNTIME_CRATE_FORBIDDEN_GATEWAY_PROJECTION_TOKENS: &[&str] = &[
     "andromeda_rpc_codec",
     "CatalogProcedureManifest",
@@ -36,6 +37,10 @@ fn quic_src_dir() -> PathBuf {
 
 fn runtime_src_dir() -> PathBuf {
     runtime_crate_root().join("src")
+}
+
+fn quic_crate_root() -> PathBuf {
+    workspace_root().join("crates/andromeda-quic")
 }
 
 fn read_runtime_crate_file(relative_path: &str) -> String {
@@ -285,6 +290,30 @@ fn doctrine_scan_rejects_unapproved_zero_rtt_enablement() {
         "Detected unapproved 0-RTT enablement:\n{}",
         violations.join("\n")
     );
+}
+
+#[test]
+fn transport_stack_rejects_grpc_http2_service_surface_dependencies() {
+    let manifests = [
+        (
+            "andromeda-quic",
+            read_file(quic_crate_root().join("Cargo.toml")),
+        ),
+        (
+            "andromeda-quic-runtime-quinn",
+            read_file(runtime_crate_root().join("Cargo.toml")),
+        ),
+    ];
+
+    for (crate_name, manifest) in manifests {
+        let manifest_lower = manifest.to_ascii_lowercase();
+        for forbidden in FORBIDDEN_SERVICE_SURFACE_DEPS {
+            assert!(
+                !manifest_lower.contains(forbidden),
+                "{crate_name} must not depend on {forbidden}; QUIC transport must stay runtime-transport only without gRPC/HTTP2 service surface"
+            );
+        }
+    }
 }
 
 #[test]

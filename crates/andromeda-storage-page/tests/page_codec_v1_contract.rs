@@ -69,3 +69,20 @@ fn page_codec_v1_rejects_non_fixed_header_length_bytes() {
     let error = PageCodecV1::decode_header(&encoded_header).unwrap_err();
     assert!(error.message().contains("header length"));
 }
+
+#[test]
+fn page_codec_v1_rejects_truncated_page_image() {
+    let payload = vec![0x7C; 48];
+    let header = sample_header(PageSize::KiB16, payload.len());
+    let trailer = integrity_trailer_for_payload(&header, &payload);
+    let encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
+
+    let truncated = &encoded[..encoded.len() - 1];
+    let error = PageCodecV1::decode_page(truncated).unwrap_err();
+
+    assert!(
+        error.message().contains("trailer")
+            || error.message().contains("length")
+            || error.message().contains("truncated")
+    );
+}

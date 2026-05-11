@@ -162,6 +162,49 @@ pub struct PlanCacheKey {
     pub shape_fingerprint: PlanShapeFingerprint,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct PlanCachePublicationIdentity {
+    pub procedure_id: ProcedureId,
+    pub contract_hash: ContractHash,
+    pub catalog_version: CatalogVersion,
+}
+
+impl PlanCachePublicationIdentity {
+    pub const fn new(
+        procedure_id: ProcedureId,
+        contract_hash: ContractHash,
+        catalog_version: CatalogVersion,
+    ) -> Self {
+        Self {
+            procedure_id,
+            contract_hash,
+            catalog_version,
+        }
+    }
+
+    pub const fn procedure_id(self) -> ProcedureId {
+        self.procedure_id
+    }
+
+    pub const fn contract_hash(self) -> ContractHash {
+        self.contract_hash
+    }
+
+    pub const fn catalog_version(self) -> CatalogVersion {
+        self.catalog_version
+    }
+
+    pub fn covers_key(self, key: PlanCacheKey) -> bool {
+        self.procedure_id == key.procedure_id
+            && self.contract_hash == key.contract_hash
+            && self.catalog_version == key.catalog_version
+    }
+
+    pub fn invalidates_key(self, key: PlanCacheKey) -> bool {
+        self.procedure_id == key.procedure_id && !self.covers_key(key)
+    }
+}
+
 impl PlanCacheKey {
     pub fn build(
         binding: impl Borrow<ProcedureContractBinding>,
@@ -243,6 +286,14 @@ impl PlanCacheKey {
         self.shape_fingerprint
     }
 
+    pub const fn publication_identity(self) -> PlanCachePublicationIdentity {
+        PlanCachePublicationIdentity::new(
+            self.procedure_id,
+            self.contract_hash,
+            self.catalog_version,
+        )
+    }
+
     pub const fn version_binding(self) -> VersionBinding {
         VersionBinding::for_procedure(self.binding())
     }
@@ -268,5 +319,11 @@ impl PlanCacheKey {
         let shape = self.shape_fingerprint.as_bytes();
         hasher.update(&shape);
         hasher.finalize()
+    }
+}
+
+impl From<PlanCacheKey> for PlanCachePublicationIdentity {
+    fn from(value: PlanCacheKey) -> Self {
+        value.publication_identity()
     }
 }

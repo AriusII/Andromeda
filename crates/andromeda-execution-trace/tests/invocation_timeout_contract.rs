@@ -15,7 +15,8 @@
 
 use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
 use andromeda_observability::TraceId;
-use andromeda_types::InvocationId;
+use andromeda_procedure_contract::PolicyVersion;
+use andromeda_types::{CatalogVersion, ContractHash, InvocationId};
 
 // Seed helpers so every test gets a distinct, deterministic TraceId.
 const T1: TraceId = TraceId::new(0x_0001_0000_0000_0001);
@@ -137,6 +138,9 @@ fn audit_ledger_accepts_all_event_types_including_timeout() {
             trace_id,
             invocation_id,
             procedure_name: "Inventory.QueryStock".to_string(),
+            catalog_version: CatalogVersion::new(5),
+            contract_hash: ContractHash::test_vector(0x5A),
+            policy_version: PolicyVersion::new([0x5A; PolicyVersion::LEN]),
             executor_kind: "LocalExecutor".to_string(),
         },
         InvocationTraceEvent::TimeoutExceeded {

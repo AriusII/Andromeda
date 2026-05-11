@@ -1,4 +1,4 @@
-use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_error::AndromedaResult;
 
 pub use andromeda_procedure_runtime::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatchUnavailableReason,
@@ -11,6 +11,12 @@ pub type SrplDispatcherAdapter = andromeda_procedure_runtime::SrplDispatcherAdap
     crate::SrplProcedureDispatcher,
     crate::LocalProcedure,
 >;
+
+pub fn catalog_backed_srpl_dispatcher_adapter(
+    dispatcher: crate::SrplProcedureDispatcher,
+) -> SrplDispatcherAdapter {
+    SrplDispatcherAdapter::with_resolver_dispatcher(dispatcher)
+}
 
 pub trait ProcedureDispatcher:
     andromeda_procedure_runtime::ProcedureDispatcher<Procedure = crate::LocalProcedure>
@@ -32,11 +38,6 @@ impl ProcedureRequestResolver for crate::SrplProcedureDispatcher {
     fn resolve_request(&self, request: &crate::InvocationRequest) -> AndromedaResult<()> {
         self.resolve_procedure(request)
             .map(|_| ())
-            .map_err(|resolve_err| {
-                AndromedaError::new(
-                    AndromedaErrorKind::Srpl,
-                    format!("SRPL procedure resolution failed: {:?}", resolve_err),
-                )
-            })
+            .map_err(|resolve_err| resolve_err.into_andromeda_error())
     }
 }

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`andromeda-maps` defines runtime-free Map descriptors and publication evidence primitives.
+`andromeda-maps` defines runtime-free Map descriptors, consistency policy, refresh admission, delta log, and publication evidence primitives.
 
 Use this crate when an Andromeda component needs to describe Map identity, grain, refresh mode, staleness policy, or the evidence required to publish, roll back, rebuild, or recover a Map projection.
 
@@ -11,8 +11,9 @@ Use this crate when an Andromeda component needs to describe Map identity, grain
 This crate owns:
 
 - `MapId`, `MapGrain`, `MapRefreshMode`, `MapStalenessPolicy`, and `MapDescriptor`.
+- `MapConsistencyPolicy`, `MapRefreshAdmissionRequest`, and `MapDeltaLog` for bounded CPU-first refresh admission.
 - `MapOwnershipBoundary` and `MapEvidenceAuthority` for distinguishing descriptor-only values from durable-owner-supplied evidence.
-- Publication candidates and validated publication candidates.
+- Publication candidates, validated publication candidates, and bounded refresh admission decisions.
 - Publication evidence that binds Map projections to catalog, statistics, and WAL-related versions supplied by owning components.
 - Switch, rollback, rebuild, and recovery evidence shapes for Map publication state transitions.
 - Typed descriptor errors for invalid Map metadata and missing durable evidence.

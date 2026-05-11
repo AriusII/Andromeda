@@ -78,7 +78,7 @@ pub(super) fn validate_catalog_resolved_procedure(
     }
 
     let published_contract = catalog
-        .get_procedure_by_id(request.procedure.procedure_id)
+        .visible_get_procedure_by_id(request.procedure.procedure_id)
         .ok_or_else(|| {
             AndromedaError::new(
                 AndromedaErrorKind::Contract,

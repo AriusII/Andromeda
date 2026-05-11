@@ -2,6 +2,8 @@ use andromeda_audit::{CertificateIdentity, SurfaceScope, UserPrincipal, UserPrin
 use andromeda_error::AndromedaResult;
 use andromeda_observability::TraceId;
 
+use crate::BreakGlassPolicy;
+
 use super::{
     AuthorizationDenialReason, AuthorizationOutcome, PrincipalRegistry, SurfaceAction,
     allowed_security_outcome, denied_security_outcome,
@@ -122,6 +124,60 @@ impl<'a> SurfaceAuthorizer<'a> {
             permission,
             format!(
                 "permission={:?}:action={}",
+                permission,
+                action.evidence_label()
+            ),
+        )
+    }
+
+    /// Authorize and optionally apply a bounded break-glass override.
+    ///
+    /// Override is allowed only when:
+    /// - baseline decision is denied
+    /// - certificate resolves to a known break-glass principal
+    /// - policy is active at `now_epoch_secs`
+    /// - requested scope + permission are explicitly listed in the policy
+    pub fn authorize_with_break_glass(
+        &self,
+        trace_id: TraceId,
+        requested_scope: SurfaceScope,
+        presented_fingerprint: &str,
+        action: SurfaceAction,
+        now_epoch_secs: u64,
+        break_glass: Option<&BreakGlassPolicy>,
+    ) -> AndromedaResult<AuthorizationOutcome> {
+        let baseline = self.authorize(trace_id, requested_scope, presented_fingerprint, action)?;
+        if baseline.is_allowed() {
+            return Ok(baseline);
+        }
+
+        let Some(policy) = break_glass else {
+            return Ok(baseline);
+        };
+
+        let Some(binding) = self.registry.lookup(presented_fingerprint) else {
+            return Ok(baseline);
+        };
+
+        if binding.principal.kind != UserPrincipalKind::BreakGlass {
+            return Ok(baseline);
+        }
+
+        let permission = action.required_permission();
+        if !policy.allows(requested_scope, permission, now_epoch_secs) {
+            return Ok(baseline);
+        }
+
+        allowed_security_outcome(
+            trace_id,
+            requested_scope,
+            binding.certificate.clone(),
+            binding.principal.clone(),
+            permission,
+            format!(
+                "break_glass_override:ticket={}:approved_by={}:permission={:?}:action={}",
+                policy.ticket_id(),
+                policy.approved_by(),
                 permission,
                 action.evidence_label()
             ),

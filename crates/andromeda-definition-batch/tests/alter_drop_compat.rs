@@ -547,7 +547,7 @@ fn apply_rejects_stale_base_catalog_without_advancing_snapshot() {
         error.message()
     );
     assert_eq!(snapshot.version, CatalogVersion::new(2));
-    assert_eq!(snapshot.object_count(), 0);
+    assert_eq!(snapshot.applied_object_count(), 0);
 }
 
 #[test]
@@ -607,7 +607,7 @@ fn apply_rejects_duplicate_and_conflicting_recreate_attempts() {
         conflict.message()
     );
     assert_eq!(snapshot.version, CatalogVersion::new(2));
-    assert_eq!(snapshot.object_count(), 1);
+    assert_eq!(snapshot.applied_object_count(), 1);
 }
 
 #[test]

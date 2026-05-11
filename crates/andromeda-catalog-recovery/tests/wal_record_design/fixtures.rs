@@ -59,13 +59,13 @@ pub(crate) fn apply_catalog_version_record(
     batch_id: u64,
     version: u64,
     record_count: usize,
-    lsn: u64,
+    durable_lsn: u64,
 ) -> CatalogWalRecord {
     CatalogWalRecord::ApplyCatalogVersion {
         batch_id: DefinitionBatchId::new(batch_id),
         version: CatalogVersion::new(version),
         record_count,
-        lsn,
+        durable_lsn,
     }
 }
 

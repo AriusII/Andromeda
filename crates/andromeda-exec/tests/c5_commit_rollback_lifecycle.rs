@@ -49,7 +49,9 @@ fn foreground_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
-    ExecutionIoAdmissionRequest::new(
+    let contract = inventory_reserve_stock_contract().unwrap();
+    ExecutionIoAdmissionRequest::for_procedure(
+        contract.procedure_id,
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),

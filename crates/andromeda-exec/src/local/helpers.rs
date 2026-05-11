@@ -1,3 +1,4 @@
+use andromeda_admission::ResourceBudgetScope;
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_hardware::{PipelineClass, ResourceBudget};
 use andromeda_observability::TraceId;
@@ -5,6 +6,7 @@ use andromeda_storage_page::PageSize;
 use andromeda_storage_placement::{
     CoreIoPlacementRequest, OperationalProfile, StorageIoBudgetScope, StorageWorkloadClass,
 };
+use andromeda_types::ProcedureId;
 
 use crate::{
     CompletionStatus, ExecutionIoAdmissionDecision, ExecutionIoAdmissionRequest, InvocationReject,
@@ -48,6 +50,7 @@ pub fn require_local_procedure_execution_io_admission(
 pub(super) fn require_local_procedure_execution_io_admission_for_trace(
     io_admission: Result<ExecutionIoAdmissionDecision, InvocationReject>,
     trace_id: TraceId,
+    procedure_id: ProcedureId,
 ) -> AndromedaResult<ExecutionIoAdmissionDecision> {
     let decision = require_local_procedure_execution_io_admission(io_admission)?;
     if decision.trace.trace_id != trace_id {
@@ -56,12 +59,19 @@ pub(super) fn require_local_procedure_execution_io_admission_for_trace(
             "execution IO admission evidence trace id must match local Procedure invocation trace",
         ));
     }
+    if decision.resource_scope != ResourceBudgetScope::for_procedure(procedure_id) {
+        return Err(AndromedaError::new(
+            AndromedaErrorKind::Contract,
+            "execution IO admission must bind ResourceBudget evidence to the admitted ProcedureId",
+        ));
+    }
 
     Ok(decision)
 }
 
 pub(super) fn default_local_procedure_execution_io_admission(
     trace_id: TraceId,
+    procedure_id: ProcedureId,
 ) -> AndromedaResult<ExecutionIoAdmissionDecision> {
     let profile = OperationalProfile::hot_write();
     let placement_request = CoreIoPlacementRequest::new(
@@ -70,7 +80,8 @@ pub(super) fn default_local_procedure_execution_io_admission(
         profile.workflow.page_budget.path_budget,
         false,
     );
-    let request = ExecutionIoAdmissionRequest::new(
+    let request = ExecutionIoAdmissionRequest::for_procedure(
+        procedure_id,
         profile,
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(PageSize::KiB16.bytes() as u64, 0, 1),
@@ -80,6 +91,7 @@ pub(super) fn default_local_procedure_execution_io_admission(
     require_local_procedure_execution_io_admission_for_trace(
         request.validate_admission(trace_id),
         trace_id,
+        procedure_id,
     )
 }
 

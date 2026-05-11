@@ -36,8 +36,12 @@ pub use replay::{
     CatalogPublicationSubscriptionReplaySummary, CatalogSubscriptionReplayKey,
     replay_publication_subscription_changes,
 };
+#[allow(
+    unused_imports,
+    reason = "re-exported publication contracts live at this module boundary"
+)]
 pub use report::{
-    CatalogPublicationReport, CatalogRecoveryReplayExpectation,
+    CatalogPublicationDurableEvidence, CatalogPublicationReport, CatalogRecoveryReplayExpectation,
     validate_catalog_publication_receipt,
 };
 pub use runtime::{

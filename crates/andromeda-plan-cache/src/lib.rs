@@ -25,8 +25,8 @@ pub use advisory_evidence::{
 pub use decision::{PlanCacheMissReason, PlanDecisionEvidence, PlanDecisionOutcome};
 pub use error::{PlanCacheKeyError, PlanCachePolicyError};
 pub use identity::{
-    CardinalityBucket, PLAN_CACHE_KEY_SCHEMA_VERSION, PlanCacheKey, PlanClass,
-    PlanShapeFingerprint, PlanShapeFingerprintBuilder,
+    CardinalityBucket, PLAN_CACHE_KEY_SCHEMA_VERSION, PlanCacheKey, PlanCachePublicationIdentity,
+    PlanClass, PlanShapeFingerprint, PlanShapeFingerprintBuilder,
 };
 pub use limits::{
     PLAN_CACHE_MAX_ENTRIES, PLAN_SELECTION_MAX_CANDIDATES, PLAN_SELECTION_MAX_SCENARIO_EVIDENCE,

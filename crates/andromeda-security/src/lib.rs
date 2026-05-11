@@ -2,9 +2,11 @@
 
 #![forbid(unsafe_code)]
 
+mod break_glass_policy;
 mod principal_binding;
 mod surface_gate;
 
+pub use break_glass_policy::BreakGlassPolicy;
 pub use principal_binding::{
     AuthorizationDenialReason, AuthorizationOutcome, PrincipalBinding, PrincipalRegistry,
     SurfaceAction, SurfaceAuthorizer,

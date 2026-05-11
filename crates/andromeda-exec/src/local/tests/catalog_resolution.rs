@@ -42,6 +42,10 @@ fn local_runtime_carries_resource_budget_evidence_before_dispatch() {
         decision.resource_budget,
         ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2)
     );
+    assert_eq!(
+        decision.resource_scope,
+        ResourceBudgetScope::for_procedure(contract.procedure_id)
+    );
     assert_eq!(decision.trace.trace_id, context.trace_id);
 
     let outcome = runtime
@@ -283,6 +287,28 @@ fn local_runtime_rejects_resource_budget_before_transaction_begin() {
     assert_eq!(error.kind(), AndromedaErrorKind::Resource);
     assert!(error.message().contains("execution IO admission rejected"));
     assert!(error.message().contains("memory budget must not be zero"));
+    assert!(runtime.wal().is_empty());
+    assert_eq!(runtime.transactions().live_count().unwrap(), 0);
+}
+
+#[test]
+fn local_runtime_rejects_job_scoped_budget_before_transaction_begin() {
+    let contract = inventory_reserve_stock_contract().unwrap();
+    let procedure = inventory_local_procedure(&contract);
+    let context = inventory_context(&contract, 7121);
+    let mut runtime = LocalVerticalRuntime::new(InMemoryWal::new());
+
+    let error = runtime
+        .execute_authorized_io_admitted(
+            inventory_request_with_id(&contract, 721),
+            &procedure,
+            &context,
+            job_scoped_io_admission(context.trace_id),
+        )
+        .unwrap_err();
+
+    assert_eq!(error.kind(), AndromedaErrorKind::Contract);
+    assert!(error.message().contains("ProcedureId"));
     assert!(runtime.wal().is_empty());
     assert_eq!(runtime.transactions().live_count().unwrap(), 0);
 }

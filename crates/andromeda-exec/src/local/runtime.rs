@@ -362,10 +362,15 @@ where
         let pre_transaction =
             validate_pre_transaction_admission(&request, procedure, trace_id, context)?;
         let _io_admission = match io_admission {
-            Some(io_admission) => {
-                require_local_procedure_execution_io_admission_for_trace(io_admission, trace_id)?
-            },
-            None => default_local_procedure_execution_io_admission(trace_id)?,
+            Some(io_admission) => require_local_procedure_execution_io_admission_for_trace(
+                io_admission,
+                trace_id,
+                request.procedure.procedure_id,
+            )?,
+            None => default_local_procedure_execution_io_admission(
+                trace_id,
+                request.procedure.procedure_id,
+            )?,
         };
         let runtime_span = RuntimeRecordSpan::started();
 
@@ -425,7 +430,10 @@ where
     ) -> AndromedaResult<VerticalInvocationOutcome> {
         let pre_transaction =
             validate_pre_transaction_admission(&request, procedure, trace_id, context)?;
-        let _io_admission = default_local_procedure_execution_io_admission(trace_id)?;
+        let _io_admission = default_local_procedure_execution_io_admission(
+            trace_id,
+            request.procedure.procedure_id,
+        )?;
         let runtime_span = RuntimeRecordSpan::started();
 
         let rollback_payload = rollback_payload_for_cause(cause, &failure_reason)?;

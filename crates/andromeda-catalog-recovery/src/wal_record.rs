@@ -38,7 +38,7 @@ pub enum CatalogWalRecord {
         batch_id: DefinitionBatchId,
         version: CatalogVersion,
         record_count: usize,
-        lsn: u64,
+        durable_lsn: u64,
     },
     CatalogCheckpoint {
         checkpoint_lsn: u64,
@@ -55,6 +55,14 @@ impl CatalogWalRecord {
             Self::CatalogCheckpoint {
                 catalog_version, ..
             } => Some(*catalog_version),
+            _ => None,
+        }
+    }
+
+    /// Return the durable publication LSN for records that carry one.
+    pub fn durable_lsn(&self) -> Option<u64> {
+        match self {
+            Self::ApplyCatalogVersion { durable_lsn, .. } => Some(*durable_lsn),
             _ => None,
         }
     }
@@ -149,7 +157,7 @@ impl CatalogWalRecord {
                 batch_id,
                 version,
                 record_count,
-                lsn,
+                durable_lsn,
             } => {
                 if batch_id.get() == 0 {
                     return catalog_recovery_error(
@@ -166,9 +174,9 @@ impl CatalogWalRecord {
                         "catalog WAL apply version record: record_count must not be zero",
                     );
                 }
-                if *lsn == 0 {
+                if *durable_lsn == 0 {
                     return catalog_recovery_error(
-                        "catalog WAL apply version record: lsn must not be zero",
+                        "catalog WAL apply version record: durable_lsn must not be zero",
                     );
                 }
                 Ok(())

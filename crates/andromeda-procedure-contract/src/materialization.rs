@@ -145,17 +145,10 @@ impl ProcedureContractCandidate {
     pub fn materialize(self) -> AndromedaResult<ProcedureContract> {
         let contract_hash = canonical_procedure_contract_hash_parts(
             &self.object.name,
-            self.stats_version,
             self.protocol_layout,
             &self.inputs,
             &self.structured_inputs,
             &self.result_streams,
-            &self.required_permissions,
-            self.transaction_policy,
-            self.compatibility_policy,
-            self.result_metadata_policy,
-            &self.error_policy,
-            self.multi_result_policy,
         );
         let contract = ProcedureContract {
             object: self.object,

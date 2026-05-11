@@ -186,7 +186,8 @@ pub(crate) fn foreground_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
-    ExecutionIoAdmissionRequest::new(
+    ExecutionIoAdmissionRequest::for_procedure(
+        ProcedureId::new(2),
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -204,7 +205,8 @@ pub(crate) fn rejected_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
-    ExecutionIoAdmissionRequest::new(
+    ExecutionIoAdmissionRequest::for_procedure(
+        ProcedureId::new(2),
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(0, 1024 * 1024, 2),

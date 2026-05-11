@@ -272,8 +272,44 @@ where
         }
     }
 
-    pub fn object_count(&self) -> usize {
+    fn definition_is_visible(&self, definition: &CatalogDefinition) -> bool {
+        definition.object_ref().catalog_version <= self.visible_version()
+    }
+
+    fn visible_lifecycle(
+        &self,
+        lifecycle: CatalogObjectLifecycle,
+    ) -> Option<CatalogObjectLifecycle> {
+        if lifecycle.created_version > self.visible_version() {
+            return None;
+        }
+
+        Some(match lifecycle.status {
+            CatalogObjectLifecycleStatus::Active => lifecycle,
+            CatalogObjectLifecycleStatus::Deprecated
+                if lifecycle.last_changed_version <= self.visible_version() =>
+            {
+                lifecycle
+            },
+            CatalogObjectLifecycleStatus::Deprecated => {
+                CatalogObjectLifecycle::active(lifecycle.created_version)
+            },
+        })
+    }
+
+    pub fn applied_object_count(&self) -> usize {
         self.objects_by_id.len()
+    }
+
+    pub fn visible_object_count(&self) -> usize {
+        self.objects_by_id
+            .values()
+            .filter(|definition| self.definition_is_visible(definition))
+            .count()
+    }
+
+    pub fn object_count(&self) -> usize {
+        self.visible_object_count()
     }
 
     pub fn visible_version(&self) -> CatalogVersion {
@@ -298,25 +334,63 @@ where
         }
     }
 
-    pub fn contains_object_id(&self, object_id: CatalogObjectId) -> bool {
+    pub fn applied_contains_object_id(&self, object_id: CatalogObjectId) -> bool {
         self.objects_by_id.contains_key(&object_id)
     }
 
-    pub fn contains_name(&self, name: &QualifiedName) -> bool {
+    pub fn visible_contains_object_id(&self, object_id: CatalogObjectId) -> bool {
+        self.visible_get_by_id(object_id).is_some()
+    }
+
+    pub fn contains_object_id(&self, object_id: CatalogObjectId) -> bool {
+        self.visible_contains_object_id(object_id)
+    }
+
+    pub fn applied_contains_name(&self, name: &QualifiedName) -> bool {
         self.object_names.contains_key(name)
     }
 
-    pub fn get_by_id(&self, object_id: CatalogObjectId) -> Option<&CatalogDefinition> {
+    pub fn visible_contains_name(&self, name: &QualifiedName) -> bool {
+        self.visible_get_by_name(name).is_some()
+    }
+
+    pub fn contains_name(&self, name: &QualifiedName) -> bool {
+        self.visible_contains_name(name)
+    }
+
+    pub fn applied_get_by_id(&self, object_id: CatalogObjectId) -> Option<&CatalogDefinition> {
         self.objects_by_id.get(&object_id)
     }
 
-    pub fn get_by_name(&self, name: &QualifiedName) -> Option<&CatalogDefinition> {
-        self.object_names
-            .get(name)
-            .and_then(|object_id| self.objects_by_id.get(object_id))
+    pub fn visible_get_by_id(&self, object_id: CatalogObjectId) -> Option<&CatalogDefinition> {
+        self.applied_get_by_id(object_id)
+            .filter(|definition| self.definition_is_visible(definition))
     }
 
-    pub fn get_procedure_by_id(&self, procedure_id: ProcedureId) -> Option<&ProcedureContract> {
+    pub fn get_by_id(&self, object_id: CatalogObjectId) -> Option<&CatalogDefinition> {
+        self.visible_get_by_id(object_id)
+    }
+
+    pub fn applied_get_by_name(&self, name: &QualifiedName) -> Option<&CatalogDefinition> {
+        self.object_names
+            .get(name)
+            .and_then(|object_id| self.applied_get_by_id(*object_id))
+    }
+
+    pub fn visible_get_by_name(&self, name: &QualifiedName) -> Option<&CatalogDefinition> {
+        self.object_names
+            .get(name)
+            .and_then(|object_id| self.visible_get_by_id(*object_id))
+    }
+
+    pub fn get_by_name(&self, name: &QualifiedName) -> Option<&CatalogDefinition> {
+        self.visible_get_by_name(name)
+    }
+
+    pub fn applied_get_procedure_by_id(
+        &self,
+        procedure_id: ProcedureId,
+    ) -> Option<&ProcedureContract> {
         self.objects_by_id
             .values()
             .find_map(|definition| match definition {
@@ -327,8 +401,33 @@ where
             })
     }
 
-    pub fn lifecycle_by_id(&self, object_id: CatalogObjectId) -> Option<CatalogObjectLifecycle> {
+    pub fn visible_get_procedure_by_id(
+        &self,
+        procedure_id: ProcedureId,
+    ) -> Option<&ProcedureContract> {
+        self.applied_get_procedure_by_id(procedure_id)
+            .filter(|contract| contract.object.catalog_version <= self.visible_version())
+    }
+
+    pub fn get_procedure_by_id(&self, procedure_id: ProcedureId) -> Option<&ProcedureContract> {
+        self.visible_get_procedure_by_id(procedure_id)
+    }
+
+    pub fn applied_lifecycle_by_id(
+        &self,
+        object_id: CatalogObjectId,
+    ) -> Option<CatalogObjectLifecycle> {
         self.object_lifecycle.get(&object_id).copied()
+    }
+
+    pub fn lifecycle_by_id(&self, object_id: CatalogObjectId) -> Option<CatalogObjectLifecycle> {
+        self.applied_lifecycle_by_id(object_id)
+            .and_then(|lifecycle| self.visible_lifecycle(lifecycle))
+    }
+
+    pub fn applied_is_active_object(&self, object_id: CatalogObjectId) -> bool {
+        self.applied_lifecycle_by_id(object_id)
+            .is_some_and(|lifecycle| lifecycle.status == CatalogObjectLifecycleStatus::Active)
     }
 
     pub fn is_active_object(&self, object_id: CatalogObjectId) -> bool {
@@ -397,7 +496,7 @@ where
                 CatalogSnapshotDefinitionBatchOperation::Deprecate(target) => {
                     target.validate_for_catalog_mutation()?;
                     let target_object = target.object_ref();
-                    let Some(existing) = self.get_by_id(target_object.object_id) else {
+                    let Some(existing) = self.applied_get_by_id(target_object.object_id) else {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
                             "definition batch cannot deprecate unknown object id",
@@ -417,7 +516,7 @@ where
                             "definition batch lifecycle target name index must match the existing object id",
                         ));
                     }
-                    if !self.is_active_object(target_object.object_id) {
+                    if !self.applied_is_active_object(target_object.object_id) {
                         return Err(AndromedaError::new(
                             AndromedaErrorKind::Catalog,
                             "definition batch cannot deprecate an inactive catalog object",
@@ -462,7 +561,8 @@ where
                 continue;
             }
 
-            let Some(existing_dependency) = self.get_by_name(&dependency.dependency_name) else {
+            let Some(existing_dependency) = self.applied_get_by_name(&dependency.dependency_name)
+            else {
                 return Err(AndromedaError::new(
                     AndromedaErrorKind::Catalog,
                     "definition batch procedure structured input dependency catalog edge is missing from catalog snapshot",
@@ -475,7 +575,7 @@ where
                     "definition batch catalog dependency must reference an object of the expected kind",
                 ));
             }
-            if !self.is_active_object(existing_dependency_object.object_id) {
+            if !self.applied_is_active_object(existing_dependency_object.object_id) {
                 return Err(AndromedaError::new(
                     AndromedaErrorKind::Catalog,
                     "definition batch catalog dependency must reference an active catalog object",
@@ -501,7 +601,7 @@ where
 
         for definition in self.objects_by_id.values() {
             let dependent_object = definition.object_ref();
-            if !self.is_active_object(dependent_object.object_id)
+            if !self.applied_is_active_object(dependent_object.object_id)
                 || deprecated_ids.contains(&dependent_object.object_id)
             {
                 continue;
@@ -717,7 +817,7 @@ where
                         ));
                     }
                     if self
-                        .lifecycle_by_id(target_object.object_id)
+                        .applied_lifecycle_by_id(target_object.object_id)
                         .is_some_and(|lifecycle| {
                             lifecycle.status == CatalogObjectLifecycleStatus::Deprecated
                         })
@@ -748,7 +848,7 @@ where
                 CatalogMutationOperation::DeprecateObject { target } => {
                     let target_object = target.object_ref();
                     let lifecycle = self
-                        .lifecycle_by_id(target_object.object_id)
+                        .applied_lifecycle_by_id(target_object.object_id)
                         .unwrap_or_else(|| {
                             CatalogObjectLifecycle::active(target_object.catalog_version)
                         });

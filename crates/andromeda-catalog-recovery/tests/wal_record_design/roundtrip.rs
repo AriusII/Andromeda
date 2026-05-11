@@ -133,7 +133,7 @@ fn wal_record_roundtrip_apply_catalog_version() {
         batch_id,
         version,
         record_count,
-        lsn,
+        durable_lsn,
     } = record
     else {
         panic!("Expected ApplyCatalogVersion variant");
@@ -142,7 +142,17 @@ fn wal_record_roundtrip_apply_catalog_version() {
     assert_eq!(batch_id.get(), 100);
     assert_eq!(version, CatalogVersion::new(42));
     assert_eq!(record_count, 3);
-    assert_eq!(lsn, 99999);
+    assert_eq!(durable_lsn, 99999);
+    assert_eq!(
+        CatalogWalRecord::ApplyCatalogVersion {
+            batch_id,
+            version,
+            record_count,
+            durable_lsn,
+        }
+        .durable_lsn(),
+        Some(99999)
+    );
 }
 
 #[test]

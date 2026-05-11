@@ -3,6 +3,7 @@ use andromeda_catalog_store::{
     CatalogStoreWalAppend, CatalogStoreWalAppendSequenceError,
     validate_catalog_store_wal_append_sequence,
 };
+use andromeda_definition_batch::DefinitionBatchDependencyGraphHash;
 
 #[test]
 fn mutation_records_are_ordered_begin_apply_commit() {
@@ -221,8 +222,10 @@ fn snapshot_apply_advances_version_without_claiming_durable_publication() {
     let report = store
         .apply_definition_batch(&product_batch(10, 11))
         .unwrap();
+    let product_name = QualifiedName::parse("Inventory.Product").unwrap();
 
     assert_eq!(store.snapshot().version, version(11));
+    assert_eq!(store.snapshot().visible_version(), version(10));
     assert_eq!(report.snapshot_report.previous_version, version(10));
     assert_eq!(report.snapshot_report.next_version, version(11));
     assert_eq!(
@@ -233,6 +236,53 @@ fn snapshot_apply_advances_version_without_claiming_durable_publication() {
     assert_eq!(
         store.snapshot().publication,
         CatalogSnapshotPublication::InMemoryOnly
+    );
+    assert_eq!(store.snapshot().object_count(), 0);
+    assert!(store.snapshot().get_by_name(&product_name).is_none());
+    assert_eq!(store.snapshot().applied_object_count(), 1);
+    assert!(
+        store
+            .snapshot()
+            .applied_get_by_name(&product_name)
+            .is_some()
+    );
+}
+
+#[test]
+fn staged_deprecation_keeps_visible_catalog_active_until_durable_publication() {
+    let mut store = store_at(10);
+    let mut next_lsn = 70;
+    store
+        .apply_definition_batch_durably(
+            &product_batch(10, 11),
+            |_kind, _payload| {
+                let lsn = next_lsn;
+                next_lsn += 1;
+                Ok(lsn)
+            },
+            Ok,
+        )
+        .unwrap();
+
+    store
+        .apply_definition_batch(&batch(
+            version(11),
+            vec![DefinitionOperation::Deprecate(CatalogLifecycleTarget {
+                object: object(1, "Inventory.Product", ObjectKind::Table, version(11)),
+            })],
+        ))
+        .unwrap();
+
+    let product_name = QualifiedName::parse("Inventory.Product").unwrap();
+    assert_eq!(store.snapshot().version, version(12));
+    assert_eq!(store.snapshot().visible_version(), version(11));
+    assert!(store.snapshot().contains_name(&product_name));
+    assert!(store.snapshot().is_active_object(CatalogObjectId::new(1)));
+    assert!(store.snapshot().applied_contains_name(&product_name));
+    assert!(
+        !store
+            .snapshot()
+            .applied_is_active_object(CatalogObjectId::new(1))
     );
 }
 
@@ -607,7 +657,7 @@ fn durable_publication_rejects_stale_identity_or_record_count_mismatch() {
         .publish_durable_mutation_plan(&wrong_database_plan, evidence)
         .unwrap_err();
     assert_eq!(identity_error.kind(), AndromedaErrorKind::Catalog);
-    assert!(identity_error.message().contains("boundary"));
+    assert!(identity_error.message().contains("must match"));
 
     let wrong_record_count = CatalogMutationCommitEvidence::from_durable_commit_record(
         records.last().unwrap(),
@@ -656,4 +706,53 @@ fn durable_apply_report_carries_definition_batch_integrity_hashes() {
     assert!(!report.dependency_graph_hash.is_zero());
     assert_eq!(report.receipt.next_version, version(11));
     assert_eq!(store.snapshot().version, version(11));
+}
+
+#[test]
+fn snapshot_apply_rejects_tampered_definition_batch_source_hash_drift() {
+    let mut store = store_at(10);
+    let mut plan = plan_product_batch(&store, 10, 11).mutation_plan;
+
+    let andromeda_catalog::CatalogMutationOperation::CreateObject { definition, .. } =
+        &mut plan.deltas[0].operation
+    else {
+        panic!("product batch must create a table");
+    };
+    let CatalogDefinition::Table(table) = definition else {
+        panic!("product batch must create a table");
+    };
+    table.columns.push(column("WarehouseId", 1));
+
+    let error = store
+        .apply_mutation_plan(&plan)
+        .expect_err("tampered source shape must be rejected before apply");
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("source hash"));
+    assert_store_unpublished_at(&store, 10);
+}
+
+#[test]
+fn durable_publication_rejects_tampered_definition_batch_dependency_hash() {
+    let mut store = store_at(10);
+    let mut plan = plan_product_batch(&store, 10, 11).mutation_plan;
+    plan.dependency_graph_hash =
+        DefinitionBatchDependencyGraphHash::new([0x5A; DefinitionBatchDependencyGraphHash::LEN]);
+
+    let records = plan.records();
+    let evidence = CatalogMutationCommitEvidence::from_durable_commit_record(
+        records.last().unwrap(),
+        records.len(),
+        CatalogMutationDurability::StorageWal {
+            commit_lsn: 77,
+            durable_lsn: 80,
+        },
+    )
+    .unwrap();
+
+    let error = store
+        .publish_durable_mutation_plan(&plan, evidence)
+        .expect_err("tampered dependency graph hash must be rejected before publication");
+    assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+    assert!(error.message().contains("dependency graph hash"));
+    assert_store_unpublished_at(&store, 10);
 }

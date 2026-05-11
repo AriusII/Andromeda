@@ -80,12 +80,13 @@ where
     TReceipt: CatalogPublicationReceiptView,
 {
     publication.validate()?;
+    let durable_evidence = publication.durable_evidence();
     acknowledgement.validate_against_expectation(&CatalogPublicationReceiptExpectation {
         database_id: publication.receipt.database_id(),
         namespace_id: publication.receipt.namespace_id(),
         next_version: publication.receipt.next_version(),
-        durable_lsn: publication.receipt.durable_lsn(),
-        durable_evidence_marker: publication.receipt.durable_evidence_marker(),
+        durable_lsn: durable_evidence.durable_lsn,
+        durable_evidence_marker: durable_evidence.durable_evidence_marker.as_ref(),
         record_count: publication.receipt.record_count(),
         audit_trace_id: publication.audit_trace.trace_id.as_str(),
     })

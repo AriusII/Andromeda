@@ -40,9 +40,38 @@ fn t_cm_04_cost_always_nonnegative() {
     ]);
     let cost_est = estimate_without_stats(&ir);
     assert!(cost_est.cpu_cost >= 0.0, "cpu_cost non-negative");
-    assert!(cost_est.io_cost >= 0.0, "io_cost non-negative");
-    assert!(cost_est.memory_cost >= 0.0, "memory_cost non-negative");
+    assert!(
+        cost_est.logical_io_cost >= 0.0,
+        "logical_io_cost non-negative"
+    );
+    assert!(
+        cost_est.physical_io_cost >= 0.0,
+        "physical_io_cost non-negative"
+    );
+    assert!(cost_est.wal_cost >= 0.0, "wal_cost non-negative");
+    assert!(cost_est.temp_cost >= 0.0, "temp_cost non-negative");
+    assert!(cost_est.network_cost >= 0.0, "network_cost non-negative");
+    assert!(
+        cost_est.risk_penalty_cost >= 0.0,
+        "risk_penalty_cost non-negative"
+    );
     assert!(cost_est.total_cost >= 0.0, "total_cost non-negative");
+}
+
+/// T-CM-04b  Update + Emit populate wal/network/risk components.
+#[test]
+fn t_cm_04b_update_and_emit_populate_new_v0_components() {
+    let ir = make_ir(vec![
+        update_op(0, "db.ns.T", vec![], vec![simple_assignment("qty", int(1))]),
+        emit_op(1, "T", "qty"),
+    ]);
+    let cost_est = estimate_without_stats(&ir);
+    assert!(cost_est.wal_cost > 0.0, "writes must budget wal cost");
+    assert!(cost_est.network_cost > 0.0, "emit must budget network cost");
+    assert!(
+        cost_est.risk_penalty_cost > 0.0,
+        "unknown write cardinality must add a bounded risk penalty"
+    );
 }
 
 /// T-CM-05  CostEstimate::zero() is valid.
@@ -57,8 +86,12 @@ fn t_cm_05_zero_estimate_is_valid() {
 fn t_cm_06_accuracy_zero_estimate_returns_zero() {
     let actual = ActualCost {
         cpu_nanos: 1_000,
-        io_pages: 1,
-        memory_pages: 1,
+        logical_io_pages: 1,
+        physical_io_pages: 1,
+        wal_pages: 0,
+        temp_pages: 1,
+        network_units: 0,
+        risk_penalty_units: 0,
     };
     assert_eq!(cost_accuracy(&CostEstimate::zero(), &actual), 0.0);
 }
@@ -70,8 +103,12 @@ fn t_cm_07_high_actual_exceeds_warn_threshold() {
     let estimated = estimate_without_stats(&ir);
     let actual = ActualCost {
         cpu_nanos: 0,
-        io_pages: 1_000,
-        memory_pages: 0,
+        logical_io_pages: 1_000,
+        physical_io_pages: 1_000,
+        wal_pages: 0,
+        temp_pages: 0,
+        network_units: 0,
+        risk_penalty_units: 0,
     };
     let ratio = cost_accuracy(&estimated, &actual);
     assert!(
@@ -89,8 +126,12 @@ fn t_cm_08_extreme_actual_exceeds_alert_threshold() {
     let estimated = estimate_without_stats(&ir);
     let actual = ActualCost {
         cpu_nanos: 0,
-        io_pages: 100_000,
-        memory_pages: 0,
+        logical_io_pages: 100_000,
+        physical_io_pages: 100_000,
+        wal_pages: 0,
+        temp_pages: 0,
+        network_units: 0,
+        risk_penalty_units: 0,
     };
     let ratio = cost_accuracy(&estimated, &actual);
     assert!(
@@ -126,8 +167,12 @@ fn t_cm_10_accuracy_ratio_nonnegative() {
     let estimated = estimate_without_stats(&ir);
     let actual = ActualCost {
         cpu_nanos: 500,
-        io_pages: 2,
-        memory_pages: 1,
+        logical_io_pages: 2,
+        physical_io_pages: 2,
+        wal_pages: 0,
+        temp_pages: 1,
+        network_units: 0,
+        risk_penalty_units: 0,
     };
     let ratio = cost_accuracy(&estimated, &actual);
     assert!(ratio >= 0.0, "accuracy ratio must never be negative");

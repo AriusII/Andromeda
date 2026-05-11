@@ -1,13 +1,10 @@
 pub(crate) use andromeda_catalog_store::{CatalogObjectRef, ObjectKind, QualifiedName};
-pub(crate) use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+pub(crate) use andromeda_error::AndromedaErrorKind;
 pub(crate) use andromeda_exec::dispatch::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatcher,
     SrplDispatcherAdapter,
 };
-pub(crate) use andromeda_exec::{
-    InvocationContext, InvocationRequest, LocalProcedure, ResultStreamMetadata,
-    SrplProcedureDispatcher,
-};
+pub(crate) use andromeda_exec::{InvocationContext, InvocationRequest, SrplProcedureDispatcher};
 pub(crate) use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 pub(crate) use andromeda_procedure_contract::{
     AccessMode, IsolationPolicy, MultiResultPolicy, PolicyVersion, ProcedureContractBinding,
@@ -20,8 +17,7 @@ pub(crate) use andromeda_procedure_runtime::procedure_resolver::{
 };
 pub(crate) use andromeda_srpl_interpreter::SrplIrInterpreter;
 pub(crate) use andromeda_srpl_ir::{
-    BoundSrplBodyPlan, BoundSrplOperationPlan, Cardinality, ExecutableProcedurePlan,
-    SrplCatalogBindingEvidence,
+    BoundSrplBodyPlan, BoundSrplOperationPlan, ExecutableProcedurePlan, SrplCatalogBindingEvidence,
 };
 pub(crate) use andromeda_types::{
     CatalogObjectId, CatalogVersion, ColumnDescriptor, ContractHash, InvocationId, ProcedureId,
@@ -67,35 +63,6 @@ impl ProcedureResolver for MockValidResolver {
     ) -> Result<ProcedureResolveResponse, ProcedureResolveError> {
         request.validate_response(&self.response)?;
         Ok(self.response.clone())
-    }
-}
-
-#[derive(Clone)]
-pub(crate) struct MockLocalDispatcher {
-    procedure: LocalProcedure,
-}
-
-impl MockLocalDispatcher {
-    pub(crate) fn new(procedure: LocalProcedure) -> Self {
-        Self { procedure }
-    }
-}
-
-impl andromeda_procedure_runtime::ProcedureDispatcher for MockLocalDispatcher {
-    type Procedure = LocalProcedure;
-
-    fn dispatch_procedure(
-        &self,
-        request: ProcedureDispatchRequest,
-    ) -> AndromedaResult<Self::Procedure> {
-        request.validate()?;
-        if request.procedure != self.procedure.contract {
-            return Err(AndromedaError::new(
-                AndromedaErrorKind::Contract,
-                "mock local dispatcher contract mismatch",
-            ));
-        }
-        Ok(self.procedure.clone())
     }
 }
 
@@ -244,16 +211,5 @@ pub(crate) fn invocation_request(invocation_id: u64) -> InvocationRequest {
         expected_contract_hash: contract_ref().contract_hash,
         catalog_version: contract_ref().catalog_version,
         structured_parameters: Vec::new(),
-    }
-}
-
-pub(crate) fn local_procedure() -> LocalProcedure {
-    LocalProcedure {
-        contract: contract_ref(),
-        contract_binding: contract_binding(),
-        required_permissions: vec!["Test.Procedure.Execute".to_string()],
-        result_metadata: ResultStreamMetadata::exact(1, 1, Cardinality::One, 1),
-        mutation_payload: b"local-handler-payload".to_vec(),
-        rows_affected: 1,
     }
 }

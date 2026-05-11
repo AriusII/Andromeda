@@ -2,7 +2,7 @@
 
 use andromeda_buffer_pool::{
     BufferFrame, BufferFrameId, BufferFrameState, BufferPoolConfig, BufferPoolError,
-    ClockEvictionPolicy, DirtyTracker,
+    BufferPoolMetrics, ClockEvictionPolicy, DirtyTracker,
 };
 use andromeda_storage_page::{
     AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageImage, PageLayoutContract,
@@ -15,6 +15,7 @@ fn buffer_pool_module_exports_all_public_types() {
         let _ = BufferFrameId::new(1).expect("valid frame id");
         let _ = BufferPoolConfig::new(32, PageSize::KiB16).expect("valid config");
         let _: Option<BufferPoolError> = None;
+        let _: Option<BufferPoolMetrics> = None;
         let _: ClockEvictionPolicy = ClockEvictionPolicy::new();
         let _: DirtyTracker = DirtyTracker::new();
         let _: BufferFrameState = BufferFrameState::Free;

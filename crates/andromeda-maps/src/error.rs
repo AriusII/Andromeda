@@ -20,6 +20,18 @@ pub enum MapDescriptorError {
     AnalyticsJobNotAdvisory,
     ColumnarConsumerNotMaps,
     ColumnarArtifactNotAdvisory,
+    ConsistencyPolicyDescriptorMismatch,
+    RefreshCostExceedsBudget,
+    StalenessExceeded,
+    MissingDecisionTrace,
+    ImmediateRefreshMissingTableWalRecords,
+    ImmediateRefreshMissingMapWalRecords,
+    IncrementalRefreshMissingDeltaLog,
+    IncrementalDeltaLogMapMismatch,
+    SnapshotRefreshRequiresPublishedSnapshot,
+    SnapshotRefreshSnapshotMismatch,
+    RefreshPathNotCpuFirst,
+    WalPriorityExceeded,
 }
 
 impl fmt::Display for MapDescriptorError {
@@ -56,6 +68,42 @@ impl fmt::Display for MapDescriptorError {
             },
             Self::ColumnarArtifactNotAdvisory => {
                 f.write_str("map refresh plan columnar layout must remain advisory")
+            },
+            Self::ConsistencyPolicyDescriptorMismatch => {
+                f.write_str("map consistency policy must match the refresh plan descriptor")
+            },
+            Self::RefreshCostExceedsBudget => {
+                f.write_str("map refresh cost exceeds the bounded consistency budget")
+            },
+            Self::StalenessExceeded => {
+                f.write_str("map refresh candidate exceeds the declared staleness policy")
+            },
+            Self::MissingDecisionTrace => {
+                f.write_str("map refresh admission requires decision trace evidence")
+            },
+            Self::ImmediateRefreshMissingTableWalRecords => {
+                f.write_str("immediate map refresh requires same-transaction table WAL records")
+            },
+            Self::ImmediateRefreshMissingMapWalRecords => {
+                f.write_str("immediate map refresh requires same-transaction map WAL records")
+            },
+            Self::IncrementalRefreshMissingDeltaLog => {
+                f.write_str("incremental map refresh requires a controlled delta log")
+            },
+            Self::IncrementalDeltaLogMapMismatch => {
+                f.write_str("incremental map delta log must match the declared map descriptor")
+            },
+            Self::SnapshotRefreshRequiresPublishedSnapshot => {
+                f.write_str("snapshot-only map refresh requires a published source snapshot")
+            },
+            Self::SnapshotRefreshSnapshotMismatch => {
+                f.write_str("snapshot-only map refresh must bind to the published source snapshot")
+            },
+            Self::RefreshPathNotCpuFirst => {
+                f.write_str("map refresh execution path must remain CPU-first in P10")
+            },
+            Self::WalPriorityExceeded => {
+                f.write_str("map refresh admission would exceed WAL priority budget")
             },
         }
     }

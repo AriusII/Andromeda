@@ -1,6 +1,8 @@
 //! Hardware capability aggregation and resource budgets.
 
-use crate::{CpuProfile, GpuProfile, HardwareArchitecture, PipelineClass, RamProfile};
+use crate::{
+    CpuProfile, CpuRuntimeProfile, GpuProfile, HardwareArchitecture, PipelineClass, RamProfile,
+};
 use andromeda_error::AndromedaResult;
 
 /// Complete hardware profile describing the compute environment.
@@ -27,6 +29,30 @@ impl HardwareProfile {
             ram: RamProfile::conservative(),
             gpu: GpuProfile::disabled(),
         }
+    }
+
+    pub fn detected(ram: RamProfile, gpu: GpuProfile, has_direct_io: bool) -> Self {
+        Self::from_cpu_profile(CpuProfile::detect(), ram, gpu, has_direct_io)
+    }
+
+    pub fn from_cpu_profile(
+        cpu: CpuProfile,
+        ram: RamProfile,
+        gpu: GpuProfile,
+        has_direct_io: bool,
+    ) -> Self {
+        Self {
+            architecture: cpu.architecture,
+            has_simd: cpu.supports_simd(),
+            has_direct_io,
+            cpu,
+            ram,
+            gpu,
+        }
+    }
+
+    pub const fn runtime_profile(&self) -> CpuRuntimeProfile {
+        self.cpu.runtime_profile()
     }
 
     pub fn validate_gpu_pipeline(&self, pipeline: PipelineClass) -> AndromedaResult<()> {
@@ -65,7 +91,7 @@ impl ResourceBudget {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{CpuCapabilityClass, GpuExecutionPolicy};
+    use crate::{CpuCapabilityClass, CpuRuntimeProfile, GpuExecutionPolicy};
 
     #[test]
     fn conservative_profile_disables_gpu() {
@@ -76,11 +102,22 @@ mod tests {
             CpuCapabilityClass::Conservative
         );
         assert!(!profile.has_simd);
+        assert_eq!(profile.runtime_profile(), CpuRuntimeProfile::Conservative);
         assert_eq!(profile.gpu.execution_policy, GpuExecutionPolicy::Disabled);
         assert!(
             profile
                 .validate_gpu_pipeline(PipelineClass::BatchAnalytics)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn detected_hardware_profile_uses_detected_cpu_runtime_profile() {
+        let profile =
+            HardwareProfile::detected(RamProfile::conservative(), GpuProfile::disabled(), false);
+
+        assert_eq!(profile.runtime_profile(), profile.cpu.runtime_profile());
+        assert_eq!(profile.has_simd, profile.cpu.supports_simd());
+        assert!(profile.cpu.hardware_threads >= 1);
     }
 }

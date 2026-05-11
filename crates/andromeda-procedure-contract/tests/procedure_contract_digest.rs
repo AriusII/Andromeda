@@ -280,6 +280,32 @@ fn contract_hash_ignores_catalog_version_while_binding_tracks_catalog_version() 
 }
 
 #[test]
+fn contract_hash_ignores_stats_and_policy_only_drift() {
+    let baseline = procedure(20, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
+    let mut drifted = baseline.clone();
+    drifted.stats_version = StatsVersion::new(2);
+    drifted.transaction_policy.isolation = IsolationPolicy::Snapshot;
+    drifted
+        .required_permissions
+        .push("Inventory.Audit.Execute".to_string());
+
+    assert_eq!(
+        baseline.contract_hash,
+        drifted.canonical_hash(),
+        "ContractHash must remain tied to observable contract shape, not stats/policy-only drift"
+    );
+    assert!(drifted.validate_canonical_hash().is_ok());
+    assert_ne!(
+        baseline.binding().stats_version,
+        drifted.binding().stats_version
+    );
+    assert_ne!(
+        baseline.binding().policy_version,
+        drifted.binding().policy_version
+    );
+}
+
+#[test]
 fn policy_version_changes_with_policy_fields_only() {
     let baseline = procedure(12, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
     let baseline_policy = baseline.policy_version();

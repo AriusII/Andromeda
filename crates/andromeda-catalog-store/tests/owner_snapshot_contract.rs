@@ -400,7 +400,9 @@ fn owner_snapshot_validates_external_structured_input_dependencies() {
         .unwrap();
 
     assert_eq!(snapshot.version, version(12));
-    assert!(snapshot.contains_name(&QualifiedName::parse("Inventory.ReserveStock").unwrap()));
+    assert!(
+        snapshot.applied_contains_name(&QualifiedName::parse("Inventory.ReserveStock").unwrap())
+    );
 }
 
 #[test]
@@ -478,8 +480,8 @@ fn owner_snapshot_allows_joint_deprecation_of_dependency_and_dependent() {
         .unwrap();
 
     assert_eq!(snapshot.version, version(13));
-    assert!(!snapshot.is_active_object(CatalogObjectId::new(1)));
-    assert!(!snapshot.is_active_object(CatalogObjectId::new(2)));
+    assert!(!snapshot.applied_is_active_object(CatalogObjectId::new(1)));
+    assert!(!snapshot.applied_is_active_object(CatalogObjectId::new(2)));
 }
 
 #[test]

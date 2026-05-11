@@ -91,23 +91,16 @@ fn nested_module_exports_match_root_export_identities() {
 
     let records = root_wal.records().to_vec();
     let descriptor: WalSegmentDescriptor =
-        WalSegmentDescriptor::for_records(
-            1, None, &records,
-        )
-        .unwrap();
+        WalSegmentDescriptor::for_records(1, None, &records).unwrap();
     let nested_descriptor: WalSegmentDescriptor = descriptor;
-    let segment: WalSegment =
-        WalSegment::new(nested_descriptor, records)
-            .unwrap();
+    let segment: WalSegment = WalSegment::new(nested_descriptor, records).unwrap();
     assert_eq!(segment.descriptor.record_count, 2);
 
     let encoded = encode_wal_record(&segment.records[0]).unwrap();
-    let decoded_header: WalFrameHeader =
-        decode_frame_header(&encoded).unwrap();
+    let decoded_header: WalFrameHeader = decode_frame_header(&encoded).unwrap();
     assert_eq!(decoded_header.kind().unwrap(), WalRecordKind::TxBegin);
 
-    let scan: WalScanResult =
-        scan_wal_records_from(&encoded, Lsn::new(1), None);
+    let scan: WalScanResult = scan_wal_records_from(&encoded, Lsn::new(1), None);
     assert!(scan.is_complete());
     assert_eq!(scan.records.len(), 1);
 
@@ -121,9 +114,6 @@ fn nested_module_exports_match_root_export_identities() {
     let _ = scan_file_wal
         as fn(std::path::PathBuf) -> andromeda_error::AndromedaResult<FileWalDiskScan>;
     let _ = scan_file_wal
-        as fn(
-            std::path::PathBuf,
-        )
-            -> andromeda_error::AndromedaResult<FileWalDiskScan>;
+        as fn(std::path::PathBuf) -> andromeda_error::AndromedaResult<FileWalDiskScan>;
     let _ = FileWal::open as fn(std::path::PathBuf) -> andromeda_error::AndromedaResult<FileWal>;
 }

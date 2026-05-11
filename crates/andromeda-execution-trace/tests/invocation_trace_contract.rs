@@ -11,7 +11,8 @@
 
 use andromeda_execution_trace::{AuditLedger, InMemoryAuditLedger, InvocationTraceEvent};
 use andromeda_observability::TraceId;
-use andromeda_types::InvocationId;
+use andromeda_procedure_contract::PolicyVersion;
+use andromeda_types::{CatalogVersion, ContractHash, InvocationId};
 
 /// Test 1: Audit ledger accepts and records admission decision traces.
 #[test]
@@ -84,6 +85,9 @@ fn test_dispatch_event_trace_recorded() {
         trace_id,
         invocation_id,
         procedure_name: "calculate_revenue".to_string(),
+        catalog_version: CatalogVersion::new(3),
+        contract_hash: ContractHash::test_vector(0x33),
+        policy_version: PolicyVersion::new([0x11; PolicyVersion::LEN]),
         executor_kind: "LocalVerticalExecutor".to_string(),
     };
 
@@ -97,10 +101,19 @@ fn test_dispatch_event_trace_recorded() {
     match &snapshot[0] {
         InvocationTraceEvent::DispatchEvent {
             procedure_name,
+            catalog_version,
+            contract_hash,
+            policy_version,
             executor_kind,
             ..
         } => {
             assert_eq!(procedure_name, "calculate_revenue");
+            assert_eq!(catalog_version.get(), 3);
+            assert_eq!(*contract_hash, ContractHash::test_vector(0x33));
+            assert_eq!(
+                *policy_version,
+                PolicyVersion::new([0x11; PolicyVersion::LEN])
+            );
             assert_eq!(executor_kind, "LocalVerticalExecutor");
         },
         _ => panic!("expected dispatch event trace"),
@@ -225,6 +238,9 @@ fn test_complete_invocation_trace_sequence() {
         trace_id,
         invocation_id,
         procedure_name: "test_proc".to_string(),
+        catalog_version: CatalogVersion::new(3),
+        contract_hash: ContractHash::test_vector(0x77),
+        policy_version: PolicyVersion::new([0x22; PolicyVersion::LEN]),
         executor_kind: "Local".to_string(),
     };
 

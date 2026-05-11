@@ -85,10 +85,11 @@ pub fn catalog_visible_change_audit_evidence_for_publication<TReceipt>(
 where
     TReceipt: CatalogPublicationReceiptView,
 {
+    let durable_evidence = publication.durable_evidence();
     CatalogVisibleChangeAuditEvidence {
         trace: publication.audit_trace.clone(),
-        durable_lsn: publication.receipt.durable_lsn(),
-        durable_evidence_marker: publication.receipt.durable_evidence_marker().cloned(),
+        durable_lsn: durable_evidence.durable_lsn,
+        durable_evidence_marker: durable_evidence.durable_evidence_marker,
         audit_record_ordinal,
         visible_change_record_ordinal,
     }
@@ -102,9 +103,10 @@ where
     TReceipt: CatalogPublicationReceiptView,
 {
     publication.validate()?;
+    let durable_evidence = publication.durable_evidence();
     evidence.validate_against_expectation(
         &publication.audit_trace,
-        publication.receipt.durable_lsn(),
-        publication.receipt.durable_evidence_marker(),
+        durable_evidence.durable_lsn,
+        durable_evidence.durable_evidence_marker.as_ref(),
     )
 }

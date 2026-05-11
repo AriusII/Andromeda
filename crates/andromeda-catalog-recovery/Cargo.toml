@@ -9,6 +9,7 @@ publish = false
 andromeda-catalog-store.workspace = true
 andromeda-definition-batch.workspace = true
 andromeda-error.workspace = true
+andromeda-plan-cache.workspace = true
 andromeda-procedure-contract.workspace = true
 andromeda-types.workspace = true
 andromeda-wal.workspace = true

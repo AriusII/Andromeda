@@ -13,6 +13,7 @@ pub mod file_wal;
 mod invocation_wal;
 pub mod lsn;
 pub mod wal_codec;
+mod wal_performance;
 pub mod wal_segment;
 pub mod write_ahead_log;
 
@@ -27,6 +28,10 @@ pub use wal_codec::{
     WAL_RECORD_MAGIC, WalFrameHeader, WalScanResult, WalScanStop, WalScanStopReason,
     decode_frame_header, decode_wal_record_frame, encode_wal_record, encoded_wal_record_len,
     scan_wal_records, scan_wal_records_from,
+};
+pub use wal_performance::{
+    WalFlushTelemetry, WalIoQueueClass, WalQueueDepthMetrics, WalQueueSeparationEvidence,
+    WalWriteAmplificationMetrics,
 };
 pub use wal_segment::{WalSegment, WalSegmentDescriptor};
 pub use write_ahead_log::{

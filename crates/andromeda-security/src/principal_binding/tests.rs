@@ -1,4 +1,5 @@
 use super::*;
+use crate::BreakGlassPolicy;
 use andromeda_audit::{
     AdminOperation, CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope,
     UserPrincipal, UserPrincipalKind,
@@ -13,6 +14,10 @@ fn principal(id: &str) -> UserPrincipal {
     UserPrincipal::new(id, UserPrincipalKind::Service).unwrap()
 }
 
+fn principal_with_kind(id: &str, kind: UserPrincipalKind) -> UserPrincipal {
+    UserPrincipal::new(id, kind).unwrap()
+}
+
 fn binding(
     fingerprint: &str,
     surface: SurfaceScope,
@@ -22,6 +27,21 @@ fn binding(
     PrincipalBinding::new(
         cert(fingerprint, surface),
         principal(principal_id),
+        permissions,
+    )
+    .unwrap()
+}
+
+fn binding_with_kind(
+    fingerprint: &str,
+    surface: SurfaceScope,
+    principal_id: &str,
+    kind: UserPrincipalKind,
+    permissions: Vec<Permission>,
+) -> PrincipalBinding {
+    PrincipalBinding::new(
+        cert(fingerprint, surface),
+        principal_with_kind(principal_id, kind),
         permissions,
     )
     .unwrap()
@@ -261,4 +281,104 @@ fn fingerprint_evidence_is_sanitized_for_unknown_certs() {
     let audit = outcome.audit();
     assert!(audit.certificate.fingerprint.starts_with("fingerprint:"));
     assert!(!audit.contains_sensitive_evidence());
+}
+
+#[test]
+fn break_glass_policy_can_authorize_bounded_emergency_override() {
+    let reg = registry_with(vec![binding_with_kind(
+        "fp-breakglass-admin",
+        SurfaceScope::Administration,
+        "ops-breakglass",
+        UserPrincipalKind::BreakGlass,
+        vec![],
+    )]);
+    let auth = SurfaceAuthorizer::new(&reg);
+    let policy = BreakGlassPolicy::new(
+        "INC-7001",
+        "security-lead",
+        100,
+        220,
+        vec![Permission::ManageSecurity],
+        vec![SurfaceScope::Administration],
+    )
+    .unwrap();
+
+    let denied = auth
+        .authorize(
+            TraceId::new(7001),
+            SurfaceScope::Administration,
+            "fp-breakglass-admin",
+            SurfaceAction::Admin(AdminOperation::ManageSecurity),
+        )
+        .unwrap();
+    assert!(denied.is_denied());
+
+    let overridden = auth
+        .authorize_with_break_glass(
+            TraceId::new(7002),
+            SurfaceScope::Administration,
+            "fp-breakglass-admin",
+            SurfaceAction::Admin(AdminOperation::ManageSecurity),
+            150,
+            Some(&policy),
+        )
+        .unwrap();
+
+    assert!(overridden.is_allowed());
+    assert!(overridden.audit().reason.contains("break_glass_override"));
+    assert!(overridden.audit().reason.contains("INC-7001"));
+}
+
+#[test]
+fn break_glass_policy_does_not_override_when_policy_is_expired_or_principal_not_breakglass() {
+    let reg = registry_with(vec![
+        binding_with_kind(
+            "fp-breakglass-expired",
+            SurfaceScope::Administration,
+            "ops-breakglass-expired",
+            UserPrincipalKind::BreakGlass,
+            vec![],
+        ),
+        binding_with_kind(
+            "fp-service-no-override",
+            SurfaceScope::Administration,
+            "ops-service",
+            UserPrincipalKind::Service,
+            vec![],
+        ),
+    ]);
+    let auth = SurfaceAuthorizer::new(&reg);
+    let policy = BreakGlassPolicy::new(
+        "INC-7002",
+        "security-lead",
+        100,
+        120,
+        vec![Permission::ManageSecurity],
+        vec![SurfaceScope::Administration],
+    )
+    .unwrap();
+
+    let expired = auth
+        .authorize_with_break_glass(
+            TraceId::new(7003),
+            SurfaceScope::Administration,
+            "fp-breakglass-expired",
+            SurfaceAction::Admin(AdminOperation::ManageSecurity),
+            130,
+            Some(&policy),
+        )
+        .unwrap();
+    assert!(expired.is_denied());
+
+    let non_breakglass = auth
+        .authorize_with_break_glass(
+            TraceId::new(7004),
+            SurfaceScope::Administration,
+            "fp-service-no-override",
+            SurfaceAction::Admin(AdminOperation::ManageSecurity),
+            110,
+            Some(&policy),
+        )
+        .unwrap();
+    assert!(non_breakglass.is_denied());
 }

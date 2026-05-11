@@ -96,11 +96,12 @@ where
     where
         TReceipt: CatalogPublicationReceiptView<DurabilityMarker = TDurabilityMarker>,
     {
+        let durable_evidence = publication.durable_evidence();
         Self {
             key: CatalogPublicationReplayKey::from_receipt(&publication.receipt),
             outcome: CatalogPublicationReplayTerminalOutcome::Committed,
-            durable_lsn: publication.receipt.durable_lsn(),
-            durable_evidence_marker: publication.receipt.durable_evidence_marker().cloned(),
+            durable_lsn: durable_evidence.durable_lsn,
+            durable_evidence_marker: durable_evidence.durable_evidence_marker,
             record_count: publication.receipt.record_count(),
             audit_trace_id: publication.audit_trace.trace_id.clone(),
         }
@@ -159,6 +160,7 @@ where
         TReceipt: CatalogPublicationReceiptView<DurabilityMarker = TDurabilityMarker>,
     {
         self.validate()?;
+        let durable_evidence = publication.durable_evidence();
         if self.outcome != CatalogPublicationReplayTerminalOutcome::Committed {
             return catalog_recovery_publication_error(
                 "catalog publication replay terminal must be committed before applying visible publication",
@@ -171,12 +173,12 @@ where
         )?;
         require_equal(
             &self.durable_lsn,
-            &publication.receipt.durable_lsn(),
+            &durable_evidence.durable_lsn,
             "catalog publication replay terminal durable LSN must match publication",
         )?;
         require_equal(
             &self.durable_evidence_marker.as_ref(),
-            &publication.receipt.durable_evidence_marker(),
+            &durable_evidence.durable_evidence_marker.as_ref(),
             "catalog publication replay terminal durable marker must match publication",
         )?;
         require_equal(

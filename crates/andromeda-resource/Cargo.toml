@@ -7,3 +7,7 @@ publish = false
 
 [dependencies]
 andromeda-hardware.workspace = true
+andromeda-types.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true

@@ -1,6 +1,7 @@
 use std::{error::Error, fmt};
 
 pub type ResourceResult<T> = Result<T, ResourceLimitError>;
+pub type ResourceScopeResult<T> = Result<T, ResourceScopeError>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResourceLimitField {
@@ -30,10 +31,10 @@ impl fmt::Display for ResourceLimitError {
                     f,
                     "resource limit field {field:?} must be greater than zero"
                 )
-            }
+            },
             Self::ByteBudgetOverflow => {
                 f.write_str("resource byte budget overflows u64 when memory and temp are combined")
-            }
+            },
             Self::BudgetExceedsLimit {
                 field,
                 budget,
@@ -47,3 +48,18 @@ impl fmt::Display for ResourceLimitError {
 }
 
 impl Error for ResourceLimitError {}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResourceScopeError {
+    EmptyJobName,
+}
+
+impl fmt::Display for ResourceScopeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyJobName => f.write_str("resource governance job name must not be empty"),
+        }
+    }
+}
+
+impl Error for ResourceScopeError {}

@@ -49,6 +49,7 @@ impl CatalogMutationCommitEvidence {
     }
 
     pub fn validate_for_plan(self, plan: &CatalogMutationPlan) -> AndromedaResult<()> {
+        plan.validate_definition_batch_integrity()?;
         self.durability.validate()?;
 
         if !plan.mutation().is_monotonic() {

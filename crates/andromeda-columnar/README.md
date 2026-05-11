@@ -4,13 +4,14 @@
 
 `andromeda-columnar` is the future owner crate for columnar analytical layout descriptors, batch scan contracts, and columnar evidence used by statistics, maps, analytics, and benchmarks.
 
-This crate currently owns runtime-free advisory columnar layout descriptors and the `ColumnarArtifactDescriptor` trait. It does not own persisted bytes, scan execution, WAL coverage, recovery replay, or catalog publication.
+This crate currently owns runtime-free advisory columnar layout and segment descriptors, pruning metadata, source snapshot bindings, and the `ColumnarArtifactDescriptor` trait. It does not own persisted bytes, scan execution, WAL coverage, recovery replay, or catalog publication.
 
 ## Scope
 
 This crate is expected to own:
 
 - `ColumnarLayoutDescriptor`, `ColumnarVersionBinding`, consumer vocabulary, and acceleration policy vocabulary.
+- `ColumnarSegmentDescriptor`, `ColumnChunkDescriptor`, pruning metadata, and source snapshot binding for advisory analytical segments.
 - The advisory boundary trait used to prove columnar artifacts remain version-bound, CPU-fallback-capable, and outside C5 truth.
 - Runtime-free columnar layout descriptors and scan-shape contracts.
 - Version-bound columnar snapshots for analytical or diagnostic use.

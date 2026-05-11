@@ -155,7 +155,7 @@ impl CatalogManifestStoreBoundary<CatalogManifestRecord> for CatalogSnapshotMani
         procedure_id: ProcedureId,
     ) -> AndromedaResult<Option<CatalogManifestRecord>> {
         let store = self.read_store()?;
-        let Some(contract) = store.snapshot().get_procedure_by_id(procedure_id) else {
+        let Some(contract) = store.snapshot().visible_get_procedure_by_id(procedure_id) else {
             return Ok(None);
         };
         self.record_from_visible_contract(&store, contract)
@@ -166,7 +166,8 @@ impl CatalogManifestStoreBoundary<CatalogManifestRecord> for CatalogSnapshotMani
         name: &QualifiedName,
     ) -> AndromedaResult<Option<CatalogManifestRecord>> {
         let store = self.read_store()?;
-        let Some(CatalogDefinition::Procedure(contract)) = store.snapshot().get_by_name(name)
+        let Some(CatalogDefinition::Procedure(contract)) =
+            store.snapshot().visible_get_by_name(name)
         else {
             return Ok(None);
         };

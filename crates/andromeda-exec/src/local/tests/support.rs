@@ -1,4 +1,5 @@
 pub(crate) use super::super::LocalVerticalRuntime;
+pub(crate) use andromeda_admission::ResourceBudgetScope;
 pub(crate) use andromeda_audit::{
     CertificateIdentity, Permission, SecurityAuditOutcome, SurfaceScope, UserPrincipal,
     UserPrincipalKind,
@@ -147,7 +148,9 @@ pub(crate) fn foreground_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
-    ExecutionIoAdmissionRequest::new(
+    let contract = inventory_reserve_stock_contract().unwrap();
+    ExecutionIoAdmissionRequest::for_procedure(
+        contract.procedure_id,
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -165,7 +168,9 @@ pub(crate) fn rejected_resource_budget_io_admission(
     trace_id: TraceId,
 ) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
     let profile = OperationalProfile::hot_write();
-    ExecutionIoAdmissionRequest::new(
+    let contract = inventory_reserve_stock_contract().unwrap();
+    ExecutionIoAdmissionRequest::for_procedure(
+        contract.procedure_id,
         profile.clone(),
         PipelineClass::ForegroundExecution,
         ResourceBudget::new(0, 1024 * 1024, 2),
@@ -176,6 +181,26 @@ pub(crate) fn rejected_resource_budget_io_admission(
             false,
         ),
     )
+    .validate_admission(trace_id)
+}
+
+pub(crate) fn job_scoped_io_admission(
+    trace_id: TraceId,
+) -> Result<ExecutionIoAdmissionDecision, InvocationReject> {
+    let profile = OperationalProfile::hot_write();
+    ExecutionIoAdmissionRequest::for_job(
+        "map-refresh",
+        profile.clone(),
+        PipelineClass::ForegroundExecution,
+        ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
+        CoreIoPlacementRequest::new(
+            StorageWorkloadClass::HotAppend,
+            StorageIoBudgetScope::Page(PageSize::KiB16),
+            profile.workflow.page_budget.path_budget,
+            false,
+        ),
+    )
+    .unwrap()
     .validate_admission(trace_id)
 }
 

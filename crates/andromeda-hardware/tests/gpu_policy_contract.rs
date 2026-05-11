@@ -1,5 +1,9 @@
 use andromeda_error::AndromedaErrorKind;
-use andromeda_hardware::{GpuExecutionPolicy, GpuProfile, PipelineClass};
+use andromeda_hardware::{
+    CpuKernelKind, CpuKernelRegistry, CpuKernelVariant, CpuProfile, CpuRuntimeProfile,
+    GpuExecutionPolicy, GpuProfile, HardwareArchitecture, HardwareProfile, PipelineClass,
+    RamProfile,
+};
 
 fn critical_truth_paths() -> [PipelineClass; 7] {
     [
@@ -131,7 +135,12 @@ fn hardware_policy_namespace_preserves_flat_public_types() {
     let _: Option<OptionalGpuDecision> = Option::<OptionalGpuDecision>::None;
     let _: Option<OptionalGpuSelection> = Option::<OptionalGpuSelection>::None;
     let _: Option<CpuCapabilityClass> = Option::<CpuCapabilityClass>::None;
+    let _: Option<CpuKernelDispatch> = Option::<CpuKernelDispatch>::None;
+    let _: Option<CpuKernelKind> = Option::<CpuKernelKind>::None;
+    let _: Option<CpuKernelRegistry> = Option::<CpuKernelRegistry>::None;
+    let _: Option<CpuKernelVariant> = Option::<CpuKernelVariant>::None;
     let _: Option<CpuProfile> = Option::<CpuProfile>::None;
+    let _: Option<CpuRuntimeProfile> = Option::<CpuRuntimeProfile>::None;
     let _: Option<HardwareArchitecture> = Option::<HardwareArchitecture>::None;
     let _: Option<HardwareProfile> = Option::<HardwareProfile>::None;
     let _: Option<ResourceBudget> = Option::<ResourceBudget>::None;
@@ -164,4 +173,61 @@ fn acceleration_policy_namespace_preserves_owner_path() {
         andromeda_hardware::acceleration::OptionalGpuSelection::CpuFallback
     );
     assert!(decision.advisory_only);
+}
+
+#[test]
+fn cpu_profiles_cover_required_p11_runtime_buckets() {
+    assert_eq!(
+        CpuProfile::x64_baseline(4).runtime_profile(),
+        CpuRuntimeProfile::X64Baseline
+    );
+    assert_eq!(
+        CpuProfile::x64_avx2(4).runtime_profile(),
+        CpuRuntimeProfile::X64Avx2
+    );
+    assert_eq!(
+        CpuProfile::x64_avx512(4).runtime_profile(),
+        CpuRuntimeProfile::X64Avx512
+    );
+    assert_eq!(
+        CpuProfile::arm64_neon(4).runtime_profile(),
+        CpuRuntimeProfile::Arm64Neon
+    );
+    assert_eq!(
+        CpuProfile::arm64_sve2(4).runtime_profile(),
+        CpuRuntimeProfile::Arm64Sve2
+    );
+}
+
+#[test]
+fn cpu_kernel_registry_dispatches_accelerated_and_scalar_variants() {
+    let registry = CpuKernelRegistry::v0();
+
+    let scalar =
+        registry.dispatch_for_runtime_profile(CpuKernelKind::Scan, CpuRuntimeProfile::Conservative);
+    assert_eq!(scalar.selected_variant, CpuKernelVariant::Scalar);
+    assert!(scalar.uses_scalar_fallback());
+
+    let x64 =
+        registry.dispatch_for_runtime_profile(CpuKernelKind::Scan, CpuRuntimeProfile::X64Avx2);
+    assert_eq!(x64.selected_variant, CpuKernelVariant::X64Avx2);
+    assert_eq!(x64.scalar_fallback_variant, CpuKernelVariant::Scalar);
+
+    let arm64 =
+        registry.dispatch_for_runtime_profile(CpuKernelKind::Scan, CpuRuntimeProfile::Arm64Sve2);
+    assert_eq!(arm64.selected_variant, CpuKernelVariant::Arm64Sve2);
+}
+
+#[test]
+fn hardware_profile_runtime_coverage_tracks_cpu_profile() {
+    let profile = HardwareProfile::from_cpu_profile(
+        CpuProfile::x64_baseline(8),
+        RamProfile::conservative(),
+        GpuProfile::disabled(),
+        false,
+    );
+
+    assert_eq!(profile.architecture, HardwareArchitecture::X64);
+    assert_eq!(profile.runtime_profile(), CpuRuntimeProfile::X64Baseline);
+    assert!(profile.has_simd);
 }

@@ -35,12 +35,13 @@ where
         TReceipt: CatalogPublicationReceiptView<DurabilityMarker = TDurabilityMarker>,
     {
         publication.validate()?;
+        let durable_evidence = publication.durable_evidence();
         Ok(Self {
             key: CatalogPublicationReplayKey::from_receipt(&publication.receipt),
             visible_catalog_version: publication.receipt.next_version(),
             expected_record_count: publication.receipt.record_count(),
-            durable_lsn: publication.receipt.durable_lsn(),
-            durable_evidence_marker: publication.receipt.durable_evidence_marker().cloned(),
+            durable_lsn: durable_evidence.durable_lsn,
+            durable_evidence_marker: durable_evidence.durable_evidence_marker,
             audit_trace_id: publication.audit_trace.trace_id.clone(),
         })
     }

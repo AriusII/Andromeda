@@ -82,10 +82,57 @@ pub struct CatalogPublicationReport<TReceipt> {
     pub audit_trace: CatalogPublicationAuditTrace,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogPublicationDurableEvidence<TDurabilityMarker> {
+    pub durable_lsn: Option<u64>,
+    pub durable_evidence_marker: Option<TDurabilityMarker>,
+}
+
+impl<TDurabilityMarker> CatalogPublicationDurableEvidence<TDurabilityMarker>
+where
+    TDurabilityMarker: PartialEq,
+{
+    pub fn validate_against_receipt<TReceipt>(&self, receipt: &TReceipt) -> AndromedaResult<()>
+    where
+        TReceipt: CatalogPublicationReceiptView<DurabilityMarker = TDurabilityMarker>,
+    {
+        if self.durable_lsn == Some(0) {
+            return catalog_recovery_publication_error(
+                "catalog publication receipt durable WAL LSN must not be zero",
+            );
+        }
+        if self.durable_lsn.is_none() && self.durable_evidence_marker.is_none() {
+            return catalog_recovery_publication_error(
+                "catalog publication receipt must carry durable WAL LSN or durable marker evidence",
+            );
+        }
+        require_equal(
+            &self.durable_lsn,
+            &receipt.durable_lsn(),
+            "catalog publication durable evidence LSN must match publication receipt",
+        )?;
+        require_equal(
+            &self.durable_evidence_marker.as_ref(),
+            &receipt.durable_evidence_marker(),
+            "catalog publication durable evidence marker must match publication receipt",
+        )?;
+        Ok(())
+    }
+}
+
 impl<TReceipt> CatalogPublicationReport<TReceipt>
 where
     TReceipt: CatalogPublicationReceiptView,
 {
+    pub fn durable_evidence(
+        &self,
+    ) -> CatalogPublicationDurableEvidence<TReceipt::DurabilityMarker> {
+        CatalogPublicationDurableEvidence {
+            durable_lsn: self.receipt.durable_lsn(),
+            durable_evidence_marker: self.receipt.durable_evidence_marker().cloned(),
+        }
+    }
+
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.audience != CatalogPublicationAudience::AdministrationHaOnly {
             return catalog_recovery_publication_error(
@@ -93,6 +140,8 @@ where
             );
         }
         validate_catalog_publication_receipt(&self.receipt)?;
+        self.durable_evidence()
+            .validate_against_receipt(&self.receipt)?;
         self.plan_invalidation
             .validate_for_visible_version(self.receipt.next_version())?;
         self.recovery_replay.validate_for_receipt(&self.receipt)?;

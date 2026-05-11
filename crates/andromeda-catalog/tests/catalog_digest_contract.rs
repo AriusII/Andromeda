@@ -259,6 +259,25 @@ fn procedure_catalog_version_advances_definition_evidence_without_contract_hash_
 }
 
 #[test]
+fn procedure_contract_hash_ignores_stats_and_policy_only_drift() {
+    let baseline = procedure(32, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
+    let mut drifted = baseline.clone();
+    drifted.stats_version = StatsVersion::new(2);
+    drifted.transaction_policy.isolation = IsolationPolicy::Snapshot;
+    drifted
+        .required_permissions
+        .push("Inventory.Audit.Execute".to_string());
+
+    assert_eq!(
+        baseline.contract_hash,
+        drifted.canonical_hash(),
+        "ContractHash must remain canonical procedure shape, independent from stats/policy-only drift"
+    );
+    assert!(drifted.validate_canonical_hash().is_ok());
+    assert_ne!(baseline.binding(), drifted.binding());
+}
+
+#[test]
 fn dependency_graph_includes_procedure_to_table_edges_from_bindings() {
     let version = CatalogVersion::new(1);
     let stock_table = table(101, "Inventory.ProductStock", version);

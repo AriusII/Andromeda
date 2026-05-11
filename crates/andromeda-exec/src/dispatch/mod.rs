@@ -13,4 +13,5 @@ pub use permission_validation::{
 pub use procedure::{
     PreTransactionDispatchEvidence, ProcedureDispatchRequest, ProcedureDispatchUnavailableReason,
     ProcedureDispatcher, RemoteProcedureDispatcherUnavailable, SrplDispatcherAdapter,
+    catalog_backed_srpl_dispatcher_adapter,
 };

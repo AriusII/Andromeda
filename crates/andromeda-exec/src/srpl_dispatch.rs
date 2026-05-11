@@ -6,10 +6,11 @@
 use std::sync::Arc;
 
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
-use andromeda_procedure_contract::ResultStreamContract;
+use andromeda_procedure_contract::{AccessMode, ResultStreamContract};
 use andromeda_procedure_runtime::procedure_resolver::{
     ProcedureResolveError, ProcedureResolveRequest, ProcedureResolveResponse, ProcedureResolver,
 };
+use andromeda_procedure_runtime::{ProcedureDispatchRequest, ProcedureDispatcher};
 use andromeda_srpl_interpreter::SrplIrInterpreter;
 use andromeda_srpl_ir::ExecutableProcedurePlan;
 
@@ -96,6 +97,68 @@ impl SrplProcedureDispatcher {
         result_streams: &[ResultStreamContract],
     ) -> AndromedaResult<ResultStreamMetadata> {
         DefaultResultMetadataExtractor::extract_metadata(plan, result_streams)
+    }
+
+    fn local_procedure_for_resolved(
+        request: ProcedureDispatchRequest,
+        response: ProcedureResolveResponse,
+    ) -> AndromedaResult<crate::LocalProcedure> {
+        let contract_binding = request.procedure_binding.ok_or_else(|| {
+            AndromedaError::new(
+                AndromedaErrorKind::Contract,
+                "SRPL dispatch requires ProcedureContractBinding before local procedure materialization",
+            )
+        })?;
+        let result_metadata =
+            Self::result_metadata_for_plan(&response.plan, &response.manifest.result_streams)?;
+        let mutation_payload = match response.manifest.transaction_policy.access_mode {
+            AccessMode::ReadOnly => Vec::new(),
+            AccessMode::ReadWrite => response.name.as_catalog_path().into_bytes(),
+        };
+        let rows_affected = if matches!(
+            response.manifest.transaction_policy.access_mode,
+            AccessMode::ReadWrite
+        ) {
+            1
+        } else {
+            0
+        };
+
+        let procedure = crate::LocalProcedure {
+            contract: response.contract_ref,
+            contract_binding,
+            required_permissions: response.manifest.required_permissions,
+            result_metadata,
+            mutation_payload,
+            rows_affected,
+        };
+        procedure.validate()?;
+        Ok(procedure)
+    }
+}
+
+impl ProcedureDispatcher for SrplProcedureDispatcher {
+    type Procedure = crate::LocalProcedure;
+
+    fn dispatch_procedure(
+        &self,
+        request: ProcedureDispatchRequest,
+    ) -> AndromedaResult<Self::Procedure> {
+        request.validate()?;
+        let invocation_request = InvocationRequest {
+            invocation_id: request.invocation_id,
+            procedure: request.procedure,
+            expected_binding: request.procedure_binding,
+            expected_contract_hash: request.procedure.contract_hash,
+            catalog_version: request.procedure.catalog_version,
+            structured_parameters: Vec::new(),
+        };
+        let response = self
+            .resolve_procedure(&invocation_request)
+            .map_err(|resolve_err| resolve_err.into_andromeda_error())?;
+
+        Self::validate_plan(&response.plan)?;
+        Self::local_procedure_for_resolved(request, response)
     }
 }
 

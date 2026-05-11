@@ -5,6 +5,7 @@
 Runtime-free Map descriptor, dependency, summarizability, refresh, and staleness primitives.
 "#]
 
+mod consistency;
 mod dependency;
 mod descriptor;
 mod diagnostic;
@@ -14,6 +15,9 @@ mod publication;
 mod refresh;
 mod summarizability;
 
+pub use consistency::{
+    MapConsistencyPolicy, MapDeltaLog, MapRefreshAdmissionDecision, MapRefreshAdmissionRequest,
+};
 pub use dependency::{MapDependency, MapDependencyGraph};
 pub use descriptor::{MapDescriptor, MapGrain, MapId, MapRefreshMode, MapStalenessPolicy};
 pub use diagnostic::{MapValidationDiagnostic, MapValidationReport};

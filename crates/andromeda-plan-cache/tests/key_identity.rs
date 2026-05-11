@@ -103,3 +103,59 @@ fn test_cache_invalidated_on_stats_version_bump() {
         "no-silent-drop: old stats key must not match new stats key"
     );
 }
+
+#[test]
+fn test_publication_identity_covers_only_current_catalog_contract_binding() {
+    let current = PlanCacheKey::build(
+        binding(300, 21, 0x44, 4, 0x55),
+        PlanClass::ParameterShape,
+        shaped_fingerprint(),
+    )
+    .expect("current publication key");
+    let publication = current.publication_identity();
+
+    let same_publication_new_stats = PlanCacheKey::build(
+        binding(300, 21, 0x44, 9, 0x66),
+        PlanClass::StatsAdaptive,
+        shaped_fingerprint(),
+    )
+    .expect("same publication identity with different adaptive versions");
+
+    assert!(publication.covers_key(current));
+    assert!(publication.covers_key(same_publication_new_stats));
+}
+
+#[test]
+fn test_publication_identity_invalidates_only_stale_catalog_or_contract_entries() {
+    let current = PlanCacheKey::build(
+        binding(301, 22, 0x77, 5, 0x88),
+        PlanClass::Cardinality,
+        shaped_fingerprint(),
+    )
+    .expect("current publication key");
+    let publication = current.publication_identity();
+
+    let stale_catalog = PlanCacheKey::build(
+        binding(301, 21, 0x77, 5, 0x88),
+        PlanClass::Cardinality,
+        shaped_fingerprint(),
+    )
+    .expect("stale catalog key");
+    let stale_contract = PlanCacheKey::build(
+        binding(301, 22, 0x99, 5, 0x88),
+        PlanClass::Cardinality,
+        shaped_fingerprint(),
+    )
+    .expect("stale contract key");
+    let different_procedure = PlanCacheKey::build(
+        binding(302, 21, 0x99, 5, 0x88),
+        PlanClass::Cardinality,
+        shaped_fingerprint(),
+    )
+    .expect("different procedure key");
+
+    assert!(publication.invalidates_key(stale_catalog));
+    assert!(publication.invalidates_key(stale_contract));
+    assert!(!publication.invalidates_key(current));
+    assert!(!publication.invalidates_key(different_procedure));
+}

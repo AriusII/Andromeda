@@ -29,7 +29,8 @@ pub use dispatch::{
     LocalRollbackReceipt, PermissionScopeValidation, PreTransactionDispatchEvidence,
     ProcedureDispatchRequest, ProcedureDispatchUnavailableReason, ProcedureDispatcher,
     RemoteProcedureDispatcherUnavailable, RollbackCause, RollbackWalDurabilityEvidence,
-    WalDurabilityEvidence, validate_dispatch_permissions, validate_dispatch_permissions_or_error,
+    WalDurabilityEvidence, catalog_backed_srpl_dispatcher_adapter, validate_dispatch_permissions,
+    validate_dispatch_permissions_or_error,
 };
 pub use executor_bridge::ExecutorDispatchBridge;
 #[allow(deprecated)]

@@ -9,6 +9,7 @@ publish = false
 andromeda-audit.workspace = true
 andromeda-error.workspace = true
 andromeda-observability.workspace = true
+andromeda-procedure-contract.workspace = true
 andromeda-result-stream.workspace = true
 andromeda-transaction.workspace = true
 andromeda-types.workspace = true

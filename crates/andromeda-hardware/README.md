@@ -11,18 +11,19 @@ Use this crate when code needs to describe hardware capability classes, resource
 This crate owns:
 
 - CPU architecture and capability descriptors.
+- Runtime CPU profile detection and CPU kernel dispatch descriptors.
 - RAM section budget descriptors and budget validation.
 - GPU availability and execution policy descriptors.
 - Optional GPU, SIMD, and vector advisory admission contracts.
 - `PipelineClass` values that separate critical engine truth paths from non-critical work.
 - `HardwareProfile` and `ResourceBudget` aggregation types.
 
-The crate describes policy and capability inputs. It does not detect hardware, allocate memory, schedule work, run GPU kernels, or prove benchmark results.
+The crate describes policy and capability inputs. It may detect runtime CPU profile buckets and select CPU kernel variants, but it does not allocate memory, schedule work, run GPU kernels, or prove benchmark results.
 
 ## Non-goals
 
 - Do not put GPU work in commit, WAL append, rollback, recovery, MVCC visibility, catalog publication, or security-critical paths.
-- Do not add GPU kernels, concrete SIMD dispatch implementations, hardware probing, async scheduling, direct I/O implementations, or benchmark execution.
+- Do not add GPU kernels, concrete SIMD kernel implementations, async scheduling, direct I/O implementations, or benchmark execution.
 - Do not treat RAM, temp storage, GPU output, or benchmark output as durable truth.
 - Do not add dependencies on storage, WAL, transaction, catalog, SRPL, execution, RPC runtime, benchmark, analytics, or GPU crates.
 - Do not serialize Rust native profile structs directly to disk or network.

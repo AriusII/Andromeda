@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; printf '[%s] sessionStart\\n' \"$(date -Iseconds)\" >> .work/copilot-cli/session.log",
+        "powershell": "New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\session.log' -Value ('[{0}] sessionStart' -f (Get-Date -Format o))"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; input=$(cat | tr -d '\\r'); reason=$(printf '%s' \"$input\" | sed -n 's/.*\"reason\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p'); printf '[%s] sessionEnd reason=%s\\n' \"$(date -Iseconds)\" \"${reason:-unspecified}\" >> .work/copilot-cli/session.log",
+        "powershell": "$raw=[Console]::In.ReadToEnd(); try{$e=$raw|ConvertFrom-Json}catch{$e=$null}; $reason='unspecified'; if($e -and $e.PSObject.Properties.Name -contains 'reason'){$reason=[string]$e.reason}; New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\session.log' -Value ('[{0}] sessionEnd reason={1}' -f (Get-Date -Format o), $reason)"
+      }
+    ],
+    "userPromptSubmitted": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; input=$(cat | tr -d '\\r'); prompt=$(printf '%s' \"$input\" | sed -n 's/.*\"prompt\"[[:space:]]*:[[:space:]]*\"\\(.*\\)\".*/\\1/p'); printf '[%s] %s\\n' \"$(date -Iseconds)\" \"${prompt:-$input}\" >> .work/copilot-cli/prompts.log",
+        "powershell": "$raw=[Console]::In.ReadToEnd(); try{$e=$raw|ConvertFrom-Json}catch{$e=$null}; $prompt=$raw; if($e -and $e.PSObject.Properties.Name -contains 'prompt'){$prompt=[string]$e.prompt}; New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\prompts.log' -Value ('[{0}] {1}' -f (Get-Date -Format o), $prompt)"
+      }
+    ],
+    "preToolUse": [
+      {
+        "cwd": ".",
+        "timeoutSec": 15,
+        "bash": "bash .github/hooks/scripts/guard-tool-use.sh",
+        "powershell": "powershell -NoProfile -ExecutionPolicy Bypass -File .github\\hooks\\scripts\\guard-tool-use.ps1"
+      }
+    ],
+    "postToolUse": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; input=$(cat | tr -d '\\r'); tool=$(printf '%s' \"$input\" | sed -n 's/.*\"toolName\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p'); hash=$(printf '%s' \"$input\" | sha256sum | awk '{print $1}'); printf '[%s] tool=%s argHash=%s\\n' \"$(date -Iseconds)\" \"${tool:-unknown}\" \"$hash\" >> .work/copilot-cli/tool-usage.log",
+        "powershell": "$raw=[Console]::In.ReadToEnd(); try{$e=$raw|ConvertFrom-Json}catch{$e=$null}; $tool='unknown'; if($e -and $e.PSObject.Properties.Name -contains 'toolName'){$tool=[string]$e.toolName}; $sha=[System.Security.Cryptography.SHA256]::Create(); $bytes=[Text.Encoding]::UTF8.GetBytes($raw); $hash=([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant(); New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\tool-usage.log' -Value ('[{0}] tool={1} argHash={2}' -f (Get-Date -Format o), $tool, $hash)"
+      }
+    ],
+    "errorOccurred": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; input=$(cat | tr -d '\\r'); printf '[%s] %s\\n' \"$(date -Iseconds)\" \"$input\" >> .work/copilot-cli/errors.log",
+        "powershell": "$raw=[Console]::In.ReadToEnd(); New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\errors.log' -Value ('[{0}] {1}' -f (Get-Date -Format o), $raw)"
+      }
+    ],
+    "agentStop": [
+      {
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "mkdir -p .work/copilot-cli; printf '[%s] agentStop\\n' \"$(date -Iseconds)\" >> .work/copilot-cli/session.log",
+        "powershell": "New-Item -ItemType Directory -Force -Path '.work\\copilot-cli' | Out-Null; Add-Content -Path '.work\\copilot-cli\\session.log' -Value ('[{0}] agentStop' -f (Get-Date -Format o))"
+      }
+    ],
+    "subagentStart": [
+      {
+        "matcher": {
+          "agentName": "*"
+        },
+        "cwd": ".",
+        "timeoutSec": 10,
+        "bash": "printf '%s\\n' '{\"additionalContext\":\"Write worker artifacts under .work/copilot-cli/<task-slug>/{analysis,plans,missions,final}/. Preserve Andromeda invariants: no gRPC, no JSON application surface, no ad hoc SQL application surface, and WAL-before-visible-commit.\"}'",
+        "powershell": "[pscustomobject]@{additionalContext='Write worker artifacts under .work/copilot-cli/<task-slug>/{analysis,plans,missions,final}/. Preserve Andromeda invariants: no gRPC, no JSON application surface, no ad hoc SQL application surface, and WAL-before-visible-commit.'} | ConvertTo-Json -Compress"
+      }
+    ]
+  }
+}

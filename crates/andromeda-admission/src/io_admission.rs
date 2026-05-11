@@ -3,12 +3,13 @@ use andromeda_hardware::PipelineClass;
 use andromeda_observability::{CriticalDecisionKind, DecisionTrace, TraceId};
 use andromeda_resource::{
     ExecutionResourceAdmissionDecision, ExecutionResourceAdmissionRequest,
-    ResourceAdmissionRejection, ResourceBudget,
+    ResourceAdmissionRejection, ResourceBudget, ResourceBudgetScope, ResourceScopeResult,
 };
 use andromeda_storage_placement::{
     CoreIoPlacementDecision, CoreIoPlacementPolicy, CoreIoPlacementRequest, OperationalProfile,
     OperationalProfileMode, StorageWorkloadClass,
 };
+use andromeda_types::ProcedureId;
 
 use crate::InvocationReject;
 
@@ -18,6 +19,7 @@ pub struct ExecutionIoAdmissionDecision {
     pub profile_mode: OperationalProfileMode,
     pub pipeline_class: PipelineClass,
     pub workload: StorageWorkloadClass,
+    pub resource_scope: ResourceBudgetScope,
     pub resource_budget: ResourceBudget,
     pub resource_decision: ExecutionResourceAdmissionDecision,
     pub placement: CoreIoPlacementDecision,
@@ -27,12 +29,14 @@ pub struct ExecutionIoAdmissionDecision {
 pub struct ExecutionIoAdmissionRequest {
     pub operational_profile: OperationalProfile,
     pub pipeline_class: PipelineClass,
+    pub resource_scope: ResourceBudgetScope,
     pub resource_budget: ResourceBudget,
     pub placement_request: CoreIoPlacementRequest,
 }
 
 impl ExecutionIoAdmissionRequest {
-    pub fn new(
+    fn with_scope(
+        resource_scope: ResourceBudgetScope,
         operational_profile: OperationalProfile,
         pipeline_class: PipelineClass,
         resource_budget: impl Into<ResourceBudget>,
@@ -41,9 +45,42 @@ impl ExecutionIoAdmissionRequest {
         Self {
             operational_profile,
             pipeline_class,
+            resource_scope,
             resource_budget: resource_budget.into(),
             placement_request,
         }
+    }
+
+    pub fn for_procedure(
+        procedure_id: ProcedureId,
+        operational_profile: OperationalProfile,
+        pipeline_class: PipelineClass,
+        resource_budget: impl Into<ResourceBudget>,
+        placement_request: CoreIoPlacementRequest,
+    ) -> Self {
+        Self::with_scope(
+            ResourceBudgetScope::for_procedure(procedure_id),
+            operational_profile,
+            pipeline_class,
+            resource_budget,
+            placement_request,
+        )
+    }
+
+    pub fn for_job(
+        job: impl Into<String>,
+        operational_profile: OperationalProfile,
+        pipeline_class: PipelineClass,
+        resource_budget: impl Into<ResourceBudget>,
+        placement_request: CoreIoPlacementRequest,
+    ) -> ResourceScopeResult<Self> {
+        Ok(Self::with_scope(
+            ResourceBudgetScope::for_job(job)?,
+            operational_profile,
+            pipeline_class,
+            resource_budget,
+            placement_request,
+        ))
     }
 
     pub fn validate_admission(
@@ -60,6 +97,7 @@ impl ExecutionIoAdmissionRequest {
         }
 
         let resource_admission = ExecutionResourceAdmissionRequest::new(
+            self.resource_scope.clone(),
             self.pipeline_class,
             self.resource_budget,
             self.placement_request.use_gpu,
@@ -88,14 +126,16 @@ impl ExecutionIoAdmissionRequest {
                 trace_id,
                 decision: CriticalDecisionKind::ResourceGovernance,
                 reason: format!(
-                    "execution IO profile {:?}, {} pipeline, resource budget, and storage placement admitted before transaction creation",
+                    "execution IO profile {:?}, {} pipeline, {}, resource budget, and storage placement admitted before transaction creation",
                     self.operational_profile.mode,
-                    self.pipeline_class.name()
+                    self.pipeline_class.name(),
+                    self.resource_scope
                 ),
             },
             profile_mode: self.operational_profile.mode,
             pipeline_class: self.pipeline_class,
             workload: self.placement_request.workload,
+            resource_scope: self.resource_scope.clone(),
             resource_budget: self.resource_budget,
             resource_decision,
             placement,
@@ -124,6 +164,7 @@ mod tests {
     use andromeda_storage_placement::{
         IoLatencyBudget, IoPathBudget, IoPathClass, IoThroughputBudget, StorageIoBudgetScope,
     };
+    use andromeda_types::ProcedureId;
 
     fn hot_page_placement_request(
         workload: StorageWorkloadClass,
@@ -143,7 +184,8 @@ mod tests {
 
     #[test]
     fn execution_io_admission_accepts_hot_write_foreground_without_gpu() {
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(20),
             OperationalProfile::hot_write(),
             PipelineClass::ForegroundExecution,
             ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -157,14 +199,20 @@ mod tests {
             CriticalDecisionKind::ResourceGovernance
         );
         assert_eq!(decision.pipeline_class, PipelineClass::ForegroundExecution);
+        assert_eq!(
+            decision.resource_scope,
+            ResourceBudgetScope::for_procedure(ProcedureId::new(20))
+        );
         assert_eq!(decision.resource_decision.budget, decision.resource_budget);
+        assert_eq!(decision.resource_decision.scope, decision.resource_scope);
         assert_eq!(decision.resource_decision.evidence.streams, 2);
         assert!(!decision.placement.gpu_enabled);
     }
 
     #[test]
     fn execution_io_admission_rejects_gpu_on_critical_path_before_transaction() {
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(21),
             OperationalProfile::hot_write(),
             PipelineClass::Commit,
             ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -180,7 +228,8 @@ mod tests {
 
     #[test]
     fn execution_io_admission_rejects_profiles_that_permit_gpu_on_critical_paths() {
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(22),
             OperationalProfile::analytics_off_critical_path(),
             PipelineClass::Commit,
             ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 1),
@@ -202,7 +251,8 @@ mod tests {
             execution_policy: GpuExecutionPolicy::OffCriticalPathOnly,
         };
 
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(25),
             profile,
             PipelineClass::ForegroundExecution,
             ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -217,7 +267,8 @@ mod tests {
 
     #[test]
     fn execution_io_admission_rejects_pipeline_workload_mismatch() {
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(23),
             OperationalProfile::hot_write(),
             PipelineClass::Recovery,
             ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 2),
@@ -232,7 +283,8 @@ mod tests {
 
     #[test]
     fn execution_io_admission_rejects_resource_budget_over_profile_ram() {
-        let request = ExecutionIoAdmissionRequest::new(
+        let request = ExecutionIoAdmissionRequest::for_procedure(
+            ProcedureId::new(24),
             OperationalProfile::hot_write(),
             PipelineClass::ForegroundExecution,
             ResourceBudget::new(600 * 1024 * 1024, 1024 * 1024, 2),
@@ -243,5 +295,26 @@ mod tests {
 
         assert_eq!(reject.status, CompletionStatus::SystemUnavailable);
         assert!(reject.reason.contains("execution memory budget"));
+    }
+
+    #[test]
+    fn execution_io_admission_supports_named_job_scope() {
+        let request = ExecutionIoAdmissionRequest::for_job(
+            "map-refresh",
+            OperationalProfile::hot_write(),
+            PipelineClass::ForegroundExecution,
+            ResourceBudget::new(8 * 1024 * 1024, 1024 * 1024, 1),
+            hot_page_placement_request(StorageWorkloadClass::HotAppend, false),
+        )
+        .unwrap();
+
+        let decision = request.validate_admission(TraceId::new(26)).unwrap();
+
+        assert_eq!(
+            decision.resource_scope,
+            ResourceBudgetScope::for_job("map-refresh").unwrap()
+        );
+        assert_eq!(decision.resource_decision.scope, decision.resource_scope);
+        assert!(decision.trace.reason.contains("job map-refresh"));
     }
 }

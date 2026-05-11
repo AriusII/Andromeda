@@ -63,6 +63,9 @@ pub enum InvocationTraceEvent {
         trace_id: TraceId,
         invocation_id: InvocationId,
         procedure_name: String,
+        catalog_version: andromeda_types::CatalogVersion,
+        contract_hash: andromeda_types::ContractHash,
+        policy_version: andromeda_procedure_contract::PolicyVersion,
         executor_kind: String,
     },
 

@@ -1,8 +1,9 @@
 use std::num::{NonZeroU16, NonZeroU64};
 
 use andromeda_columnar::{
-    ColumnarAccelerationPolicy, ColumnarArtifactDescriptor, ColumnarConsumer,
-    ColumnarLayoutDescriptor, ColumnarVersionBinding,
+    ColumnChunkDescriptor, ColumnChunkPruningMetadata, ColumnarAccelerationPolicy,
+    ColumnarArtifactDescriptor, ColumnarConsumer, ColumnarLayoutDescriptor,
+    ColumnarSegmentDescriptor, ColumnarSnapshotBinding, ColumnarVersionBinding,
 };
 
 #[test]
@@ -45,4 +46,43 @@ fn columnar_layout_can_target_diagnostics_without_claiming_truth() {
     );
     assert!(descriptor.is_advisory_columnar_artifact());
     assert!(!descriptor.is_source_truth());
+}
+
+#[test]
+fn columnar_segment_descriptor_tracks_snapshot_binding_and_pruning_metadata() {
+    let layout = ColumnarLayoutDescriptor::new(
+        ColumnarConsumer::Maps,
+        NonZeroU16::new(2).unwrap(),
+        ColumnarVersionBinding::new(
+            NonZeroU64::new(21).unwrap(),
+            NonZeroU64::new(34).unwrap(),
+            NonZeroU64::new(55).unwrap(),
+            Some(NonZeroU64::new(89).unwrap()),
+        ),
+        ColumnarAccelerationPolicy::CpuOnly,
+    );
+    let segment = ColumnarSegmentDescriptor::new(
+        layout,
+        ColumnarSnapshotBinding::new(NonZeroU64::new(144).unwrap()),
+        vec![
+            ColumnChunkDescriptor::new(
+                0,
+                NonZeroU64::new(1_024).unwrap(),
+                ColumnChunkPruningMetadata::new(true, true, false),
+            ),
+            ColumnChunkDescriptor::new(
+                1,
+                NonZeroU64::new(1_024).unwrap(),
+                ColumnChunkPruningMetadata::new(false, false, true),
+            ),
+        ],
+    );
+
+    assert_eq!(segment.consumer(), ColumnarConsumer::Maps);
+    assert_eq!(segment.chunk_count(), 2);
+    assert!(segment.has_pruning_metadata());
+    assert!(segment.has_bloom_filters());
+    assert!(segment.is_bound_to_source_snapshot(NonZeroU64::new(144).unwrap()));
+    assert!(segment.is_advisory_columnar_artifact());
+    assert!(!segment.is_source_truth());
 }

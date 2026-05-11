@@ -174,9 +174,13 @@ fn make_ir(ops: Vec<SrplBusinessOperationIr>) -> SrplProcedureIr {
 
 fn cost(total: f64) -> CostEstimate {
     CostEstimate {
-        cpu_cost: total * 0.5,
-        io_cost: total * 0.4,
-        memory_cost: total * 0.1,
+        cpu_cost: total * 0.40,
+        logical_io_cost: total * 0.15,
+        physical_io_cost: total * 0.15,
+        wal_cost: total * 0.10,
+        temp_cost: total * 0.10,
+        network_cost: total * 0.05,
+        risk_penalty_cost: total * 0.05,
         total_cost: total,
     }
 }

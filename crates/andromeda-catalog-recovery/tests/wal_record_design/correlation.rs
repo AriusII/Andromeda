@@ -14,6 +14,7 @@ fn batch_wal_correlation_preserves_identities() {
     let CatalogWalRecord::ApplyCatalogVersion {
         batch_id: recorded_batch_id,
         version: recorded_version,
+        durable_lsn,
         ..
     } = apply_record
     else {
@@ -28,6 +29,10 @@ fn batch_wal_correlation_preserves_identities() {
         recorded_version, version,
         "Version must be preserved for correlation"
     );
+    assert_eq!(
+        durable_lsn, 5000,
+        "Durable LSN must be preserved for correlation"
+    );
 }
 
 #[test]
@@ -39,8 +44,12 @@ fn batch_wal_correlation_lsn_monotonic_check() {
     assert!(batch2.validate().is_ok());
 
     let (
-        CatalogWalRecord::ApplyCatalogVersion { lsn: lsn1, .. },
-        CatalogWalRecord::ApplyCatalogVersion { lsn: lsn2, .. },
+        CatalogWalRecord::ApplyCatalogVersion {
+            durable_lsn: lsn1, ..
+        },
+        CatalogWalRecord::ApplyCatalogVersion {
+            durable_lsn: lsn2, ..
+        },
     ) = (&batch1, &batch2)
     else {
         panic!("Expected ApplyCatalogVersion records");

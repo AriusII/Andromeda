@@ -38,7 +38,11 @@ pub trait ProcedureHandler {
 /// contract validation have accepted the invocation.
 #[derive(Clone, Default)]
 pub struct ProcedureRegistry {
-    handlers: HashMap<ProcedureId, Arc<dyn ProcedureHandler + Send + Sync>>,
+    handlers_by_id: HashMap<ProcedureId, Arc<dyn ProcedureHandler + Send + Sync>>,
+    handlers_by_contract: Vec<(
+        ProcedureContractRef,
+        Arc<dyn ProcedureHandler + Send + Sync>,
+    )>,
 }
 
 impl ProcedureRegistry {
@@ -47,11 +51,11 @@ impl ProcedureRegistry {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.handlers.is_empty()
+        self.handlers_by_id.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.handlers.len()
+        self.handlers_by_id.len()
     }
 
     pub fn register<H>(&mut self, handler: H) -> AndromedaResult<()>
@@ -67,24 +71,41 @@ impl ProcedureRegistry {
     ) -> AndromedaResult<()> {
         let procedure_id = handler.procedure_id();
 
-        if self.handlers.contains_key(&procedure_id) {
+        if self.handlers_by_id.contains_key(&procedure_id) {
             return Err(duplicate_procedure_error(procedure_id));
         }
 
         validate_handler_registration(handler.as_ref())?;
-        self.handlers.insert(procedure_id, handler);
+        self.handlers_by_contract
+            .push((handler.contract(), handler.clone()));
+        self.handlers_by_id.insert(procedure_id, handler);
         Ok(())
     }
 
     pub fn contains(&self, procedure_id: ProcedureId) -> bool {
-        self.handlers.contains_key(&procedure_id)
+        self.handlers_by_id.contains_key(&procedure_id)
     }
 
     pub fn lookup(
         &self,
         procedure_id: ProcedureId,
     ) -> Option<Arc<dyn ProcedureHandler + Send + Sync>> {
-        self.handlers.get(&procedure_id).cloned()
+        self.handlers_by_id.get(&procedure_id).cloned()
+    }
+
+    /// Lookup a handler by full catalog-bound contract identity.
+    ///
+    /// This ensures dispatch can be keyed by the canonical catalog contract
+    /// tuple (`ProcedureId`, `CatalogVersion`, `ContractHash`) rather than id
+    /// alone.
+    pub fn lookup_contract(
+        &self,
+        contract: ProcedureContractRef,
+    ) -> Option<Arc<dyn ProcedureHandler + Send + Sync>> {
+        self.handlers_by_contract
+            .iter()
+            .find(|(candidate, _)| *candidate == contract)
+            .map(|(_, handler)| handler.clone())
     }
 
     /// Dispatch an already-admitted local Procedure invocation.
@@ -116,11 +137,16 @@ impl ProcedureDispatcher for ProcedureRegistry {
         request.validate()?;
 
         let procedure_id = request.procedure.procedure_id;
-        let handler = self
-            .lookup(procedure_id)
-            .ok_or_else(|| unknown_procedure_error(procedure_id))?;
+        let handler = self.lookup(procedure_id).ok_or_else(|| {
+            unknown_procedure_contract_error(
+                request.procedure.procedure_id,
+                request.procedure.catalog_version.get(),
+            )
+        })?;
 
-        if handler.contract() != request.procedure {
+        if self.lookup_contract(request.procedure).is_none()
+            || handler.contract() != request.procedure
+        {
             return Err(AndromedaError::new(
                 AndromedaErrorKind::Contract,
                 "dispatch request contract must match registered handler contract before execution",
@@ -241,6 +267,20 @@ fn unknown_procedure_error(procedure_id: ProcedureId) -> AndromedaError {
         format!(
             "ProcedureRegistry does not contain ProcedureId {}",
             procedure_id.get()
+        ),
+    )
+}
+
+fn unknown_procedure_contract_error(
+    procedure_id: ProcedureId,
+    catalog_version: u64,
+) -> AndromedaError {
+    AndromedaError::new(
+        AndromedaErrorKind::Execution,
+        format!(
+            "ProcedureRegistry does not contain ProcedureId {} for CatalogVersion {}",
+            procedure_id.get(),
+            catalog_version
         ),
     )
 }

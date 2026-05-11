@@ -75,17 +75,17 @@ impl ForbiddenConstruct {
         match self {
             Self::UnboundedWhile => {
                 "SRPL-FORBID-001: unbounded while loops are forbidden in SRPL core"
-            }
+            },
             Self::FreeRecursion => "SRPL-FORBID-002: free recursion is forbidden in SRPL core",
             Self::ExternalNetwork => {
                 "SRPL-FORBID-003: external network access is forbidden in SRPL core"
-            }
+            },
             Self::ExternalFilesystem => {
                 "SRPL-FORBID-004: external filesystem access is forbidden in SRPL core"
-            }
+            },
             Self::NondeterministicRandom => {
                 "SRPL-FORBID-005: nondeterministic random sources are forbidden in SRPL core"
-            }
+            },
             Self::DynamicTextSql => "SRPL-FORBID-006: dynamic text SQL is forbidden in SRPL core",
             Self::SelectStar => "SRPL-FORBID-007: select star is forbidden in SRPL core",
         }

@@ -6,8 +6,8 @@ use andromeda_catalog_store::{
 };
 use andromeda_definition_batch::{
     BatchDependencyGraph, CatalogDependency, CatalogDependencyKind, CatalogLifecycleAction,
-    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchId, DefinitionOperation,
-    dry_run_definition_batch,
+    CatalogLifecycleTarget, DefinitionBatch, DefinitionBatchDependencyGraphHash, DefinitionBatchId,
+    DefinitionBatchSourceHash, DefinitionOperation, dry_run_definition_batch,
 };
 use andromeda_error::AndromedaErrorKind;
 use andromeda_procedure_contract::{
@@ -577,4 +577,42 @@ fn dependency_graph_rejects_kind_mismatch_and_forward_binding_references() {
     let error = BatchDependencyGraph::from_operations_with_bindings(&operations, &bindings)
         .expect_err("forward intra-batch dependency must be rejected");
     assert_eq!(error.kind(), AndromedaErrorKind::Catalog);
+}
+
+#[test]
+fn validate_integrity_hashes_rejects_stale_source_or_dependency_graph_hash() {
+    let definition_batch = batch(
+        version(50),
+        vec![
+            create_table(1, "Inventory.Product", 51),
+            create_table(2, "Inventory.Stock", 51),
+        ],
+    );
+
+    definition_batch
+        .validate_integrity_hashes(
+            definition_batch.source_hash(),
+            definition_batch.dependency_graph_hash().unwrap(),
+        )
+        .unwrap();
+
+    let source_error = definition_batch
+        .validate_integrity_hashes(
+            DefinitionBatchSourceHash::new([0xAB; DefinitionBatchSourceHash::LEN]),
+            definition_batch.dependency_graph_hash().unwrap(),
+        )
+        .expect_err("stale source hash must be rejected");
+    assert_eq!(source_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(source_error.message().contains("source hash"));
+
+    let dependency_error = definition_batch
+        .validate_integrity_hashes(
+            definition_batch.source_hash(),
+            DefinitionBatchDependencyGraphHash::new(
+                [0xCD; DefinitionBatchDependencyGraphHash::LEN],
+            ),
+        )
+        .expect_err("stale dependency graph hash must be rejected");
+    assert_eq!(dependency_error.kind(), AndromedaErrorKind::Catalog);
+    assert!(dependency_error.message().contains("dependency graph hash"));
 }

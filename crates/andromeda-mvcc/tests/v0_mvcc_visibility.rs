@@ -174,9 +174,7 @@ fn mvcc_compatibility_module_reexports_focused_types() {
     )
     .unwrap();
     let statuses = TransactionStatusTable::new();
-    statuses
-        .record(tx_id, TransactionStatus::InFlight)
-        .unwrap();
+    statuses.record(tx_id, TransactionStatus::InFlight).unwrap();
 
     assert!(row.visible_in_snapshot(&snapshot, &statuses).unwrap());
 }

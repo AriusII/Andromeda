@@ -4,10 +4,16 @@ use std::{
     fs::{File, OpenOptions},
     io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use crate::{
-    Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record, write_ahead_log::append_chain,
+    Lsn, WalRecord, WalRecordKind, WalScanStop, encode_wal_record,
+    wal_performance::{
+        WalFlushTelemetry, WalQueueDepthMetrics, WalQueueSeparationEvidence,
+        wal_flush_telemetry_from_records, wal_queue_depth_from_records,
+    },
+    write_ahead_log::append_chain,
 };
 
 use super::{
@@ -233,6 +239,30 @@ impl FileWal {
             Some(last_lsn) => self.flush_through(last_lsn),
             None => Ok(self.durable_lsn),
         }
+    }
+
+    pub fn queue_depth_metrics(
+        &self,
+        separation: WalQueueSeparationEvidence,
+    ) -> AndromedaResult<WalQueueDepthMetrics> {
+        wal_queue_depth_from_records(&self.records, self.durable_lsn, separation)
+    }
+
+    pub fn flush_through_with_metrics(
+        &mut self,
+        lsn: Lsn,
+        separation: WalQueueSeparationEvidence,
+        flush_latency: Duration,
+    ) -> AndromedaResult<WalFlushTelemetry> {
+        let telemetry = wal_flush_telemetry_from_records(
+            &self.records,
+            self.durable_lsn,
+            lsn,
+            separation,
+            flush_latency,
+        )?;
+        self.flush_through(lsn)?;
+        Ok(telemetry)
     }
 
     pub fn durable_records(&self) -> impl Iterator<Item = &WalRecord> {

@@ -16,8 +16,13 @@
 //! - Adaptive consumers must explain use or rejection through DecisionTrace.
 
 mod descriptor;
+mod segment;
 
 pub use descriptor::{
     ColumnarAccelerationPolicy, ColumnarArtifactDescriptor, ColumnarConsumer,
     ColumnarLayoutDescriptor, ColumnarVersionBinding,
+};
+pub use segment::{
+    ColumnChunkDescriptor, ColumnChunkPruningMetadata, ColumnarSegmentDescriptor,
+    ColumnarSnapshotBinding,
 };

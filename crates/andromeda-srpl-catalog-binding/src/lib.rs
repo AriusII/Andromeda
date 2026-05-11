@@ -36,14 +36,14 @@ struct CatalogSnapshotBindingView<'a> {
 
 impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
     fn catalog_version(&self) -> CatalogVersion {
-        self.catalog.version
+        self.catalog.visible_version()
     }
 
     fn lookup_procedure_contract(
         &self,
         name: &QualifiedName,
     ) -> AndromedaResult<ProcedureContract> {
-        match self.catalog.get_by_name(name) {
+        match self.catalog.visible_get_by_name(name) {
             Some(CatalogDefinition::Procedure(contract))
                 if self.catalog.is_active_object(contract.object.object_id) =>
             {
@@ -65,7 +65,7 @@ impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
     }
 
     fn lookup_table(&self, name: &QualifiedName) -> AndromedaResult<SrplCatalogTableBinding> {
-        match self.catalog.get_by_name(name) {
+        match self.catalog.visible_get_by_name(name) {
             Some(CatalogDefinition::Table(table))
                 if self.catalog.is_active_object(table.object.object_id) =>
             {
@@ -94,7 +94,7 @@ impl SrplExecutableCatalogView for CatalogSnapshotBindingView<'_> {
         &self,
         name: &QualifiedName,
     ) -> AndromedaResult<Option<SrplCatalogStructuredObjectBinding>> {
-        match self.catalog.get_by_name(name) {
+        match self.catalog.visible_get_by_name(name) {
             Some(CatalogDefinition::StructuredObject(object))
                 if self.catalog.is_active_object(object.object.object_id) =>
             {

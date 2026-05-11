@@ -11,6 +11,7 @@ pub mod acceleration;
 mod cpu;
 mod gpu;
 mod integration;
+mod kernel;
 mod pipeline;
 mod ram;
 
@@ -18,7 +19,8 @@ mod ram;
 /// hardware policy contracts via `andromeda_hardware::policy::*`.
 pub mod policy {
     pub use crate::{
-        CpuCapabilityClass, CpuProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
+        CpuCapabilityClass, CpuKernelDispatch, CpuKernelKind, CpuKernelRegistry, CpuKernelVariant,
+        CpuProfile, CpuRuntimeProfile, GpuExecutionPolicy, GpuProfile, HardwareArchitecture,
         HardwareProfile, OptionalGpuDecision, OptionalGpuRequest, OptionalGpuSelection,
         PipelineClass, RamProfile, RamSectionBudget, RamSectionRole, ResourceBudget,
         SimdDispatchDecision, SimdDispatchRequest, SimdExecutionMode, VectorAdvisoryDecision,
@@ -32,8 +34,9 @@ pub use acceleration::{
     SimdDispatchRequest, SimdExecutionMode, VectorAdvisoryDecision, VectorAdvisoryKind,
     VectorAdvisoryRequest, select_optional_gpu, select_simd_dispatch, validate_vector_advisory,
 };
-pub use cpu::{CpuCapabilityClass, CpuProfile, HardwareArchitecture};
+pub use cpu::{CpuCapabilityClass, CpuProfile, CpuRuntimeProfile, HardwareArchitecture};
 pub use gpu::{GpuExecutionPolicy, GpuProfile};
 pub use integration::{HardwareProfile, ResourceBudget};
+pub use kernel::{CpuKernelDispatch, CpuKernelKind, CpuKernelRegistry, CpuKernelVariant};
 pub use pipeline::PipelineClass;
 pub use ram::{RamProfile, RamSectionBudget, RamSectionRole};

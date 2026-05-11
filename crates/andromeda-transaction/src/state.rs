@@ -329,6 +329,25 @@ mod tests {
     }
 
     #[test]
+    fn poisoned_state_blocks_normal_continuation_and_only_allows_rollback() {
+        let mut tx = TransactionStateMachine::new(TransactionId::new(6));
+        tx.apply(TransactionEvent::Begin).unwrap();
+        tx.apply(TransactionEvent::Poison).unwrap();
+        assert_eq!(tx.state(), TransactionState::Poisoned);
+
+        let err = tx
+            .request_commit()
+            .expect_err("poisoned transaction must reject commit continuation");
+        assert_eq!(err.kind(), AndromedaErrorKind::Transaction);
+        assert_eq!(tx.state(), TransactionState::Poisoned);
+
+        tx.request_rollback().unwrap();
+        tx.mark_durable_rollback_lsn(Lsn::new(30)).unwrap();
+        tx.complete_rollback_after_durable_flush(30).unwrap();
+        assert_eq!(tx.state(), TransactionState::RolledBack);
+    }
+
+    #[test]
     fn rollback_completion_requires_durable_wal() {
         let mut tx = TransactionStateMachine::new(TransactionId::new(3));
         tx.apply(TransactionEvent::Begin).unwrap();

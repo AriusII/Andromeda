@@ -30,6 +30,7 @@ mod flush_result;
 mod frame;
 mod guard;
 mod manager;
+mod metrics;
 mod page_dirty;
 mod pool_config;
 mod pool_error;
@@ -47,6 +48,7 @@ pub use flush_result::{FlushAllDirtyResult, FlushBlockedFrame, FlushError, Flush
 pub use frame::{BufferFrameCore, BufferFrameId, BufferFrameState};
 pub use guard::{PageGuard, PageGuardMut};
 pub use manager::{BufferPool, BufferPoolManager};
+pub use metrics::BufferPoolMetrics;
 pub use page_dirty::{DirtyEntry, DirtyFlushCandidate, DirtyTracker};
 pub use pool_config::BufferPoolConfig;
 pub use pool_error::BufferPoolError;
