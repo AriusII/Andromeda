@@ -280,7 +280,10 @@ fn contract_hash_ignores_catalog_version_while_binding_tracks_catalog_version() 
 }
 
 #[test]
-fn contract_hash_ignores_stats_and_policy_only_drift() {
+fn contract_hash_changes_with_stats_and_policy_drift() {
+    // Per SPEC_PROCEDURE_CONTRACT_V0 §"Properties" line 86: ContractHash MUST
+    // change when observable procedure shape, protocol, permission, policy,
+    // result metadata, error, multi-result, or statistics evidence changes.
     let baseline = procedure(20, "Inventory.ReserveStock", CatalogVersion::new(1), vec![]);
     let mut drifted = baseline.clone();
     drifted.stats_version = StatsVersion::new(2);
@@ -289,12 +292,14 @@ fn contract_hash_ignores_stats_and_policy_only_drift() {
         .required_permissions
         .push("Inventory.Audit.Execute".to_string());
 
-    assert_eq!(
+    assert_ne!(
         baseline.contract_hash,
         drifted.canonical_hash(),
-        "ContractHash must remain tied to observable contract shape, not stats/policy-only drift"
+        "ContractHash must change with stats/policy drift per SPEC_PROCEDURE_CONTRACT_V0 line 86"
     );
-    assert!(drifted.validate_canonical_hash().is_ok());
+    // The drifted contract still carries the baseline's stored hash, so the
+    // canonical-vs-stored validation must reject it as non-canonical.
+    assert!(drifted.validate_canonical_hash().is_err());
     assert_ne!(
         baseline.binding().stats_version,
         drifted.binding().stats_version
