@@ -7,7 +7,7 @@ use crate::error::storage_error;
 pub const PAGE_CODEC_V1_HEADER_LEN: usize = 112;
 pub const PAGE_CODEC_V1_TRAILER_LEN: usize = 48;
 
-pub(crate) const PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET: usize = 104;
+pub const PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET: usize = 104;
 const PAGE_CODEC_V1_HEADER_INTEGRITY_LEN: usize = 4;
 pub(crate) const PAGE_CODEC_V1_HEADER_LEN_U16: u16 = PAGE_CODEC_V1_HEADER_LEN as u16;
 pub(crate) const PAGE_CODEC_V1_HEADER_LEN_U32: u32 = PAGE_CODEC_V1_HEADER_LEN as u32;
@@ -60,7 +60,7 @@ pub(crate) fn validate_v1_fixed_header_layout(header: &PageHeader) -> AndromedaR
     Ok(())
 }
 
-pub(crate) fn header_integrity_crc32(header_bytes: &[u8]) -> u32 {
+pub fn header_integrity_crc32(header_bytes: &[u8]) -> u32 {
     let mut crc = 0xFFFF_FFFFu32;
     for (offset, byte) in header_bytes.iter().copied().enumerate() {
         let byte = if (PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET

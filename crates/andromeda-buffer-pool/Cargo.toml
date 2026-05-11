@@ -13,4 +13,5 @@ andromeda-wal.workspace = true
 [dev-dependencies]
 andromeda-disk-page-store.workspace = true
 andromeda-segment.workspace = true
+andromeda-types.workspace = true
 tempfile = "3.8"

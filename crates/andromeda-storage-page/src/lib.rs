@@ -38,9 +38,9 @@ pub use identity::{AllocationId, ExtentId, ObjectId, PageId};
 pub use image::PageImage;
 pub use layout::{PageFlags, PageHeader, PageLayoutContract, PageSize, PageTrailer, PageType};
 pub use page_codec_v1::{
-    DecodedPageV1, PAGE_CODEC_V1_HEADER_LEN, PAGE_CODEC_V1_TRAILER_LEN, PageCodecV1,
-    integrity_trailer_for_payload, payload_crc64, payload_hash, torn_write_guard,
-    validate_payload_integrity,
+    DecodedPageV1, PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET, PAGE_CODEC_V1_HEADER_LEN,
+    PAGE_CODEC_V1_TRAILER_LEN, PageCodecV1, header_integrity_crc32, integrity_trailer_for_payload,
+    payload_crc64, payload_hash, torn_write_guard, validate_payload_integrity,
 };
 pub use store::{InMemoryPageStore, PageStore};
 

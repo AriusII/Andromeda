@@ -8,6 +8,7 @@ publish = false
 [dependencies]
 andromeda-error.workspace = true
 andromeda-manifest.workspace = true
+andromeda-segment.workspace = true
 andromeda-storage-heap.workspace = true
 andromeda-storage-index.workspace = true
 andromeda-storage-page.workspace = true
@@ -19,6 +20,7 @@ andromeda-wal.workspace = true
 [dev-dependencies]
 andromeda-observability.workspace = true
 andromeda-observe.workspace = true
+andromeda-segment.workspace = true
 proptest.workspace = true
 andromeda-mvcc.workspace = true
 tokio.workspace = true

@@ -26,6 +26,8 @@ fn recovery_manifest() -> DatabaseManifest {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     }
 }
 

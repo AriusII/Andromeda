@@ -843,7 +843,7 @@ fn allowed_dev_dependency_rules() -> Vec<AllowedDependencyRule> {
             "andromeda-wal may only dev-depend on pure WAL test harness crates",
             "andromeda-wal",
             DependencyScope::Dev,
-            &["proptest"],
+            &["proptest", "tempfile"],
         ),
     ]
 }

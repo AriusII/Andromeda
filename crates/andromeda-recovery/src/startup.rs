@@ -7,6 +7,9 @@ use crate::{RecoveryManifestView, StartupMode};
 pub struct StartupEvidence {
     /// `true` iff the manifest has been validated against cold-snapshot invariants.
     pub manifest_validated: bool,
+    /// `true` iff the durable segment index bytes were decoded and verified before
+    /// the WAL scan. Set to `true` in bootstrap mode when no segment index exists yet.
+    pub segment_index_validated: bool,
     /// Identifier of the cold snapshot the recovery executor will mount.
     pub mounted_snapshot_id: u64,
     /// The LSN at which the manifest requires WAL replay to start.
@@ -28,6 +31,7 @@ impl StartupEvidence {
     ) -> Self {
         Self {
             manifest_validated: manifest.validate_recovery_manifest().is_ok(),
+            segment_index_validated: true,
             mounted_snapshot_id: manifest.mounted_snapshot_id(),
             required_wal_start_lsn: manifest.required_wal_start_lsn(),
             last_durable_lsn: scan.last_valid_lsn.unwrap_or(Lsn::ZERO),
@@ -77,6 +81,7 @@ impl ObservedBoundary {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartupRejectionReason {
     ManifestNotValidated,
+    SegmentIndexNotValidated,
     MissingColdSnapshot,
     RamOnlyEvidence,
     FastStartRequiresCleanScan,
@@ -88,6 +93,7 @@ impl StartupRejectionReason {
     pub const fn as_static_str(self) -> &'static str {
         match self {
             Self::ManifestNotValidated => "manifest_not_validated",
+            Self::SegmentIndexNotValidated => "segment_index_not_validated",
             Self::MissingColdSnapshot => "missing_cold_snapshot",
             Self::RamOnlyEvidence => "ram_only_evidence",
             Self::FastStartRequiresCleanScan => "fast_start_requires_clean_scan",
@@ -208,6 +214,9 @@ fn classify_global_rejection(evidence: &StartupEvidence) -> Option<StartupReject
     if !evidence.manifest_validated {
         return Some(StartupRejectionReason::ManifestNotValidated);
     }
+    if !evidence.segment_index_validated {
+        return Some(StartupRejectionReason::SegmentIndexNotValidated);
+    }
     if evidence.mounted_snapshot_id == 0 {
         return Some(StartupRejectionReason::MissingColdSnapshot);
     }
@@ -280,6 +289,7 @@ mod tests {
     fn baseline_evidence() -> StartupEvidence {
         StartupEvidence {
             manifest_validated: true,
+            segment_index_validated: true,
             mounted_snapshot_id: 42,
             required_wal_start_lsn: Lsn::new(10),
             last_durable_lsn: Lsn::new(20),

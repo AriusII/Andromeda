@@ -14,6 +14,23 @@ pub(super) fn replay_manifest_switch(
 ) -> AndromedaResult<ReplayResult> {
     let payload = parse_manifest_switch_payload(record.payload())?;
 
+    // H3 — Monotonicity guard: manifest_version must be strictly increasing.
+    if let Some(active) = ctx.active_manifest
+        && payload.manifest_version <= active.manifest_version
+    {
+        ctx.manifest_switch_traces.push(
+            ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
+                lsn: record.header.lsn,
+                manifest_version: payload.manifest_version,
+                reason: "regresses manifest version (must be strictly monotonically increasing)",
+            },
+        );
+        return Ok(ReplayResult::skipped(
+            record.header.lsn,
+            WalRecordKind::ManifestSwitch,
+        ));
+    }
+
     if payload.required_wal_start_lsn < payload.base_checkpoint_lsn {
         ctx.manifest_switch_traces.push(
             ManifestSwitchRecoveryTrace::ManifestSwitchValidationFailed {
@@ -85,14 +102,21 @@ pub(super) fn replay_manifest_switch(
         ));
     }
 
+    // L1 — database_id: WAL payload v0 does not carry database_id; inherited
+    // from active manifest; falls back to 1 for bootstrap.
+    let database_id = ctx.active_manifest.map(|m| m.database_id).unwrap_or(1);
     let next_manifest = DatabaseManifest {
-        database_id: 1,
+        database_id,
         manifest_version: payload.manifest_version,
         snapshot_id: payload.snapshot_id,
         base_checkpoint_lsn: payload.base_checkpoint_lsn,
         required_wal_start_lsn: payload.required_wal_start_lsn,
         previous_manifest_hash: payload.previous_manifest_hash,
         manifest_crc: payload.manifest_crc,
+        // W4 locator fields — not yet carried in ManifestSwitch WAL payload; zero until
+        // the manifest codec path (W4) propagates them through the WAL payload.
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     next_manifest.validate()?;
 

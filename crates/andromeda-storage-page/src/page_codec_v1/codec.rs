@@ -88,6 +88,22 @@ impl PageCodecV1 {
                 "page codec v1 payload_offset must match fixed header length",
             ));
         }
+        // Validate reserved bytes must be zero (spec §4.2)
+        if bytes[70] != 0 || bytes[71] != 0 {
+            return Err(storage_error(
+                "page codec v1 nonzero reserved header bytes at offset 70",
+            ));
+        }
+        if bytes[94] != 0 || bytes[95] != 0 {
+            return Err(storage_error(
+                "page codec v1 nonzero reserved header bytes at offset 94",
+            ));
+        }
+        if bytes[108] != 0 || bytes[109] != 0 || bytes[110] != 0 || bytes[111] != 0 {
+            return Err(storage_error(
+                "page codec v1 nonzero reserved header bytes at offset 108",
+            ));
+        }
         let page_size = page_size_from_tag(read_u16(bytes, 6)?)?;
         let page_type = page_type_from_tag(read_u16(bytes, 8)?)?;
         let header = PageHeader {

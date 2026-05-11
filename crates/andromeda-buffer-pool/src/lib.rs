@@ -66,6 +66,32 @@ pub trait WalDurabilityObserver: Send + Sync {
     fn max_durable_lsn(&self) -> Lsn;
 }
 
+/// Re-export the production WAL durability observer so callers can import it
+/// from this crate alongside the [`WalDurabilityObserver`] trait.
+pub use andromeda_wal::FileWalDurabilityObserver;
+
+/// Production wiring: implement the buffer-pool's [`WalDurabilityObserver`]
+/// trait for [`FileWalDurabilityObserver`].
+///
+/// This impl is located in this crate (which owns the trait) rather than in
+/// `andromeda-wal` (which owns the type) to satisfy Rust's orphan rules.
+///
+/// # Ordering contract
+///
+/// `max_durable_lsn` and `is_durable` both perform an `Acquire` load of the
+/// shared atomic.  The corresponding `FileWal::flush_through` performs a
+/// `Release` store **after** `sync_data()` returns, so any observer that reads
+/// a non-zero value is guaranteed to see all WAL bytes that preceded the flush.
+impl WalDurabilityObserver for FileWalDurabilityObserver {
+    fn is_durable(&self, lsn: Lsn) -> bool {
+        lsn.get() <= self.current_durable_lsn().get()
+    }
+
+    fn max_durable_lsn(&self) -> Lsn {
+        self.current_durable_lsn()
+    }
+}
+
 /// Deterministic observer for tests and compatibility scaffolding.
 #[derive(Debug, Clone)]
 pub struct TestWalDurabilityObserver {

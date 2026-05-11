@@ -19,7 +19,7 @@ pub mod write_ahead_log;
 
 pub use file_wal::{
     FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWal, FileWalDiskScan,
-    FileWalHeader, scan_file_wal,
+    FileWalDurabilityObserver, FileWalHeader, scan_file_wal,
 };
 pub use invocation_wal::InvocationWal;
 pub use lsn::Lsn;

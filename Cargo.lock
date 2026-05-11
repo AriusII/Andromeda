@@ -99,6 +99,7 @@ dependencies = [
  "andromeda-error",
  "andromeda-segment",
  "andromeda-storage-page",
+ "andromeda-types",
  "andromeda-wal",
  "tempfile",
 ]
@@ -620,6 +621,7 @@ dependencies = [
  "andromeda-mvcc",
  "andromeda-observability",
  "andromeda-observe",
+ "andromeda-segment",
  "andromeda-storage-heap",
  "andromeda-storage-index",
  "andromeda-storage-page",
@@ -1082,6 +1084,7 @@ dependencies = [
  "andromeda-wal-codec",
  "dashmap",
  "proptest",
+ "tempfile",
 ]
 
 [[package]]

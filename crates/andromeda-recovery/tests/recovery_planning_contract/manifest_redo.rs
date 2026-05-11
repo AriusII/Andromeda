@@ -15,6 +15,8 @@ fn manifest_keeps_snapshot_plus_wal_anchor() {
         required_wal_start_lsn: Lsn::new(101),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
 
     assert!(manifest.validate().is_ok());
@@ -51,6 +53,8 @@ fn redo_plan_replays_only_manifest_range_and_complete_transactions() {
         required_wal_start_lsn: incomplete_row_lsn,
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let durable_records = wal.replay_durable();
     let plan =
@@ -170,6 +174,8 @@ fn redo_plan_does_not_treat_non_durable_ram_records_as_truth() {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 0,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let durable_records = wal.replay_durable();
     assert!(

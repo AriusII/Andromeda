@@ -46,6 +46,8 @@ fn v0_inventory_file_wal_recovers_only_committed_redo_after_sync() {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 1,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let redo = recover_from_file_wal(&manifest, StartupMode::SafeStart, &path).unwrap();
     let replay = redo.committed_replay_lsns().collect::<Vec<_>>();
@@ -106,6 +108,8 @@ fn v0_inventory_file_wal_replays_exec_product_stock_hredov1_into_context() {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 1,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let redo = recover_from_file_wal(&manifest, StartupMode::SafeStart, &path).unwrap();
     let disk_wal = FileWal::open(&path).unwrap();
@@ -277,6 +281,8 @@ fn v0_inventory_file_wal_recovers_product_stock_after_crash_before_client_ack() 
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 1,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let redo = recover_from_file_wal(&manifest, StartupMode::SafeStart, &path).unwrap();
 

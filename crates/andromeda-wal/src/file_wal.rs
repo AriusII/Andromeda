@@ -9,10 +9,12 @@ use andromeda_error::{AndromedaError, AndromedaErrorKind};
 
 mod format;
 mod header;
+mod observer;
 mod scan;
 mod wal;
 
 pub use header::{FILE_WAL_HEADER_LEN, FILE_WAL_MAGIC, FILE_WAL_MONO_SEGMENT_ID, FileWalHeader};
+pub use observer::FileWalDurabilityObserver;
 pub use scan::{FileWalDiskScan, scan_file_wal};
 pub use wal::FileWal;
 

@@ -1,12 +1,17 @@
 use andromeda_error::AndromedaResult;
-use andromeda_storage_page::{PageHeader, PageImage};
+use andromeda_storage_page::{
+    PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET, PAGE_CODEC_V1_HEADER_LEN, PageHeader, PageImage,
+    header_integrity_crc32,
+};
 
 use crate::PageIntegrityMode;
 
 use super::{DiskManagerError, FileDiskManager};
 
 impl FileDiskManager {
-    pub(crate) const HEADER_CRC_OFFSET: usize = 94;
+    /// Offset of the outer `header_crc` field within a PageCodecV1 112-byte header.
+    /// This aligns with PageCodecV1 bytes 100-103 (the `header_crc` field).
+    pub(crate) const HEADER_CRC_OFFSET: usize = 100;
     const HEADER_CRC_LEN: usize = 4;
 
     pub const fn page_integrity_mode(&self) -> PageIntegrityMode {
@@ -14,11 +19,17 @@ impl FileDiskManager {
     }
 
     fn compute_integrity_crc32(bytes: &[u8]) -> AndromedaResult<u32> {
+        // The outer CRC zeroes both the `header_crc` field (bytes 100-103) AND the
+        // `HeaderIntegrityCrc` field (bytes 104-107) during computation. This makes
+        // both CRC fields independent — neither's computed value depends on the other —
+        // so `stamp_page_integrity_if_enabled` can write HIC first, then write the outer
+        // CRC without invalidating HIC or vice versa.
+        let outer_range = Self::HEADER_CRC_OFFSET..Self::HEADER_CRC_OFFSET + Self::HEADER_CRC_LEN;
+        let hic_range =
+            PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET..PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET + 4;
         let mut crc = 0xFFFF_FFFFu32;
         for (offset, byte) in bytes.iter().copied().enumerate() {
-            let byte = if (Self::HEADER_CRC_OFFSET..Self::HEADER_CRC_OFFSET + Self::HEADER_CRC_LEN)
-                .contains(&offset)
-            {
+            let byte = if outer_range.contains(&offset) || hic_range.contains(&offset) {
                 0
             } else {
                 byte
@@ -101,6 +112,15 @@ impl FileDiskManager {
                 layout.header.header_crc = crc;
                 let mut bytes = image.as_bytes().to_vec();
                 Self::write_persisted_header_crc(&mut bytes, crc)?;
+                // After writing the outer header_crc at bytes 100-103, the
+                // PageCodecV1 HeaderIntegrityCrc at bytes 104-107 is stale.
+                // Recompute it over the updated 112-byte header so that the
+                // PageCodecV1 decode_header integrity check remains valid.
+                if bytes.len() >= PAGE_CODEC_V1_HEADER_LEN {
+                    let hic = header_integrity_crc32(&bytes[..PAGE_CODEC_V1_HEADER_LEN]);
+                    let hic_start = PAGE_CODEC_V1_HEADER_INTEGRITY_OFFSET;
+                    bytes[hic_start..hic_start + 4].copy_from_slice(&hic.to_le_bytes());
+                }
                 *image = PageImage::with_layout(layout, bytes).map_err(|e| {
                     DiskManagerError::PageLayoutInvalid {
                         reason: format!("failed to stamp page integrity CRC: {}", e.message()),

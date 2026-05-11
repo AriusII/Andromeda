@@ -8,8 +8,8 @@ use andromeda_buffer_pool::{BufferPool, BufferPoolConfig, TestWalDurabilityObser
 use andromeda_disk_page_store::{DiskPageStore, PageIntegrityMode};
 use andromeda_segment::{ExtentDescriptor, ExtentId, ExtentState};
 use andromeda_storage_page::{
-    AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageLayoutContract, PageSize,
-    PageType, integrity_trailer_for_payload,
+    AllocationId, Lsn, ObjectId, PAGE_CODEC_V1_HEADER_LEN, PageFlags, PageHeader, PageId,
+    PageLayoutContract, PageSize, PageType, integrity_trailer_for_payload,
 };
 
 fn test_extent() -> ExtentDescriptor {
@@ -28,6 +28,7 @@ fn test_extent() -> ExtentDescriptor {
 }
 
 fn page_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {
+    let payload_len: u32 = 512;
     let header = PageHeader {
         magic: PageHeader::MAGIC,
         format_version: PageHeader::FORMAT_VERSION_V0,
@@ -40,14 +41,14 @@ fn page_contract(page_id: PageId, page_lsn: Lsn) -> PageLayoutContract {
         page_epoch: 1,
         previous_page_id: None,
         next_page_id: None,
-        header_len: PageHeader::MIN_HEADER_LEN_V0,
-        payload_offset: 128,
-        payload_len: 512,
-        free_start: 256,
-        free_end: 512,
-        free_bytes: 256,
-        slot_count: 1,
-        row_count: 1,
+        header_len: PAGE_CODEC_V1_HEADER_LEN as u16,
+        payload_offset: PAGE_CODEC_V1_HEADER_LEN as u32,
+        payload_len,
+        free_start: PAGE_CODEC_V1_HEADER_LEN as u32,
+        free_end: PAGE_CODEC_V1_HEADER_LEN as u32 + payload_len,
+        free_bytes: payload_len,
+        slot_count: 0,
+        row_count: 0,
         flags: PageFlags::NONE,
         header_crc: 5,
     };
@@ -151,10 +152,10 @@ fn buffer_pool_flushes_disk_page_store_and_reopens_page_layout() {
     assert_eq!(direct.layout_contract(), Some(contract));
     assert_eq!(direct.page_id(), Some(page_id));
     assert_eq!(direct.page_lsn(), Some(page_lsn));
+    // Bytes 0-3: magic
     assert_eq!(direct.as_bytes()[0..4], PageHeader::MAGIC.to_le_bytes());
-    assert_eq!(direct.as_bytes()[6], 1);
-    assert_eq!(direct.as_bytes()[7], 1);
-    assert_eq!(direct.as_bytes()[8..16], page_id.get().to_le_bytes());
+    // Bytes 12-19: page_id (u64 LE) at codec-v1 offset 12
+    assert_eq!(direct.as_bytes()[12..20], page_id.get().to_le_bytes());
     assert_eq!(direct.len(), PageSize::KiB16.bytes_usize());
 
     let mut reopened_pool = BufferPool::new(

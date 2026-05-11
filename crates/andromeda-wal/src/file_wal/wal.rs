@@ -4,6 +4,10 @@ use std::{
     fs::{File, OpenOptions},
     io::{Seek, SeekFrom, Write},
     path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::Duration,
 };
 
@@ -19,6 +23,7 @@ use crate::{
 use super::{
     FileWalHeader,
     format::{file_offset_for_wal_bytes, write_file_wal_header},
+    observer::FileWalDurabilityObserver,
     scan::{
         FileWalDiskScan, FileWalRecordBoundary, is_forensic_scan_stop, record_boundaries_for,
         scan_file_wal, scan_open_file_wal,
@@ -36,6 +41,12 @@ pub struct FileWal {
     durable_bytes: u64,
     durable_lsn: Lsn,
     scan_stop: Option<WalScanStop>,
+    /// Shared atomic signal advanced by [`Self::flush_through`] after `sync_data()`.
+    ///
+    /// Cloned into every [`FileWalDurabilityObserver`] created from this WAL
+    /// via [`Self::observer`].  Buffer-pool callers read this to gate page
+    /// flush eligibility with `Acquire` ordering.
+    shared_durable_lsn: Arc<AtomicU64>,
 }
 
 impl FileWal {
@@ -99,6 +110,10 @@ impl FileWal {
             durable_bytes,
             durable_lsn,
             scan_stop: disk_scan.scan.stopped,
+            // Initialize the shared signal from the recovered durable LSN so
+            // that any observer created immediately after open() reports the
+            // correct value without requiring an extra flush_through call.
+            shared_durable_lsn: Arc::new(AtomicU64::new(durable_lsn.get())),
         })
     }
 
@@ -108,6 +123,29 @@ impl FileWal {
 
     pub const fn durable_lsn(&self) -> Lsn {
         self.durable_lsn
+    }
+
+    /// Create a production [`FileWalDurabilityObserver`] wired to this WAL.
+    ///
+    /// The observer shares an `Arc<AtomicU64>` with this `FileWal` instance.
+    /// Every call to [`Self::flush_through`] (or [`Self::flush_all`]) advances
+    /// the observer's signal after `sync_data()` returns, using `Release`
+    /// ordering.  The observer reads it with `Acquire` ordering.
+    ///
+    /// Multiple observers can be created from the same WAL; they all share the
+    /// same underlying signal and will always return the same durable LSN.
+    ///
+    /// # Usage
+    ///
+    /// ```rust,ignore
+    /// let mut wal = FileWal::open(path)?;
+    /// let observer = wal.observer();
+    /// // pass `&observer` to `BufferPool::flush_all_dirty_with_report`
+    /// wal.flush_through(target_lsn)?; // advances observer atomically
+    /// ```
+    #[must_use]
+    pub fn observer(&self) -> FileWalDurabilityObserver {
+        FileWalDurabilityObserver::from_shared(Arc::clone(&self.shared_durable_lsn))
     }
 
     pub const fn durable_bytes(&self) -> u64 {
@@ -225,6 +263,15 @@ impl FileWal {
 
         self.durable_lsn = lsn;
         self.durable_bytes = durable_bytes;
+        // Advance the shared durability signal AFTER sync_data() has returned
+        // successfully.  Release ordering guarantees that any observer performing
+        // an Acquire load of this value will see all WAL byte writes that
+        // preceded the sync_data() call above.
+        //
+        // Invariant: this store must not precede sync_data().  The buffer pool
+        // uses this value to gate page flush eligibility; an early advance would
+        // allow pages to be flushed before their WAL records are durable.
+        self.shared_durable_lsn.store(lsn.get(), Ordering::Release);
         let header = FileWalHeader::new(self.durable_lsn, durable_bytes, durable_record_count);
         write_file_wal_header(&mut self.file, &header)?;
         self.file

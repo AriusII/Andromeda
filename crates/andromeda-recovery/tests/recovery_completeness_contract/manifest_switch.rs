@@ -38,6 +38,8 @@ fn manifest_switch_recovery_rejects_non_monotonic_version() {
         required_wal_start_lsn: Lsn::new(20),
         previous_manifest_hash: [0; 32],
         manifest_crc: 0xABCD_5505,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let records = vec![
         WalRecord::from_parts(
@@ -79,6 +81,8 @@ fn manifest_switch_recovery_rejects_non_advancing_checkpoint_lsn() {
         required_wal_start_lsn: Lsn::new(20),
         previous_manifest_hash: [0; 32],
         manifest_crc: 0xABCD_5505,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let records = vec![
         WalRecord::from_parts(
@@ -123,6 +127,8 @@ fn manifest_switch_recovery_rejects_missing_checkpoint_end_evidence() {
         required_wal_start_lsn: Lsn::new(20),
         previous_manifest_hash: [0; 32],
         manifest_crc: 0xABCD_5505,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let records = vec![
         WalRecord::from_parts(

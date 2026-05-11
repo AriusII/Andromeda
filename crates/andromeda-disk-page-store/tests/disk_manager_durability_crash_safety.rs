@@ -10,17 +10,21 @@
 use andromeda_disk_page_store::{DiskManager, FileDiskManager};
 use andromeda_segment::{ExtentDescriptor, ExtentId, ExtentState};
 use andromeda_storage_page::{
-    AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageImage, PageLayoutContract,
-    PageSize, PageTrailer, PageType,
+    AllocationId, Lsn, ObjectId, PAGE_CODEC_V1_TRAILER_LEN, PageFlags, PageHeader, PageId,
+    PageImage, PageLayoutContract, PageSize, PageType, integrity_trailer_for_payload,
 };
 use std::fs;
 use std::io::{Read, Seek, SeekFrom, Write};
 use tempfile::TempDir;
 
-/// Create a valid page header.
+/// Create a valid page header for use with FileDiskManager direct tests.
+///
+/// Uses `MIN_HEADER_LEN_V0` (96 bytes) and `PAGE_CODEC_V1_TRAILER_LEN` (48 bytes)
+/// to compute available payload. These tests bypass DiskPageStore so they do not
+/// require the PageCodecV1 112-byte header constraint.
 fn create_valid_page_header(page_id: u64, page_size: PageSize, page_lsn: u64) -> PageHeader {
     let header_len = PageHeader::MIN_HEADER_LEN_V0;
-    let trailer_len = PageTrailer::V0_LEN;
+    let trailer_len = PAGE_CODEC_V1_TRAILER_LEN as u32;
     let page_bytes = page_size.bytes();
     let available_payload = page_bytes - u32::from(header_len) - trailer_len;
 
@@ -49,22 +53,17 @@ fn create_valid_page_header(page_id: u64, page_size: PageSize, page_lsn: u64) ->
     }
 }
 
-/// Create a valid page trailer.
-fn create_valid_page_trailer() -> PageTrailer {
-    PageTrailer {
-        torn_write_guard: 0xDEADBEEF,
-        page_hash: [0xAB; 32],
-        payload_crc64: 0xBEEFCAFE,
-    }
-}
-
 /// Create a page image with recognizable content.
+///
+/// The integrity trailer is computed from the actual payload bytes so that
+/// the layout contract is self-consistent (G7 fix: no hardcoded bogus trailers).
 fn create_test_page_with_content(page_id: u64, page_size: PageSize, content_byte: u8) -> PageImage {
     let header = create_valid_page_header(page_id, page_size, 100);
-    let trailer = create_valid_page_trailer();
-    let layout = PageLayoutContract { header, trailer };
-
     let bytes = vec![content_byte; page_size.bytes_usize()];
+    let payload_start = header.payload_offset as usize;
+    let payload_end = payload_start + header.payload_len as usize;
+    let trailer = integrity_trailer_for_payload(&header, &bytes[payload_start..payload_end]);
+    let layout = PageLayoutContract { header, trailer };
     PageImage::with_layout(layout, bytes).unwrap()
 }
 

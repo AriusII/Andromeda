@@ -55,8 +55,8 @@ pub use file_wal_report::{
 };
 pub use file_wal_startup::{
     FileWalStartupRecoveryV0, plan_file_wal_startup_recovery_from_scan_v0,
-    plan_file_wal_startup_recovery_v0, recover_from_file_wal,
-    recovered_transaction_id_floor_from_records,
+    plan_file_wal_startup_recovery_v0, plan_file_wal_startup_recovery_v0_with_segment_index,
+    recover_from_file_wal, recovered_transaction_id_floor_from_records,
 };
 pub use forensic_start::{
     ForensicAnomaly, ForensicAnomalyKind, ForensicAnomalyReport, ForensicStartAcceptance,

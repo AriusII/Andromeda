@@ -3,21 +3,20 @@ use std::path::Path;
 use andromeda_error::AndromedaResult;
 use andromeda_segment::ExtentDescriptor;
 use andromeda_storage_page::{
-    AllocationId, Lsn, ObjectId, PageFlags, PageHeader, PageId, PageImage, PageLayoutContract,
-    PageSize, PageStore, PageTrailer, PageType, integrity_trailer_for_payload,
+    Lsn, PAGE_CODEC_V1_HEADER_LEN, PAGE_CODEC_V1_TRAILER_LEN, PageCodecV1, PageHeader, PageId,
+    PageImage, PageLayoutContract, PageSize, PageStore, integrity_trailer_for_payload,
     validate_payload_integrity,
 };
 
-use crate::{
-    PAGE_SIZE_16K, PAGE_SIZE_32K, PAGE_TYPE_FIXED_ROW, PAGE_TYPE_FREE, PAGE_TYPE_HYBRID_ROW,
-    PAGE_TYPE_MANIFEST, PageFlushDurabilityBoundary, PageFlushDurabilityError,
-    PageLayoutCodecError, PersistedPageLayoutV1, decode_optional_page_id,
-    encode_page_size_16k_or_32k, optional_page_id_value,
-};
+use crate::{PageFlushDurabilityBoundary, PageFlushDurabilityError};
 
 use super::{DiskManager, DiskManagerError, FileDiskManager, PageIntegrityMode};
 
 /// Adapter to present FileDiskManager as a page-store façade.
+///
+/// All pages are encoded and decoded using the canonical PageCodecV1 format
+/// (112-byte header + variable payload + free space + 48-byte trailer within
+/// a fixed-size page buffer of exactly `page_size` bytes).
 pub struct DiskPageStore {
     manager: FileDiskManager,
     page_size: PageSize,
@@ -93,13 +92,26 @@ impl DiskPageStore {
             .map_err(map_page_flush_error)
     }
 
-    fn image_with_persisted_layout(image: PageImage) -> AndromedaResult<PageImage> {
+    /// Encode a `PageImage` with the canonical PageCodecV1 format.
+    ///
+    /// Writes the 112-byte PageCodecV1 header into `bytes[0..112]` and the
+    /// 48-byte PageCodecV1 trailer into `bytes[page_size-48..page_size]`.
+    /// The payload and free-space region between them is left unchanged.
+    fn image_with_v1_codec(image: PageImage) -> AndromedaResult<PageImage> {
         let mut layout_contract = image
             .layout_contract()
             .ok_or_else(|| storage_error("page image must include a validated layout contract"))?;
         let mut bytes = image.into_bytes();
         refresh_layout_integrity(&mut layout_contract, &bytes)?;
-        encode_layout_contract(layout_contract, &mut bytes)?;
+        // Encode header using PageCodecV1 (112-byte header format).
+        let header_bytes = PageCodecV1::encode_header(&layout_contract.header)
+            .map_err(|e| storage_error(e.message()))?;
+        bytes[..PAGE_CODEC_V1_HEADER_LEN].copy_from_slice(&header_bytes);
+        // Encode trailer using PageCodecV1 (48-byte trailer format).
+        let trailer_bytes = PageCodecV1::encode_trailer(&layout_contract.trailer)
+            .map_err(|e| storage_error(e.message()))?;
+        let trailer_start = bytes.len() - PAGE_CODEC_V1_TRAILER_LEN;
+        bytes[trailer_start..].copy_from_slice(&trailer_bytes);
         PageImage::with_layout(layout_contract, bytes)
     }
 }
@@ -138,7 +150,7 @@ impl PageStore for DiskPageStore {
             ));
         }
         self.manager
-            .write_page(Self::image_with_persisted_layout(image)?, durable_lsn)
+            .write_page(Self::image_with_v1_codec(image)?, durable_lsn)
     }
 
     fn allocate_page(
@@ -164,85 +176,33 @@ impl PageStore for DiskPageStore {
                 "disk page store allocation requires an allocated extent",
             ));
         }
-        let durable_image = Self::image_with_persisted_layout(image)?;
+        let durable_image = Self::image_with_v1_codec(image)?;
         self.manager
             .write_page(durable_image.clone(), durable_lsn)?;
         Ok(durable_image)
     }
 }
 
-fn encode_layout_contract(layout: PageLayoutContract, bytes: &mut [u8]) -> AndromedaResult<()> {
-    PersistedPageLayoutV1 {
-        magic: layout.header.magic,
-        format_version: layout.header.format_version,
-        page_size: encode_page_size(layout.header.page_size)?,
-        page_type: encode_page_type(layout.header.page_type),
-        page_id: layout.header.page_id.get(),
-        object_id: layout.header.object_id.get(),
-        allocation_id: layout.header.allocation_id.get(),
-        page_lsn: layout.header.page_lsn.get(),
-        page_epoch: layout.header.page_epoch,
-        previous_page_id: optional_page_id_value(layout.header.previous_page_id.map(PageId::get)),
-        next_page_id: optional_page_id_value(layout.header.next_page_id.map(PageId::get)),
-        header_len: layout.header.header_len,
-        payload_offset: layout.header.payload_offset,
-        payload_len: layout.header.payload_len,
-        free_start: layout.header.free_start,
-        free_end: layout.header.free_end,
-        free_bytes: layout.header.free_bytes,
-        slot_count: layout.header.slot_count,
-        row_count: layout.header.row_count,
-        flags: layout.header.flags.bits(),
-        header_crc: layout.header.header_crc,
-        payload_crc64: layout.trailer.payload_crc64,
-        page_hash: layout.trailer.page_hash,
-        torn_write_guard: layout.trailer.torn_write_guard,
-    }
-    .encode(bytes)
-    .map_err(map_layout_codec_error)
-}
-
+/// Decode a PageLayoutContract from raw page buffer bytes using PageCodecV1.
+///
+/// Returns `None` for all-zero (unallocated) pages. Returns an error for
+/// structurally invalid or integrity-failing pages.
 fn decode_layout_contract(bytes: &[u8]) -> AndromedaResult<Option<PageLayoutContract>> {
-    let Some(layout) =
-        PersistedPageLayoutV1::decode(bytes, PageHeader::MAGIC).map_err(map_layout_codec_error)?
-    else {
+    if bytes.len() < PAGE_CODEC_V1_HEADER_LEN + PAGE_CODEC_V1_TRAILER_LEN {
+        return Err(storage_error(
+            "page image is too small for PageCodecV1 header and trailer",
+        ));
+    }
+    // All-zero buffer → unallocated page.
+    if bytes.iter().all(|&b| b == 0) {
         return Ok(None);
-    };
-
-    let page_size = decode_page_size(layout.page_size)?;
-    let previous_page_id = decode_optional_page_id(layout.previous_page_id).map(PageId::new);
-    let next_page_id = decode_optional_page_id(layout.next_page_id).map(PageId::new);
-
-    let layout_contract = PageLayoutContract {
-        header: PageHeader {
-            magic: layout.magic,
-            format_version: layout.format_version,
-            page_size,
-            page_type: decode_page_type(layout.page_type)?,
-            page_id: PageId::new(layout.page_id),
-            object_id: ObjectId::new(layout.object_id),
-            allocation_id: AllocationId::new(layout.allocation_id),
-            page_lsn: Lsn::new(layout.page_lsn),
-            page_epoch: layout.page_epoch,
-            previous_page_id,
-            next_page_id,
-            header_len: layout.header_len,
-            payload_offset: layout.payload_offset,
-            payload_len: layout.payload_len,
-            free_start: layout.free_start,
-            free_end: layout.free_end,
-            free_bytes: layout.free_bytes,
-            slot_count: layout.slot_count,
-            row_count: layout.row_count,
-            flags: PageFlags::new(layout.flags),
-            header_crc: layout.header_crc,
-        },
-        trailer: PageTrailer {
-            payload_crc64: layout.payload_crc64,
-            page_hash: layout.page_hash,
-            torn_write_guard: layout.torn_write_guard,
-        },
-    };
+    }
+    let header = PageCodecV1::decode_header(&bytes[..PAGE_CODEC_V1_HEADER_LEN])
+        .map_err(|e| storage_error(e.message()))?;
+    let trailer_start = bytes.len() - PAGE_CODEC_V1_TRAILER_LEN;
+    let trailer = PageCodecV1::decode_trailer(&bytes[trailer_start..])
+        .map_err(|e| storage_error(e.message()))?;
+    let layout_contract = PageLayoutContract { header, trailer };
     layout_contract.validate()?;
     validate_payload_integrity(
         &layout_contract.header,
@@ -264,38 +224,6 @@ fn payload_slice<'a>(header: &PageHeader, bytes: &'a [u8]) -> AndromedaResult<&'
     let len = usize::try_from(header.payload_len)
         .map_err(|_| storage_error("page payload length does not fit usize"))?;
     slice_at(bytes, start, len)
-}
-
-fn encode_page_size(page_size: PageSize) -> AndromedaResult<u8> {
-    encode_page_size_16k_or_32k(page_size.bytes())
-        .ok_or_else(|| storage_error("unknown persisted page size"))
-}
-
-fn decode_page_size(value: u8) -> AndromedaResult<PageSize> {
-    match value {
-        PAGE_SIZE_16K => Ok(PageSize::KiB16),
-        PAGE_SIZE_32K => Ok(PageSize::KiB32),
-        _ => Err(storage_error("unknown persisted page size")),
-    }
-}
-
-fn encode_page_type(page_type: PageType) -> u8 {
-    match page_type {
-        PageType::FixedRow => PAGE_TYPE_FIXED_ROW,
-        PageType::HybridRow => PAGE_TYPE_HYBRID_ROW,
-        PageType::Manifest => PAGE_TYPE_MANIFEST,
-        PageType::Free => PAGE_TYPE_FREE,
-    }
-}
-
-fn decode_page_type(value: u8) -> AndromedaResult<PageType> {
-    match value {
-        PAGE_TYPE_FIXED_ROW => Ok(PageType::FixedRow),
-        PAGE_TYPE_HYBRID_ROW => Ok(PageType::HybridRow),
-        PAGE_TYPE_MANIFEST => Ok(PageType::Manifest),
-        PAGE_TYPE_FREE => Ok(PageType::Free),
-        _ => Err(storage_error("unknown persisted page type")),
-    }
 }
 
 fn slice_at(bytes: &[u8], offset: usize, len: usize) -> AndromedaResult<&[u8]> {
@@ -322,10 +250,6 @@ fn map_page_flush_error(error: PageFlushDurabilityError) -> andromeda_error::And
         }
         .into(),
     }
-}
-
-fn map_layout_codec_error(error: PageLayoutCodecError) -> andromeda_error::AndromedaError {
-    storage_error(error.to_string())
 }
 
 fn storage_error(message: impl Into<String>) -> andromeda_error::AndromedaError {

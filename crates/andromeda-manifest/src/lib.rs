@@ -18,13 +18,20 @@ C5 invariants:
 use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
 use andromeda_wal::Lsn;
 
+pub mod codec;
 mod cold_publication;
 mod database;
 mod format;
 pub mod format_version;
+pub mod root_pointer;
 mod snapshot;
 mod storage_format_hash;
+pub mod trace_event;
 
+pub use codec::{
+    MANIFEST_ENCODED_SIZE, MANIFEST_FORMAT_VERSION, MANIFEST_RECORD_MAGIC, crc32c, decode_manifest,
+    encode_manifest,
+};
 pub use cold_publication::PublishedColdSegment;
 pub use database::DatabaseManifest;
 pub use format::{DATABASE_MANIFEST_STORAGE_FORMAT_FINGERPRINTS, StorageFormatManifest};
@@ -32,10 +39,36 @@ pub use format_version::{
     CompatibilityMatrix, CompatibilityResult, FormatVersion, StorageFormatFingerprint,
     StorageFormatKind,
 };
+pub use root_pointer::{
+    ROOT_POINTER_ENCODED_SIZE, ROOT_POINTER_FILE_A, ROOT_POINTER_FILE_B, ROOT_POINTER_MAGIC,
+    RootPointerRecord, read_root_pointer, select_valid_pointer, write_root_pointer,
+};
 pub use snapshot::{
     DatabaseSnapshotPublication, SnapshotAvailabilityContract, SnapshotSegmentReference,
 };
 pub use storage_format_hash::{ManifestFormatHashInput, storage_format_manifest_hash};
+pub use trace_event::{ManifestSwitchEvent, ManifestSwitchTracer};
+
+/// Subdirectory within the database root where the dual-copy manifest root
+/// pointer files (`manifest_root_a`, `manifest_root_b`) are stored.
+///
+/// ## Startup read convention (P05 — W4)
+///
+/// On every startup the recovery pipeline MUST read exactly these files in
+/// order, before the WAL scan, to satisfy the exit criterion:
+///
+/// > *"Startup lit root + manifest + SegmentIndex + WAL tail, pas tout le ColdStore."*
+///
+/// ```text
+/// {db_dir}/{MANIFEST_ROOT_DIR}/manifest_root_a   (ROOT_POINTER_FILE_A)
+/// {db_dir}/{MANIFEST_ROOT_DIR}/manifest_root_b   (ROOT_POINTER_FILE_B)
+/// ```
+///
+/// The winning pointer (highest generation, valid CRC32C) resolves the active
+/// `DatabaseManifest`. The manifest's `segment_index_file_id` field then
+/// locates the `SegmentIndexV0` file, which must be decoded before the WAL
+/// scan begins.
+pub const MANIFEST_ROOT_DIR: &str = "manifest";
 
 /// Durable recovery root fields carried by an accepted database manifest.
 ///
@@ -44,28 +77,42 @@ pub use storage_format_hash::{ManifestFormatHashInput, storage_format_manifest_h
 /// promotion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ManifestDurabilityBoundary {
+    /// Stable database identity — must be non-zero.
     pub database_id: u64,
+    /// Monotonically increasing generation counter.
     pub manifest_version: u64,
+    /// Cold-snapshot anchor.
     pub snapshot_id: u64,
+    /// Last completed WAL checkpoint LSN.
     pub base_checkpoint_lsn: Lsn,
+    /// Minimum WAL start LSN for recovery.
     pub required_wal_start_lsn: Lsn,
+    /// Hash of the previous manifest (hash chain back-pointer).
     pub previous_manifest_hash: [u8; 32],
+    /// Domain CRC — must be non-zero.
     pub manifest_crc: u32,
 }
 
 impl ManifestDurabilityBoundary {
+    /// Recovery floor LSN.
+    #[must_use]
     pub const fn recovery_floor_lsn(self) -> Lsn {
         self.required_wal_start_lsn
     }
 
+    /// Last completed checkpoint LSN.
+    #[must_use]
     pub const fn checkpoint_lsn(self) -> Lsn {
         self.base_checkpoint_lsn
     }
 
+    /// Returns `true` if recovery can start at `lsn`.
+    #[must_use]
     pub const fn can_start_recovery_at(self, lsn: Lsn) -> bool {
         lsn.get() >= self.required_wal_start_lsn.get()
     }
 
+    /// Validate identity fields, LSN ordering, and CRC non-zero invariants.
     pub fn validate(&self) -> AndromedaResult<()> {
         if self.database_id == 0 || self.manifest_version == 0 || self.snapshot_id == 0 {
             return Err(manifest_error("manifest identity fields must not be zero"));
@@ -90,6 +137,8 @@ fn manifest_error(message: impl Into<String>) -> AndromedaError {
 }
 
 /// Validate that a manifest checkpoint can safely be persisted.
+///
+/// This fence must pass before a `ManifestSwitch` WAL record is written.
 pub fn validate_manifest_atomic_switch(
     manifest_checkpoint_lsn: Lsn,
     wal_durable_lsn: Lsn,

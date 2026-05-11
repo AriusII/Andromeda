@@ -1,6 +1,7 @@
 //! File-WAL startup recovery DTOs and orchestration shared by storage integrations.
 
-use andromeda_error::AndromedaResult;
+use andromeda_error::{AndromedaError, AndromedaErrorKind, AndromedaResult};
+use andromeda_segment::segment_index::SegmentIndexV0;
 use andromeda_wal::{FileWalDiskScan, WalRecord};
 use std::path::Path;
 
@@ -97,6 +98,76 @@ pub fn plan_file_wal_startup_recovery_from_scan_v0(
         &disk_scan.scan,
         forensic_report_attached,
     );
+    let decision = decide_startup(startup_mode, evidence);
+    let recovered_transaction_id_floor =
+        recovered_transaction_id_floor_from_records(&disk_scan.scan.records);
+
+    let redo_plan = match decision.acceptance() {
+        Some(acceptance) if acceptance.replay_allowed => Some(
+            RecoveryPlan::from_manifest_and_wal_scan(manifest, startup_mode, &disk_scan.scan)?,
+        ),
+        _ => None,
+    };
+
+    Ok(FileWalStartupRecoveryV0 {
+        startup_mode,
+        disk_scan,
+        evidence,
+        decision,
+        redo_plan,
+        recovered_transaction_id_floor,
+    })
+}
+
+/// Plan startup from durable manifest evidence, an optional durable segment-index
+/// byte slice, and the file-WAL durable prefix.
+///
+/// # Ordering guarantee (WAL-before-commit)
+///
+/// The segment index bytes are decoded and validated **before** the WAL file is
+/// opened. If `segment_index_bytes` contains corrupt or incompatible data the
+/// function returns `Err` without touching the WAL file. This prevents a
+/// partially-constructed runtime from observing cold-snapshot state before the
+/// segment catalog is confirmed consistent.
+///
+/// # Bootstrap mode
+///
+/// Pass `segment_index_bytes = None` when the segment index has not yet been
+/// written (first start, clean install). In that case `evidence.segment_index_validated`
+/// is set to `true` immediately — the absence of a segment index is a valid
+/// bootstrap condition.
+pub fn plan_file_wal_startup_recovery_v0_with_segment_index(
+    manifest: &impl RecoveryManifestView,
+    startup_mode: StartupMode,
+    wal_path: impl AsRef<Path>,
+    segment_index_bytes: Option<&[u8]>,
+    forensic_report_attached: bool,
+) -> AndromedaResult<FileWalStartupRecoveryV0> {
+    // ── Step 1: validate segment index BEFORE WAL scan ───────────────────────
+    let segment_index_validated = match segment_index_bytes {
+        None => true, // bootstrap: no segment index yet
+        Some(bytes) => {
+            SegmentIndexV0::decode(bytes).map_err(|e| {
+                AndromedaError::new(
+                    AndromedaErrorKind::Storage,
+                    format!("segment index decode failed before WAL scan: {e}"),
+                )
+            })?;
+            true
+        },
+    };
+
+    // ── Step 2: scan the WAL (only reached when segment index is valid) ───────
+    let disk_scan = andromeda_wal::scan_file_wal(wal_path)?;
+
+    // ── Step 3: build evidence with explicit segment_index_validated flag ─────
+    let mut evidence = StartupEvidence::from_manifest_and_wal_scan(
+        manifest,
+        &disk_scan.scan,
+        forensic_report_attached,
+    );
+    evidence.segment_index_validated = segment_index_validated;
+
     let decision = decide_startup(startup_mode, evidence);
     let recovered_transaction_id_floor =
         recovered_transaction_id_floor_from_records(&disk_scan.scan.records);

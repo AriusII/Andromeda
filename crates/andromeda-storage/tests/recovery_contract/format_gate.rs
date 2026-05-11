@@ -111,6 +111,8 @@ fn recovery_plan_format_fingerprint_api_fails_before_wal_redo_validation() {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let observed =
         recovery_v1_format_fingerprints_with(StorageFormatKind::HeapPage, FormatVersion::V2_0);
@@ -142,6 +144,8 @@ fn recovery_plan_reads_and_validates_format_fingerprints_from_manifest_before_re
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let records = vec![
         WalRecord::from_parts(
@@ -195,6 +199,8 @@ fn recovery_plan_rejects_tampered_storage_format_manifest_before_redo() {
         required_wal_start_lsn: Lsn::new(1),
         previous_manifest_hash: [0; 32],
         manifest_crc: 99,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     };
     let records = vec![
         WalRecord::from_parts(

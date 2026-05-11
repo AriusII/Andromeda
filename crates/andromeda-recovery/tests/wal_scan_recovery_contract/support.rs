@@ -47,5 +47,7 @@ pub(crate) fn manifest(required_wal_start_lsn: Lsn) -> DatabaseManifest {
         required_wal_start_lsn,
         previous_manifest_hash: [0; 32],
         manifest_crc: 7,
+        segment_index_file_id: 0,
+        btree_root_page_id: 0,
     }
 }

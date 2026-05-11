@@ -49,6 +49,11 @@ impl Display for PageLayoutCodecError {
 
 impl std::error::Error for PageLayoutCodecError {}
 
+#[deprecated(
+    since = "0.0.0",
+    note = "PersistedPageLayoutV1 uses an incompatible 98-byte header format. \
+            Use PageCodecV1 (112-byte header) from andromeda-storage-page instead."
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PersistedPageLayoutV1 {
     pub magic: u32,
@@ -77,6 +82,7 @@ pub struct PersistedPageLayoutV1 {
     pub torn_write_guard: u64,
 }
 
+#[allow(deprecated)]
 impl PersistedPageLayoutV1 {
     pub fn encode(self, bytes: &mut [u8]) -> Result<(), PageLayoutCodecError> {
         if bytes.len() != page_size_bytes(self.page_size)? {

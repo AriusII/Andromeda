@@ -39,8 +39,9 @@ fn page_header(header_crc: u32) -> PageHeader {
         page_epoch: 1,
         previous_page_id: None,
         next_page_id: None,
-        header_len: PageHeader::MIN_HEADER_LEN_V0,
-        payload_offset: 128,
+        // PageCodecV1 requires header_len == 112 and payload_offset == 112.
+        header_len: 112,
+        payload_offset: 112,
         payload_len: 512,
         free_start: 256,
         free_end: 512,
@@ -64,7 +65,8 @@ fn page_contract_for_bytes(header_crc: u32, bytes: &[u8]) -> PageLayoutContract 
 
 fn page_image() -> PageImage {
     let mut bytes = vec![0; PageSize::KiB16.bytes_usize()];
-    bytes[128..640].fill(0xA5);
+    // Payload starts at offset 112 (PageCodecV1 header length), length 512.
+    bytes[112..624].fill(0xA5);
     let contract = page_contract_for_bytes(5, &bytes);
     PageImage::with_layout(contract, bytes).expect("valid page image")
 }
@@ -131,7 +133,8 @@ fn header_crc32_stamps_persisted_layout_and_reads_clean_page() {
     assert_ne!(persisted_contract.header.header_crc, 5);
     assert_eq!(
         persisted_contract.header.header_crc,
-        read_u32_at(&data_file, 94)
+        // PageCodecV1 outer CRC (header_crc) lives at bytes 100-103.
+        read_u32_at(&data_file, 100)
     );
     assert_eq!(persisted_contract.header.page_id, PageId::new(1));
     assert_eq!(persisted_contract.header.page_lsn, Lsn::new(10));
@@ -204,21 +207,31 @@ fn none_mode_rejects_payload_corruption_through_page_codec_integrity() {
 }
 
 #[test]
-fn none_mode_boundary_does_not_cover_semantically_valid_header_bit_flip() {
+fn none_mode_pagecodecv1_detects_header_corruption_via_integrity_crc() {
+    // In PageCodecV1, bytes 0-103 of the header are covered by the
+    // HeaderIntegrityCrc at bytes 104-107. Any single-bit corruption
+    // within the header — including the `free_bytes` field at offset 88 —
+    // is detected even in None mode (no outer CRC). This is the expected
+    // behavior under the unified codec and is NOT a gap in the boundary.
     let temp_dir = tempfile::TempDir::new().expect("temp dir");
     let data_file = temp_dir.path().join("pages.bin");
     let temp_io_dir = temp_dir.path().join("io");
 
     write_page(&data_file, &temp_io_dir, PageIntegrityMode::None);
+    // Corrupt byte 88 = `free_bytes` field in PageCodecV1 header layout.
     corrupt_byte(&data_file, 88);
 
     let store = reopen_store(&data_file, &temp_io_dir, PageIntegrityMode::None);
-    let page = store
+    let error = store
         .read_page(PageId::new(1))
-        .expect("default mode only validates payload/trailer integrity")
-        .expect("page remains readable");
-    let layout = page.layout_contract().expect("layout remains decodable");
-
-    assert_eq!(layout.header.row_count, 0);
-    assert_eq!(layout.header.slot_count, 1);
+        .expect_err("PageCodecV1 HeaderIntegrityCrc must catch header corruption in None mode");
+    assert!(
+        error.message().contains("integrity")
+            || error.message().contains("CRC")
+            || error.message().contains("free")
+            || error.message().contains("offset")
+            || error.message().contains("invalid"),
+        "expected HeaderIntegrityCrc or header-validation error, got: {}",
+        error.message()
+    );
 }

@@ -1,6 +1,7 @@
 use andromeda_storage_page::{
     AllocationId, Lsn, ObjectId, PAGE_CODEC_V1_HEADER_LEN, PAGE_CODEC_V1_TRAILER_LEN, PageCodecV1,
-    PageFlags, PageHeader, PageId, PageSize, PageType, integrity_trailer_for_payload,
+    PageFlags, PageHeader, PageId, PageSize, PageType, header_integrity_crc32,
+    integrity_trailer_for_payload,
 };
 
 fn sample_header(page_size: PageSize, payload_len: usize) -> PageHeader {
@@ -84,5 +85,105 @@ fn page_codec_v1_rejects_truncated_page_image() {
         error.message().contains("trailer")
             || error.message().contains("length")
             || error.message().contains("truncated")
+    );
+}
+
+// ── New corruption-rejection tests (P05 W1) ──────────────────────────────────
+
+/// Helper: encode a header, mutate bytes at the given offset, then fix the
+/// HeaderIntegrityCrc so that the "outer" CRC check passes while the inner
+/// field check (format version, header_len, reserved bytes, etc.) is reached.
+/// Returns the 112-byte buffer with the mutation applied AND the integrity CRC
+/// recomputed, OR with the mutation applied but the integrity CRC deliberately
+/// left stale — callers choose by passing `recompute_hic`.
+fn mutated_header_bytes(
+    header: &PageHeader,
+    byte_offset: usize,
+    new_value: u8,
+    recompute_hic: bool,
+) -> [u8; PAGE_CODEC_V1_HEADER_LEN] {
+    let mut bytes = PageCodecV1::encode_header(header).unwrap();
+    bytes[byte_offset] = new_value;
+    if recompute_hic {
+        // Recompute HeaderIntegrityCrc so only the field check triggers.
+        let hic = header_integrity_crc32(&bytes);
+        bytes[104..108].copy_from_slice(&hic.to_le_bytes());
+    }
+    bytes
+}
+
+#[test]
+fn page_codec_v1_rejects_bad_format_version() {
+    let header = sample_header(PageSize::KiB16, 0);
+    // Write version = 2 at bytes 4-5 (LE), then fix the HeaderIntegrityCrc.
+    let bytes = mutated_header_bytes(&header, 4, 2, true);
+    let error = PageCodecV1::decode_header(&bytes).unwrap_err();
+    assert!(
+        error.message().contains("version") || error.message().contains("format"),
+        "expected version error, got: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn page_codec_v1_rejects_nonzero_reserved_pad0() {
+    let header = sample_header(PageSize::KiB16, 0);
+    // Bytes 70-71 are reserved pad0; must be zero.
+    let bytes = mutated_header_bytes(&header, 70, 0xFF, true);
+    let error = PageCodecV1::decode_header(&bytes).unwrap_err();
+    assert!(
+        error.message().contains("reserved") || error.message().contains("70"),
+        "expected reserved-pad0 error, got: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn page_codec_v1_rejects_nonzero_reserved_pad1() {
+    let header = sample_header(PageSize::KiB16, 0);
+    // Bytes 94-95 are reserved pad1; must be zero.
+    let bytes = mutated_header_bytes(&header, 94, 0x01, true);
+    let error = PageCodecV1::decode_header(&bytes).unwrap_err();
+    assert!(
+        error.message().contains("reserved") || error.message().contains("94"),
+        "expected reserved-pad1 error, got: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn page_codec_v1_rejects_nonzero_reserved_tail() {
+    let header = sample_header(PageSize::KiB16, 0);
+    // Bytes 108-111 are the reserved tail; must all be zero.
+    let bytes = mutated_header_bytes(&header, 108, 0x42, true);
+    let error = PageCodecV1::decode_header(&bytes).unwrap_err();
+    assert!(
+        error.message().contains("reserved") || error.message().contains("108"),
+        "expected reserved-tail error, got: {}",
+        error.message()
+    );
+}
+
+#[test]
+fn page_codec_v1_torn_page_simulation_is_rejected() {
+    // Write a valid page, then overwrite the first half with zeros to simulate
+    // a torn write mid-page. The trailer torn_write_guard and CRC must reject it.
+    let payload = vec![0xC3u8; 256];
+    let header = sample_header(PageSize::KiB16, payload.len());
+    let trailer = integrity_trailer_for_payload(&header, &payload);
+    let mut encoded = PageCodecV1::encode_page(&header, &payload, &trailer).unwrap();
+
+    // Simulate a torn write: zero out the first half of the encoded page.
+    let half = encoded.len() / 2;
+    encoded[..half].fill(0);
+
+    let error = PageCodecV1::decode_page(&encoded).unwrap_err();
+    assert!(
+        error.message().contains("magic")
+            || error.message().contains("integrity")
+            || error.message().contains("CRC")
+            || error.message().contains("mismatch"),
+        "expected torn-write detection error, got: {}",
+        error.message()
     );
 }

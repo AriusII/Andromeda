@@ -37,6 +37,7 @@ pub use andromeda_storage_page::{
 pub use error::DiskManagerError;
 pub use file::FileDiskManager;
 pub use interface::DiskManager;
+#[allow(deprecated)]
 pub use layout_codec::{
     NONE_PAGE_ID, PAGE_SIZE_16K, PAGE_SIZE_32K, PAGE_TRAILER_V0_LEN, PAGE_TYPE_FIXED_ROW,
     PAGE_TYPE_FREE, PAGE_TYPE_HYBRID_ROW, PAGE_TYPE_MANIFEST, PERSISTED_HEADER_LEN,
