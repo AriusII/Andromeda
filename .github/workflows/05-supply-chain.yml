@@ -1,0 +1,52 @@
+name: 05-supply-chain
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: 05-supply-chain-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  supply-chain-preflight:
+    name: supply-chain preflight (report-first)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Tooling availability report
+        run: python -B tools/testing/supply_chain_preflight.py --json
+
+      - name: cargo tree duplicate scan
+        run: cargo tree -d --workspace --locked
+
+      - name: cargo audit (optional)
+        shell: bash
+        run: |
+          if cargo audit --version >/dev/null 2>&1; then
+            cargo audit --deny warnings
+          else
+            echo "cargo-audit not available; recorded as skipped in this skeleton workflow."
+          fi
+
+      - name: cargo deny (optional)
+        shell: bash
+        run: |
+          if cargo deny --version >/dev/null 2>&1; then
+            cargo deny check --all-features
+          else
+            echo "cargo-deny not available; recorded as skipped in this skeleton workflow."
+          fi

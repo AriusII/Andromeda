@@ -1,0 +1,55 @@
+name: 01-rust-matrix
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: 01-rust-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-matrix:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo check --workspace --locked
+        run: cargo check --workspace --locked
+
+  lint-and-fast-tests:
+    name: lint and focused tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Nextest (ci profile when available)
+        shell: bash
+        run: |
+          if cargo nextest --version >/dev/null 2>&1; then
+            cargo nextest run --profile ci
+          else
+            echo "cargo-nextest not available in runner image; falling back to cargo test subset."
+            cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture
+          fi

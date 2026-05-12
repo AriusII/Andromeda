@@ -14,7 +14,7 @@ from typing import Sequence
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 
-EXPECTED_CRATE_COUNT = 89
+EXPECTED_CRATE_COUNT = 90
 EXPECTED_RUST_VERSION = "1.95.0"
 EXPECTED_EDITION = "2024"
 EXPECTED_RESOLVER = "3"
@@ -34,16 +34,19 @@ REQUIRED_P00_FILES = (
     "docs/adr/ADR-0017-NO_DYNAMIC_SQL_APPLICATION_SURFACE.md",
 )
 
+EXPECTED_CRATE_COUNT_TOKEN = f"{EXPECTED_CRATE_COUNT} crates"
+EXPECTED_MATRIX_COUNT_TOKEN = f"{EXPECTED_CRATE_COUNT} workspace crates"
+
 REQUIRED_TOKENS_BY_FILE = {
     "docs/status.md": (
-        "Workspace members: 89 crates",
+        f"Workspace members: {EXPECTED_CRATE_COUNT_TOKEN}",
         "Rust version: 1.95.0",
         "Edition: 2024",
         "Resolver: 3",
         "Readiness boundary",
     ),
     "docs/roadmap/00_CURRENT_STATE_CROSS_CHECK.md": (
-        "89 crates",
+        EXPECTED_CRATE_COUNT_TOKEN,
         "rust-version = \"1.95.0\"",
         "resolver = \"3\"",
         "état actuel",
@@ -51,7 +54,7 @@ REQUIRED_TOKENS_BY_FILE = {
     ),
     "docs/roadmap/sources/CROSS_CHECK_SOURCES.md": (
         "Cargo.toml",
-        "89 crates",
+        EXPECTED_CRATE_COUNT_TOKEN,
         "Rust 1.95.0",
         "source de vérité",
     ),
@@ -68,7 +71,7 @@ REQUIRED_TOKENS_BY_FILE = {
         "recovery behavior",
     ),
     "docs/project/CRATE_CLUSTER_CRITICALITY_MATRIX.md": (
-        "89 workspace crates",
+        EXPECTED_MATRIX_COUNT_TOKEN,
         "P00 governance baseline",
         "`andromeda-wal`",
         "`andromeda-inventory-demo`",

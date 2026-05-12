@@ -1,0 +1,68 @@
+name: 07-fuzzing
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      enable_gpu_lane:
+        description: "Run optional GPU lane (outside C5 commit/WAL/recovery paths)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: 07-fuzzing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fuzz-preflight:
+    name: fuzz preflight (skeleton)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Fuzz registry check
+        run: python -B tools/testing/fuzz_registry_check.py --format json
+
+      - name: Seed corpus check
+        run: python -B fuzz/generators/generate_seed_corpus.py --check
+
+      - name: Fuzz workspace check
+        run: cargo check --manifest-path fuzz/Cargo.toml --locked
+
+      - name: cargo-fuzz smoke (optional)
+        shell: bash
+        run: |
+          if cargo fuzz --version >/dev/null 2>&1; then
+            cargo fuzz list
+          else
+            echo "cargo-fuzz unavailable; skipping runtime fuzz invocation in this skeleton workflow."
+          fi
+
+  gpu-optional:
+    name: optional GPU lane (non-C5)
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.enable_gpu_lane == 'true' }}
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Compile GPU crate without default features
+        run: cargo check -p andromeda-gpu --no-default-features --locked
+
+      - name: Run GPU crate tests without default features
+        run: cargo test -p andromeda-gpu --no-default-features --locked -- --nocapture

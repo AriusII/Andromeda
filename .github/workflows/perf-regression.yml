@@ -1,0 +1,33 @@
+name: perf-regression
+
+on:
+  schedule:
+    - cron: "0 4 * * 2"
+  workflow_dispatch:
+
+concurrency:
+  group: perf-regression-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  perf-smoke:
+    name: perf regression smoke (advisory only)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Benchmark contract test
+        run: cargo test -p andromeda-bench --test scenario_evidence_boundary --locked -- --nocapture
+
+      - name: Regression detection test
+        run: cargo test -p andromeda-bench --test regression_detection --locked -- --nocapture
+
+      - name: Cross-commit history test
+        run: cargo test -p andromeda-bench --test cross_commit_history --locked -- --nocapture
+
+      - name: Benchmark CLI contract test
+        run: cargo test -p andromeda-cli --test benchmark_cli_commands --locked -- --nocapture

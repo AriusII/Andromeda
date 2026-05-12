@@ -1,0 +1,82 @@
+name: release-gate-chain
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_deep_checks:
+        description: "Run advisory deep checks (longer runtime)"
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: release-gate-chain-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-inputs:
+    name: release input summary (no readiness claim)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Roadmap gate summary
+        run: python -B tools/testing/roadmap_gate_summary.py --format json
+
+      - name: Validation manifest
+        run: python -B tools/testing/validation_manifest.py --json
+
+      - name: Release evidence metadata
+        run: python -B tools/testing/release_evidence.py --json
+
+      - name: Core Rust baseline
+        run: |
+          cargo fmt --all -- --check
+          cargo check --workspace --locked
+          cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+
+      - name: Focused C5 smoke set
+        run: |
+          cargo test -p andromeda-wal --tests --locked
+          cargo test -p andromeda-storage --test crash_recovery_impl --locked -- --nocapture
+          cargo test -p andromeda-exec --test recovery_visibility_gates --locked -- --nocapture
+
+  advisory-deep:
+    name: advisory deep checks
+    if: ${{ inputs.run_deep_checks }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Nextest CI profile (optional fallback)
+        shell: bash
+        run: |
+          if cargo nextest --version >/dev/null 2>&1; then
+            cargo nextest run --profile ci
+          else
+            echo "cargo-nextest unavailable; fallback to workspace cargo test."
+            cargo test --workspace --all-features --locked
+          fi
+
+      - name: Supply-chain preflight
+        run: python -B tools/testing/supply_chain_preflight.py --json

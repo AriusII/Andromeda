@@ -155,13 +155,18 @@ fn sync_directory(path: &Path, action: &'static str) -> AndromedaResult<()> {
     use std::os::windows::fs::OpenOptionsExt;
 
     const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const ERROR_ACCESS_DENIED: i32 = 5;
 
     let dir = OpenOptions::new()
         .read(true)
         .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
         .open(path)
         .map_err(|err| io_error(action, err))?;
-    dir.sync_all().map_err(|err| io_error(action, err))
+    match dir.sync_all() {
+        Ok(()) => Ok(()),
+        Err(err) if err.raw_os_error() == Some(ERROR_ACCESS_DENIED) => Ok(()),
+        Err(err) => Err(io_error(action, err)),
+    }
 }
 
 impl HadrMembershipStore for FileBackedHadrMembershipStore {

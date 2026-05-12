@@ -1,0 +1,40 @@
+name: 16-protocol-doctrine-scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: 16-protocol-doctrine-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  protocol-doctrine-scan:
+    name: protocol/doctrine checks (non-release skeleton)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Specification baseline check
+        run: python -B tools/testing/p01_spec_baseline_check.py --strict
+
+      - name: Protocol smoke
+        run: cargo run -p andromeda-cli -- protocol-smoke --detail
+
+      - name: RPC protocol contract tests
+        run: cargo test -p andromeda-rpc-protocol --tests --locked
+
+      - name: QUIC protocol stability contract
+        run: cargo test -p andromeda-quic --test protocol_stability_contract --locked -- --nocapture

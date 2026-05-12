@@ -1,0 +1,42 @@
+name: 00-ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: 00-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  baseline-skeleton:
+    name: baseline checks (skeleton, not release approval)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Roadmap gate summary input check
+        run: python -B tools/testing/roadmap_gate_summary.py --format json
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Workspace check
+        run: cargo check --workspace --locked
+
+      - name: Topology guard
+        run: cargo test -p andromeda-cli --test workspace_dependency_topology -- --nocapture

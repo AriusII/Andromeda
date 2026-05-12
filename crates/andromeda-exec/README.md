@@ -64,13 +64,20 @@ Recommended execution gates:
 ```powershell
 cargo test -p andromeda-exec --test surface_gate_contract -- --nocapture
 cargo test -p andromeda-execution --test srpl_adapter_contract -- --nocapture
+cargo test -p andromeda-execution --test registry_binding_contract -- --nocapture
 cargo test -p andromeda-result-stream --test result_stream_backpressure -- --nocapture
 cargo test -p andromeda-procedure-runtime --test metadata_extraction_contract -- --nocapture
 cargo test -p andromeda-exec --test runtime_contract -- --nocapture
-cargo test -p andromeda-exec --test timeout_deadlock_routing_contract -- --nocapture
-cargo test -p andromeda-exec --test retry_semantics -- --nocapture
-cargo test -p andromeda-exec --test v0_vertical_e2e -- --nocapture
+cargo test -p andromeda-exec --test p04_generic_procedure_routing -- --nocapture
+cargo test -p andromeda-exec --test v0_transition_lifecycle -- --nocapture
 ```
+
+`timeout_deadlock_routing_contract`, `retry_semantics`, and `v0_vertical_e2e` are not
+current `andromeda-exec` test targets. Timeout/deadlock/retry execution behavior is
+currently covered through `runtime_contract`, `p04_generic_procedure_routing`
+(`tests/p04_two_procedures_generic_dispatch.rs`), and lifecycle/recovery suites.
+Catalog-backed resolver integration with full SRPL dispatch remains a deferred gap
+(W2); only bounded resolver contract coverage exists today in `andromeda-execution`.
 
 If a change crosses into storage, WAL, transaction, catalog, security, or RPC behavior, add the owning crate's contract tests. For crash-sensitive execution changes, include recovery visibility tests that prove completions reconstruct from durable WAL evidence rather than transient runtime state. Add property tests for bounded state transitions and fuzz coverage for malformed protocol, ResultStream, or adapter inputs when the changed boundary accepts external bytes.
 
@@ -92,5 +99,5 @@ If a change crosses into storage, WAL, transaction, catalog, security, or RPC be
 - `src/local/`
 - `tests/surface_gate_contract.rs`
 - `tests/runtime_contract.rs`
-- `tests/timeout_deadlock_routing_contract.rs`
-- `tests/v0_vertical_e2e.rs`
+- `tests/p04_two_procedures_generic_dispatch.rs`
+- `tests/v0_transition_lifecycle.rs`

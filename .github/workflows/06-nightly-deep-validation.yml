@@ -1,0 +1,44 @@
+name: 06-nightly-deep-validation
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: 06-nightly-deep-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  nightly-deep:
+    name: nightly deep validation (advisory)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable + nightly)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Loom model tests
+        run: cargo test --manifest-path tools/loom-models/Cargo.toml --locked
+
+      - name: Add nightly Miri component
+        shell: bash
+        run: |
+          rustup toolchain install nightly --profile minimal
+          rustup +nightly component add miri
+
+      - name: Miri subset check
+        shell: bash
+        run: |
+          if cargo +nightly miri --version >/dev/null 2>&1; then
+            python -B tools/testing/miri_subset.py --run
+          else
+            echo "cargo +nightly miri unavailable; skipping Miri subset in this run."
+          fi
