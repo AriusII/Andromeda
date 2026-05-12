@@ -8,6 +8,7 @@ mod batch;
 mod evidence;
 mod identity;
 mod rejection;
+mod resync;
 mod tracker;
 
 pub use batch::{WalReplicaExpectation, WalShipmentAccepted, WalShipmentBatch, WalShipmentRange};
@@ -16,6 +17,10 @@ pub use evidence::{
 };
 pub use identity::{WalNodeIdentity, WalNodeRole};
 pub use rejection::WalShipmentRejection;
+pub use resync::{
+    ReplicaPromotionBlocker, ReplicaPromotionEligibility, ReplicaResyncDecision,
+    ReplicaResyncEvidence, ResyncCompatibility, ResyncLagStatus,
+};
 pub use tracker::{WalReplicaSafeLsnTracker, WalShippingAck, WalShippingAckBindingRejection};
 
 #[cfg(test)]

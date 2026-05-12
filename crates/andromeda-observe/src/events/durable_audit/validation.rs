@@ -1,8 +1,8 @@
 use andromeda_error::AndromedaResult;
 
 use crate::events::{
-    DurableAuditPrincipalBinding, Permission, SecurityPolicyVersionEvidence, SurfaceScope,
-    TraceEvent, observe_error,
+    DurableAuditPrincipalBinding, HadrAuditEvent, Permission, PermissionFamily,
+    SecurityPolicyVersionEvidence, SurfaceScope, TraceEvent, observe_error,
 };
 
 use super::{
@@ -41,15 +41,17 @@ pub(crate) fn validate_record(record: &PendingDurableAuditRecord) -> AndromedaRe
     if matches!(family, DurableAuditEventFamily::SecurityDecision) {
         validate_security_decision_binding(record)?;
     }
-    if matches!(
-        family,
+    match family {
         DurableAuditEventFamily::AdminDecision
-            | DurableAuditEventFamily::HadrDecision
-            | DurableAuditEventFamily::BackupDecision
-            | DurableAuditEventFamily::RestoreDecision
-            | DurableAuditEventFamily::ForensicDecision
-    ) {
-        validate_admin_operation_decision_binding(record, family)?;
+        | DurableAuditEventFamily::BackupDecision
+        | DurableAuditEventFamily::RestoreDecision
+        | DurableAuditEventFamily::ForensicDecision => {
+            validate_admin_operation_decision_binding(record, family)?;
+        },
+        DurableAuditEventFamily::HadrDecision => {
+            validate_hadr_decision_binding(record)?;
+        },
+        _ => {},
     }
 
     Ok(())
@@ -216,4 +218,53 @@ fn validate_admin_operation_decision_binding(
     )?;
 
     Ok(())
+}
+
+fn validate_hadr_decision_binding(record: &PendingDurableAuditRecord) -> AndromedaResult<()> {
+    match &record.envelope.event {
+        TraceEvent::AdminOperation(_) => {
+            validate_admin_operation_decision_binding(record, DurableAuditEventFamily::HadrDecision)
+        },
+        TraceEvent::HadrCluster(trace) => {
+            const SUBJECT: &str = "HadrDecision";
+            validate_request_session_correlation(record, SUBJECT)?;
+
+            let binding = &record.principal_binding;
+            validate_required_binding_evidence(binding, SUBJECT, true)?;
+            validate_binding_correlation(record, SUBJECT)?;
+
+            if binding.principal_id != trace.principal {
+                return Err(observe_error(
+                    "durable HadrDecision principal_id must match HADR cluster trace",
+                ));
+            }
+            if binding.surface != Some(SurfaceScope::Cluster) {
+                return Err(observe_error(
+                    "durable HadrDecision surface must be cluster-scoped for HADR cluster traces",
+                ));
+            }
+            if !binding
+                .permission
+                .is_some_and(|permission| permission.family() == PermissionFamily::Cluster)
+            {
+                return Err(observe_error(
+                    "durable HadrDecision permission must be cluster-scoped for HADR cluster traces",
+                ));
+            }
+
+            if let HadrAuditEvent::ClusterEventTraceV0 { policy_version, .. } = &trace.event
+                && let Some(policy_version) = policy_version
+                && binding.policy_version.as_ref() != Some(policy_version)
+            {
+                return Err(observe_error(
+                    "durable HadrDecision policy version evidence must match HADR cluster trace",
+                ));
+            }
+
+            Ok(())
+        },
+        _ => Err(observe_error(
+            "durable HadrDecision records require an admin operation or HADR cluster trace",
+        )),
+    }
 }

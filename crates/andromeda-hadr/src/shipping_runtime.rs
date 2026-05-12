@@ -48,10 +48,78 @@ mod fencing;
 mod flow_control;
 mod segment;
 
+use crate::shipping_contract::{
+    WalReplicaSafeLsnTracker, WalShippingAck, WalShippingAckBindingRejection,
+    WalShippingEvidenceRejectionReason, WalShippingEvidenceV0,
+};
+use andromeda_wal::Lsn;
+
 pub use correlation::*;
 pub use fencing::*;
 pub use flow_control::*;
 pub use segment::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WalShippingRuntimeEvidenceRejection {
+    EvidenceRejected(WalShippingEvidenceRejectionReason),
+    AckBinding(WalShippingAckBindingRejection),
+}
+
+impl WalShippingRuntimeEvidenceRejection {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::EvidenceRejected(_) => {
+                "WAL shipping runtime evidence carries a replica rejection reason"
+            },
+            Self::AckBinding(rejection) => rejection.as_str(),
+        }
+    }
+}
+
+impl std::fmt::Display for WalShippingRuntimeEvidenceRejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::error::Error for WalShippingRuntimeEvidenceRejection {}
+
+impl From<WalShippingAckBindingRejection> for WalShippingRuntimeEvidenceRejection {
+    fn from(rejection: WalShippingAckBindingRejection) -> Self {
+        Self::AckBinding(rejection)
+    }
+}
+
+/// Advances a required replica safe LSN from typed WAL-shipping evidence only
+/// after the evidence range is bound through the contract tracker.
+///
+/// This helper is intentionally local to the shipping runtime boundary: it does
+/// not trust RAM counters or trace state as truth.  The caller must provide a
+/// decoded and validated `WalShippingEvidenceV0`; the tracker still performs
+/// the authoritative ACK/range binding check before any safe-LSN advancement.
+pub fn advance_replica_safe_lsn_from_evidence(
+    tracker: &mut WalReplicaSafeLsnTracker,
+    evidence: &WalShippingEvidenceV0,
+) -> Result<Lsn, WalShippingRuntimeEvidenceRejection> {
+    if let Some(reason) = evidence.rejection_reason {
+        return Err(WalShippingRuntimeEvidenceRejection::EvidenceRejected(
+            reason,
+        ));
+    }
+
+    let before = tracker.clone();
+    tracker.record_validated_range(evidence.destination_node_id, evidence.validated_range)?;
+    match tracker.record_ack_bound(WalShippingAck::new(
+        evidence.destination_node_id,
+        evidence.ack_lsn,
+    )) {
+        Ok(safe_lsn) => Ok(safe_lsn),
+        Err(rejection) => {
+            *tracker = before;
+            Err(WalShippingRuntimeEvidenceRejection::from(rejection))
+        },
+    }
+}
 
 #[cfg(test)]
 mod tests {

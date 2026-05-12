@@ -135,8 +135,15 @@ pub fn require_cluster_promotion_admission(
 
 pub fn require_cluster_fence_admission(
     security: &HadrClusterSecurityEvidence,
+    durable_audit: Option<&HadrClusterDurableAuditProof>,
 ) -> AndromedaResult<()> {
-    security.require_operation(HadrClusterOperation::FenceNode)
+    security.require_operation(HadrClusterOperation::FenceNode)?;
+    if durable_audit.is_none() {
+        return Err(hadr_security_error(
+            "HADR cluster node fencing requires durable audit proof",
+        ));
+    }
+    Ok(())
 }
 
 pub fn require_cluster_manifest_update_admission(

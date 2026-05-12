@@ -14,6 +14,7 @@ mod attempt;
 mod audit;
 mod boundary;
 mod planner;
+mod report;
 
 pub use super::promotion_decision_helpers::{
     FailoverTrigger, PromotionCandidate, PromotionEligibility, PromotionRequirements,
@@ -26,6 +27,7 @@ pub use audit::{
 };
 pub use boundary::{PromotionBoundary, PromotionCommit};
 pub use planner::{PromotionPlan, PromotionPlanner};
+pub use report::{PromotionReportQuorumVoteV0, PromotionReportResultV0, PromotionReportV0};
 
 fn promotion_error(message: &str) -> andromeda_error::AndromedaError {
     andromeda_error::AndromedaError::new(andromeda_error::AndromedaErrorKind::Storage, message)

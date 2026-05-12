@@ -4,9 +4,12 @@
 //! requirements are enforced, and that eligibility rankings work correctly.
 
 use andromeda_hadr::{
-    FailoverTrigger, PromotionCandidate, PromotionEligibility, PromotionRequirements,
-    is_promotion_eligible, select_best_eligible_candidate,
+    FailoverTrigger, HadrEpoch, HadrFencingToken, HadrNodeId, HadrPromotionAuditReceipt,
+    HadrPromotionRejection, PromotionCandidate, PromotionEligibility, PromotionReportQuorumVoteV0,
+    PromotionReportResultV0, PromotionReportV0, PromotionRequirements, is_promotion_eligible,
+    select_best_eligible_candidate,
 };
+use andromeda_observability::TraceId;
 use andromeda_wal::Lsn;
 
 /// Helper to construct promotion requirements for testing.
@@ -395,4 +398,126 @@ fn test_promotion_boundary_separates_f3_and_f6_concerns() {
 
     // 3. No promotion execution (that's F6's job)
     // (We just returned eligibility, not a promotion command)
+}
+
+fn report_vote(voter: u64, observed_epoch: u64, safe_lsn: u64) -> PromotionReportQuorumVoteV0 {
+    PromotionReportQuorumVoteV0::new(
+        HadrNodeId::new(voter),
+        HadrEpoch::new(observed_epoch),
+        Lsn::new(safe_lsn),
+    )
+}
+
+fn audit_receipt() -> HadrPromotionAuditReceipt {
+    HadrPromotionAuditReceipt::new(Lsn::new(700), [0xA7; 32]).expect("audit receipt")
+}
+
+fn promotion_report(result: PromotionReportResultV0) -> PromotionReportV0 {
+    PromotionReportV0 {
+        candidate: HadrNodeId::new(2),
+        proposed_epoch: HadrEpoch::new(11),
+        quorum_size: 2,
+        quorum_voters: vec![report_vote(1, 10, 500), report_vote(3, 10, 500)],
+        fencing_token: HadrFencingToken::new(HadrNodeId::new(2), HadrEpoch::new(11)),
+        fencing_evidence_hash_sha256: [0xF3; 32],
+        safe_lsn: Lsn::new(500),
+        result,
+        rejection: match result {
+            PromotionReportResultV0::Approved => None,
+            PromotionReportResultV0::Rejected => Some(HadrPromotionRejection::DivergentCandidate),
+        },
+        audit_trace_id: TraceId::new(44_001),
+        audit_receipt: audit_receipt(),
+    }
+}
+
+#[test]
+fn promotion_report_v0_validates_approved_evidence() {
+    let report = promotion_report(PromotionReportResultV0::Approved);
+
+    assert!(report.validate().is_ok());
+}
+
+#[test]
+fn promotion_report_v0_validates_rejected_evidence_with_reason() {
+    let report = promotion_report(PromotionReportResultV0::Rejected);
+
+    assert!(report.validate().is_ok());
+}
+
+#[test]
+fn promotion_report_v0_rejects_bad_quorum_evidence() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.quorum_size = 3;
+
+    let error = report
+        .validate()
+        .expect_err("insufficient quorum must fail");
+    assert!(error.message().contains("quorum-granted"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_proposed_epoch_equal_to_quorum_observed_epoch() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.proposed_epoch = HadrEpoch::new(10);
+
+    let error = report
+        .validate()
+        .expect_err("equal proposed epoch must fail as stale quorum evidence");
+    assert!(error.message().contains("stale against quorum evidence"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_proposed_epoch_below_quorum_observed_epoch() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.proposed_epoch = HadrEpoch::new(9);
+
+    let error = report
+        .validate()
+        .expect_err("lower proposed epoch must fail as stale quorum evidence");
+    assert!(error.message().contains("stale against quorum evidence"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_missing_fencing_evidence() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.fencing_evidence_hash_sha256 = [0; 32];
+
+    let error = report
+        .validate()
+        .expect_err("missing fencing hash must fail");
+    assert!(error.message().contains("fencing evidence hash"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_missing_audit_evidence() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.audit_trace_id = TraceId::new(0);
+
+    let error = report
+        .validate()
+        .expect_err("missing audit trace must fail");
+    assert!(error.message().contains("audit trace id"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_stale_safe_lsn() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.safe_lsn = Lsn::new(499);
+
+    let error = report
+        .validate()
+        .expect_err("stale safe LSN must fail closed");
+    assert!(error.message().contains("stale"));
+}
+
+#[test]
+fn promotion_report_v0_rejects_result_rejection_inconsistency() {
+    let mut report = promotion_report(PromotionReportResultV0::Approved);
+    report.rejection = Some(HadrPromotionRejection::InsufficientQuorum);
+
+    let error = report
+        .validate()
+        .expect_err("approved report with rejection must fail");
+    assert!(error.message().contains("must not carry"));
 }

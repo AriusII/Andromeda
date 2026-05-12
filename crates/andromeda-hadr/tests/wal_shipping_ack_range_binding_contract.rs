@@ -1,5 +1,10 @@
+use andromeda_hadr::quorum_runtime::{FencingPolicy, ReplicationMode};
 use andromeda_hadr::shipping_contract::{
     WalReplicaSafeLsnTracker, WalShipmentRange, WalShippingAck, WalShippingAckBindingRejection,
+    WalShippingEvidenceRejectionReason, WalShippingEvidenceV0,
+};
+use andromeda_hadr::shipping_runtime::{
+    WalShippingRuntimeEvidenceRejection, advance_replica_safe_lsn_from_evidence,
 };
 use andromeda_wal::Lsn;
 
@@ -9,6 +14,30 @@ fn range(first: u64, last: u64) -> WalShipmentRange {
         last: Lsn::new(last),
         count: (last - first + 1) as usize,
     }
+}
+
+fn evidence(
+    replica_id: u64,
+    first: u64,
+    last: u64,
+    ack_lsn: u64,
+    rejection_reason: Option<WalShippingEvidenceRejectionReason>,
+) -> WalShippingEvidenceV0 {
+    WalShippingEvidenceV0::new(
+        1,
+        replica_id,
+        9,
+        range(first, last),
+        Lsn::new(last),
+        Lsn::new(ack_lsn),
+        Lsn::new(ack_lsn),
+        ReplicationMode::QuorumEnforced,
+        FencingPolicy::BlockOnQuorumLoss,
+        0,
+        [0x5A; 32],
+        rejection_reason,
+    )
+    .expect("typed WAL shipping evidence")
 }
 
 #[test]
@@ -120,4 +149,58 @@ fn ack_binding_rejects_jump_without_validated_prefix_from_current_safe_lsn() {
     tracker
         .record_ack_bound(WalShippingAck::new(2, Lsn::new(100)))
         .expect("ack is valid once prefix from current safe lsn is complete");
+}
+
+#[test]
+fn runtime_evidence_advances_tracker_safe_lsn_only_after_binding() {
+    let mut tracker = WalReplicaSafeLsnTracker::new([2]).expect("tracker");
+
+    let advanced =
+        advance_replica_safe_lsn_from_evidence(&mut tracker, &evidence(2, 1, 4, 4, None))
+            .expect("validated contiguous evidence advances safe lsn");
+
+    assert_eq!(advanced, Lsn::new(4));
+    assert_eq!(tracker.replica_safe_lsn(2), Some(Lsn::new(4)));
+    assert_eq!(tracker.retention_boundary_lsn(), Lsn::new(4));
+}
+
+#[test]
+fn runtime_evidence_rejects_unvalidated_ack_and_high_jump() {
+    let mut tracker = WalReplicaSafeLsnTracker::new([2]).expect("tracker");
+
+    assert_eq!(
+        advance_replica_safe_lsn_from_evidence(&mut tracker, &evidence(2, 100, 100, 100, None))
+            .expect_err("high-jump ACK must not advance without prefix from current safe LSN"),
+        WalShippingRuntimeEvidenceRejection::AckBinding(
+            WalShippingAckBindingRejection::AckOutsideDurablePrefix
+        )
+    );
+    assert_eq!(tracker.replica_safe_lsn(2), Some(Lsn::ZERO));
+    tracker
+        .record_validated_range(2, range(1, 99))
+        .expect("prefix without rejected high-jump evidence");
+    assert_eq!(
+        tracker
+            .record_ack_bound(WalShippingAck::new(2, Lsn::new(100)))
+            .expect_err("failed high-jump evidence must not leave an orphan range"),
+        WalShippingAckBindingRejection::AckExceedsShippedMax
+    );
+
+    assert_eq!(
+        advance_replica_safe_lsn_from_evidence(
+            &mut tracker,
+            &evidence(
+                2,
+                1,
+                1,
+                1,
+                Some(WalShippingEvidenceRejectionReason::AckOutsideDurablePrefix),
+            ),
+        )
+        .expect_err("negative replica evidence must fail closed"),
+        WalShippingRuntimeEvidenceRejection::EvidenceRejected(
+            WalShippingEvidenceRejectionReason::AckOutsideDurablePrefix
+        )
+    );
+    assert_eq!(tracker.replica_safe_lsn(2), Some(Lsn::ZERO));
 }

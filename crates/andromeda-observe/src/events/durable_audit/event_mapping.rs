@@ -19,6 +19,7 @@ pub(crate) fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEve
         | TraceEvent::RollbackDurable(_)
         | TraceEvent::RecoveryStartup(_)
         | TraceEvent::CorruptionBoundary(_) => Some(DurableAuditEventFamily::RecoveryDecision),
+        TraceEvent::HadrCluster(_) => Some(DurableAuditEventFamily::HadrDecision),
         TraceEvent::Audit(_) => Some(DurableAuditEventFamily::GenericAudit),
         TraceEvent::Decision(_)
         | TraceEvent::Invocation(_)
@@ -33,8 +34,7 @@ pub(crate) fn durable_audit_family(event: &TraceEvent) -> Option<DurableAuditEve
         | TraceEvent::GpuPolicyDecision(_)
         | TraceEvent::GpuExecution(_)
         | TraceEvent::TransactionTransition(_)
-        | TraceEvent::ExecutionTransition(_)
-        | TraceEvent::HadrCluster(_) => None,
+        | TraceEvent::ExecutionTransition(_) => None,
     }
 }
 
